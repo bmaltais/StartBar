@@ -87,7 +87,7 @@ Item {
   QtObject {
     id: dockSettings
 
-    readonly property string pluginId: root.shell && root.shell.pluginId ? root.shell.pluginId : "bernard.dock"
+    readonly property string pluginId: root.shell && root.shell.pluginId ? root.shell.pluginId : "io.github.bmaltais.startbar"
     property var rawEntry: null
     property var pendingEntry: null
     property int iconSize: DockConfig.DEFAULT_ICON_SIZE
@@ -510,7 +510,7 @@ Item {
 
   // ---- Settings window (docs/SPEC.md "Settings window") -------------------
   // Opened by a right click on the bar (or the dock's edge/gaps), or with
-  // `omarchy-shell bernard.dock settings`. One window, shown on the monitor
+  // `omarchy-shell io.github.bmaltais.startbar settings`. One window, shown on the monitor
   // that was clicked. DockConfig.settingsSchema() lists every option and its
   // widget; every change is written straight back through dockSettings.apply,
   // so the Dock updates live. Text fields commit when you press Enter or
@@ -543,10 +543,10 @@ Item {
   }
 
   IpcHandler {
-    target: "bernard.dock"
+    target: "io.github.bmaltais.startbar"
     function settings(): void { root.openSettings(null) }
     function closeSettings(): void { settingsWindow.visible = false }
-    // For a Super-key binding: `omarchy-shell bernard.dock startMenu`.
+    // For a Super-key binding: `omarchy-shell io.github.bmaltais.startbar startMenu`.
     function startMenu(): void { root.startMenuRequested(root.focusedScreenName(), "toggle") }
     function closeStartMenu(): void { root.startMenuRequested(root.focusedScreenName(), "close") }
   }
@@ -566,7 +566,7 @@ Item {
     screen: root.settingsScreen
     visible: false
     color: "transparent"
-    WlrLayershell.namespace: "omarchy-dock-settings"
+    WlrLayershell.namespace: "omarchy-startbar-settings"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
     exclusionMode: ExclusionMode.Ignore
@@ -1211,7 +1211,7 @@ Item {
       visible: true
       color: "transparent"
 
-      WlrLayershell.namespace: "omarchy-dock"
+      WlrLayershell.namespace: "omarchy-startbar"
       WlrLayershell.layer: WlrLayer.Top
       // Exclusive while the built-in Start menu is open, hover-shown or not,
       // so typing searches it wherever the pointer is. (A popup's grab would

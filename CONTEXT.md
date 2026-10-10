@@ -1,8 +1,12 @@
-# Omarchy Dock
+# StartBar
 
-A macOS/Windows-style dock for Omarchy that gives mouse-driven access to every open window on every workspace and monitor, plus a launcher strip of pinned apps.
+A plugin for the Omarchy shell that gives mouse-driven access to every open window on every workspace and monitor, plus a launcher strip of pinned apps.
 
 ## Language
+
+**StartBar**:
+The plugin's name, as users see it. It is not a part of the plugin: the panel is the Dock in both styles.
+_Avoid_: using StartBar for the panel or the Start menu
 
 **Dock**:
 The panel along the bottom edge of a monitor that holds Items. Every monitor gets its own Dock, and each Dock shows the same Items.

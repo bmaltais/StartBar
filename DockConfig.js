@@ -4,7 +4,7 @@
 // DockModel.js.
 //
 // Settings live in the Dock's own entry in the shell config's `plugins[]`
-// array: `{ id: "bernard.dock", iconSize, revealDelayMs, hideDelayMs, pins,
+// array: `{ id: "io.github.bmaltais.startbar", iconSize, revealDelayMs, hideDelayMs, pins,
 // placements, startPins, recentApps, startPlaces, ...taskbar settings }`.
 // This file is the one place that knows those keys and their defaults, and
 // its interface is two functions:

@@ -1,12 +1,12 @@
-# Omarchy Dock: specification
+# StartBar: specification
 
 Agreed on 2026-09-11 after a design interview. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); capitalised terms below refer to it.
 
 ## Identity
 
-- Omarchy shell plugin, id `bernard.dock`, display name "Dock", licence MIT.
+- Omarchy shell plugin, id `io.github.bmaltais.startbar`, display name "StartBar", licence MIT.
 - Kind `service` with `keepLoaded: true`; the plugin owns its own layer-shell surfaces.
-- This repository's root is the plugin directory (`manifest.json` at the root), so `omarchy plugin add <git-url>` installs it. For development, symlink the checkout into `~/.config/omarchy/plugins/bernard.dock/`. The shell's own file watcher doesn't follow that symlink, so a save there isn't picked up automatically; run `omarchy-shell shell rescanPlugins` after editing, or `omarchy restart shell` to pick up changes to the `keepLoaded` service itself. See the README's development-install section.
+- This repository's root is the plugin directory (`manifest.json` at the root), so `omarchy plugin add <git-url>` installs it. For development, symlink the checkout into `~/.config/omarchy/plugins/io.github.bmaltais.startbar/`. The shell's own file watcher doesn't follow that symlink, so a save there isn't picked up automatically; run `omarchy-shell shell rescanPlugins` after editing, or `omarchy restart shell` to pick up changes to the `keepLoaded` service itself. See CONTRIBUTING.md's development-install section.
 - Personal project, published so others can use it.
 
 ## What the Dock shows
@@ -55,7 +55,7 @@ Stored in the Dock's entry in Omarchy's shell config (`~/.config/omarchy/shell.j
   - Recommended: the last six Apps launched from the menu (`recentApps`, the `pushRecentApp` intent). Recent files are out of scope: there is no equivalent index.
   - Right-click an App: Pin to / Unpin from Start, Pin to / Unpin from Dock, Open.
   - Places column on the left: Home and the user's XDG folders (Documents, Downloads, Pictures, Music, Videos; any that is just Home is skipped, read from `~/.config/user-dirs.dirs`). One click opens the folder with `xdg-open`. A `startPlaces` list of paths (`~` allowed) replaces the defaults; an empty list hides the column.
-  - Opened from the keyboard with `omarchy-shell bernard.dock startMenu` (toggles; `closeStartMenu` closes), on the focused monitor, for a Super-key binding. With a non-built-in `startCommand` it runs that command instead.
+  - Opened from the keyboard with `omarchy-shell io.github.bmaltais.startbar startMenu` (toggles; `closeStartMenu` closes), on the focused monitor, for a Super-key binding. With a non-built-in `startCommand` it runs that command instead.
   - Pinned apps can be dragged to reorder them: left-drag a tile, the slot under it is outlined, release to save the new order in `startPins` (`StartMenu.transition`, `pinDrag*` events).
   - Keyboard: with nothing typed, the arrow keys walk the Pinned grid and then Recommended (`StartMenu.transition`, `key` events), Enter launches the selection; in All apps Up/Down walk the list.
   - In All apps, clicking a letter heading opens an A-Z jump grid (letters with no apps are dimmed); Escape closes it first.
@@ -75,7 +75,7 @@ Stored in the Dock's entry in Omarchy's shell config (`~/.config/omarchy/shell.j
 
 A window titled "Taskbar settings" (or "Dock settings" in dock style) with a widget for every option stored in the config file, so nothing needs hand-editing. It is a layer-shell window on the Overlay layer, centred on the monitor that was clicked, taking keyboard focus on demand; Escape or the close button closes it.
 
-- Opened from the "Settings…" row of the bar's quick menu, and by `omarchy-shell bernard.dock settings` (on the focused monitor; `closeSettings` closes it), so it can be bound to a key.
+- Opened from the "Settings…" row of the bar's quick menu, and by `omarchy-shell io.github.bmaltais.startbar settings` (on the focused monitor; `closeSettings` closes it), so it can be bound to a key.
 - Driven by `DockConfig.settingsSchema()`: groups Appearance, Behavior and Start menu, each field a switch, choice buttons, stepper, slider, text field or list editor. A test keeps the schema in step with the keys the config module understands.
 - Every change is written immediately through the same write-back as Pin/Unpin, so the Dock updates live. Text fields commit on Enter or when focus leaves; the opacity slider writes once, on release.
 - Places: unset means the Start menu's XDG folders; "Customize" seeds an editable list from them and "Use defaults" removes the key again.
@@ -88,7 +88,7 @@ Pinned-only launcher mode, minimise-to-special-workspace on second click, config
 
 ## Verification
 
-Manual checklist kept in the README, walked through after each milestone on a two-monitor Omarchy 4 machine.
+Manual checklist kept in CONTRIBUTING.md, walked through after each milestone on a two-monitor Omarchy 4 machine.
 
 ## Milestones
 

@@ -1,8 +1,8 @@
 {
-  "name": "omarchy-dock",
+  "name": "startbar",
   "private": true,
   "version": "1.5.0",
-  "description": "Node test harness for the Omarchy Dock's pure JS model.",
+  "description": "Node test harness for StartBar's pure JS modules.",
   "scripts": {
     "test": "node --test"
   }

@@ -15,7 +15,7 @@ const effectiveSettings = (entry) => effectiveView(entry).settings;
 const effectivePins = (entry) => effectiveView(entry).pins;
 const effectivePlacements = (entry) => effectiveView(entry).placements;
 
-const PLUGIN_ID = "bernard.dock";
+const PLUGIN_ID = "io.github.bmaltais.startbar";
 
 test("DockConfig has no Quickshell or QML imports, so Node can load it directly", () => {
   const source = fs.readFileSync(

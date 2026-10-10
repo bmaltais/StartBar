@@ -1,14 +1,15 @@
 {
   "schemaVersion": 1,
-  "id": "bernard.dock",
-  "name": "Dock",
+  "id": "io.github.bmaltais.startbar",
+  "name": "StartBar",
   "version": "1.5.0",
   "author": "Bernard Maltais",
   "license": "MIT",
-  "description": "A macOS/Windows-style dock: every open window on every workspace and monitor, plus pinned apps.",
+  "description": "A Windows 11-style taskbar with a Start menu, or a macOS-style auto-hiding dock: every open window on every workspace and monitor, plus pinned apps.",
   "kinds": ["service"],
   "keepLoaded": true,
   "entryPoints": {
     "service": "Service.qml"
-  }
+  },
+  "homepage": "https://github.com/bmaltais/StartBar"
 }
