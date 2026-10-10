@@ -5,7 +5,7 @@
 //
 // Settings live in the Dock's own entry in the shell config's `plugins[]`
 // array: `{ id: "io.github.bmaltais.startbar", iconSize, revealDelayMs, hideDelayMs, pins,
-// placements, startPins, recentApps, startPlaces, ...taskbar settings }`.
+// placements, startPins, recentApps, startPlaces, ...bar settings }`.
 // This file is the one place that knows those keys and their defaults, and
 // its interface is two functions:
 //
@@ -95,9 +95,7 @@ function effectivePlacements(entry) {
   return placements;
 }
 
-// Taskbar style (docs/SPEC.md "Taskbar style"). `style` picks between the
-// original floating dock and the Windows-11-like bar; everything else here
-// only matters to the bar, except autoHide, which the dock always has.
+// The bar's settings (docs/SPEC.md "The bar").
 var DEFAULT_BAR_HEIGHT = 48;
 var DEFAULT_OPACITY = 0.9;
 var DEFAULT_START_COMMAND = "omarchy-menu toggle apps";
@@ -122,12 +120,10 @@ function opacityOr(value, fallback) {
 
 function effectiveTaskbar(entry) {
   var source = isPlainObject(entry) ? entry : {};
-  var style = oneOf(source.style, ["dock", "taskbar"], "dock");
   return {
-    style: style,
     alignment: oneOf(source.alignment, ["center", "left"], "center"),
     colorScheme: oneOf(source.colorScheme, ["theme", "dark", "light"], "theme"),
-    autoHide: style === "dock" ? true : booleanOr(source.autoHide, false),
+    autoHide: booleanOr(source.autoHide, false),
     barHeight: positiveNumberOr(source.barHeight, DEFAULT_BAR_HEIGHT),
     opacity: opacityOr(source.opacity, DEFAULT_OPACITY),
     transparent: booleanOr(source.transparent, false),
@@ -179,7 +175,7 @@ function longestLabel(items) {
   return best;
 }
 
-// The rows of the bar's right-click menu (docs/SPEC.md "Taskbar style"): each
+// The rows of the bar's right-click menu (docs/SPEC.md "The bar"): each
 // is { label, checked, patch, group }, where patch is the `setSettings` patch
 // to apply when it's chosen and group lets the menu draw a
 // divider between runs of related rows.
@@ -197,12 +193,6 @@ function barMenuRows(taskbar) {
     var patch = {};
     patch[key] = value;
     return { label: label, checked: taskbar[key] === value, patch: patch, group: group };
-  }
-  if (taskbar.style !== "taskbar") {
-    return [
-      { label: "Switch to taskbar style", checked: false, patch: { style: "taskbar" }, group: 0 },
-      SETTINGS_ROW,
-    ];
   }
   return [
     choice("Center icons", "alignment", "center", 0),
@@ -261,42 +251,36 @@ function settingsSchema() {
       title: "Appearance",
       fields: [
         {
-          key: "style", label: "Style", type: "choice",
-          options: [{ value: "dock", label: "Dock" }, { value: "taskbar", label: "Taskbar" }],
-          hint: "Floating dock, or a full-width Windows 11-style bar",
-        },
-        {
           key: "alignment", label: "Icon alignment", type: "choice",
           options: [{ value: "center", label: "Center" }, { value: "left", label: "Left" }],
-          hint: "Taskbar only",
         },
         {
           key: "colorScheme", label: "Colors", type: "choice",
           options: [{ value: "theme", label: "Theme" }, { value: "dark", label: "Dark" }, { value: "light", label: "Light" }],
           hint: "Follow the Omarchy theme, or a fixed palette",
         },
-        { key: "barHeight", label: "Bar height", type: "int", min: 24, max: 96, step: 2, unit: "px", hint: "Taskbar only" },
-        { key: "iconSize", label: "Icon size", type: "int", min: 16, max: 128, step: 2, unit: "px" },
-        { key: "opacity", label: "Bar opacity", type: "slider", min: 0, max: 1, step: 0.05, hint: "Taskbar only" },
-        { key: "transparent", label: "Transparent bar", type: "bool", hint: "Icons only, no background (taskbar)" },
+        { key: "barHeight", label: "Bar height", type: "int", min: 24, max: 96, step: 2, unit: "px" },
+        { key: "iconSize", label: "Icon size", type: "int", min: 16, max: 128, step: 2, unit: "px", hint: "Largest icon; icons also fit inside the bar height" },
+        { key: "opacity", label: "Bar opacity", type: "slider", min: 0, max: 1, step: 0.05 },
+        { key: "transparent", label: "Transparent bar", type: "bool", hint: "Icons only, no background" },
         { key: "showWorkspaceBadge", label: "Workspace badge", type: "bool", hint: "Workspace number or name over each icon" },
       ],
     },
     {
       title: "Behavior",
       fields: [
-        { key: "autoHide", label: "Auto-hide", type: "bool", hint: "Taskbar only; the dock always auto-hides" },
+        { key: "autoHide", label: "Auto-hide", type: "bool", hint: "Hide the bar until the pointer rests on the bottom edge" },
         { key: "revealDelayMs", label: "Reveal delay", type: "int", min: 50, max: 2000, step: 50, unit: "ms", hint: "Pointer rests on the edge this long" },
         { key: "hideDelayMs", label: "Hide delay", type: "int", min: 50, max: 3000, step: 50, unit: "ms", hint: "After the pointer leaves" },
-        { key: "showClock", label: "Clock", type: "bool", hint: "Taskbar only" },
-        { key: "showPreviews", label: "Window previews", type: "bool", hint: "Hover thumbnails (taskbar)" },
+        { key: "showClock", label: "Clock", type: "bool" },
+        { key: "showPreviews", label: "Window previews", type: "bool", hint: "Hover thumbnails" },
         { key: "previewWarpPointer", label: "Pointer follows preview click", type: "bool", hint: "Move the pointer into the window you click" },
       ],
     },
     {
       title: "Start menu",
       fields: [
-        { key: "showStart", label: "Start button", type: "bool", hint: "Taskbar only" },
+        { key: "showStart", label: "Start button", type: "bool" },
         { key: "startHoverOpen", label: "Open built-in menu on hover", type: "bool", hint: "Rest the pointer on the Start button to open it (built-in menu only)" },
         { key: "startCommand", label: "Start button action", type: "text", hint: "\"builtin\" for the built-in menu, or a shell command" },
         { key: "startIcon", label: "Start icon", type: "text", hint: "grid, omarchy, arch, linux, an icon name, or an image path" },

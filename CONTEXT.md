@@ -5,12 +5,12 @@ A plugin for the Omarchy shell that gives mouse-driven access to every open wind
 ## Language
 
 **StartBar**:
-The plugin's name, as users see it. It is not a part of the plugin: the panel is the Dock in both styles.
+The plugin's name, as users see it. It is not a part of the plugin: the panel is the Dock.
 _Avoid_: using StartBar for the panel or the Start menu
 
 **Dock**:
-The panel along the bottom edge of a monitor that holds Items. Every monitor gets its own Dock, and each Dock shows the same Items.
-_Avoid_: taskbar, bar (that word is taken by the Omarchy top bar), panel
+The full-width bar along the bottom edge of a monitor that holds Items, with a Start button at its left end and a clock at its right. Every monitor gets its own Dock, and each Dock shows the same Items. It is always visible unless auto-hide is on, when it is Hidden or Revealed. Users know it as the taskbar.
+_Avoid_: bar (that word is taken by the Omarchy top bar), panel
 
 **Item**:
 One slot in the Dock. An Item is either a Window Item or a Pin.
@@ -51,12 +51,12 @@ _Avoid_: reordered, moved, custom order
 ## Dock states
 
 **Revealed**:
-The Dock is visible, floating over windows. It never reserves screen space.
+The Dock is visible. It floats over windows and never reserves screen space. It is always Revealed unless auto-hide is on.
 
 **Hidden**:
-The Dock is off screen. It is the default state; the Dock becomes Revealed when the pointer rests on the Reveal Strip and returns to Hidden once the pointer has left the Dock.
+The Dock is off screen. It only happens when auto-hide is on (off by default); the Dock becomes Revealed when the pointer rests on the Reveal Strip and returns to Hidden once the pointer has left the Dock.
 _Avoid_: collapsed, minimised, auto-hidden (auto-hide is the behaviour, Hidden is the state)
 
 **Reveal Strip**:
-The invisible band along the full bottom edge of a monitor, above any space the bar reserves, that turns a Hidden Dock into a Revealed one.
+The invisible band along the full bottom edge of a monitor, above any space the bar reserves, that turns a Hidden Dock into a Revealed one. It exists only when auto-hide is on.
 _Avoid_: hot zone, trigger area, edge

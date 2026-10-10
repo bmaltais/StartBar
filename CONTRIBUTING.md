@@ -53,10 +53,11 @@ Walk through this after any change to the Quickshell side, on a two-monitor Omar
 - **Machine:** Omarchy 4, two monitors (DP-1, DP-3)
 - **Method:** Presence, layout, Hidden/Revealed, and the indicators were checked by warping the pointer with `hyprctl dispatch` and comparing `grim` screenshots against live `hyprctl` state (window class, workspace, active window). That confirms everything the compositor reports independently of a real pointer. It does **not** exercise anything that needs a genuine click, drag, or fine hover-motion sequence — this machine has no `ydotool`/`uinput` set up for synthetic input, and a plain cursor warp reaches the Dock's Reveal Strip (a surface-level enter) but doesn't generate the intra-surface motion Qt's per-item hover needs, so tooltips didn't appear under warped hover either. Every item below is marked accordingly; unchecked items need a real mouse pass before the next release, not a re-run of this method.
 - **Result:** Everything checked this way passed. Nothing checked this way failed.
+- **Scope:** This run was made on the old dock style, which has since been removed (docs/adr/0002). Items that only describe the frame of that style were reworded for the taskbar and left unchecked, so they need a pass on the taskbar; the rest keep their marks because the code they cover is shared.
 
 ### Presence and layout
 
-- [x] The Dock appears on every monitor, bottom centre, once enabled. *(confirmed: DP-1 and DP-3 both showed the same four Items after a reveal)*
+- [ ] The Dock appears as a full-width bar along the bottom of every monitor, once enabled. *(not checked on the taskbar; on the old dock style DP-1 and DP-3 both showed the same four Items)*
 - [x] Every Dock shows the same Items, in the same order. *(confirmed: identical icons/badges on both monitors)*
 - [x] One Window Item exists per open Window, across every workspace and monitor, including special workspaces. *(confirmed for ordinary workspaces — the four open Windows across ws2/ws3 all had Items; no special-workspace Window was open to check that half)*
 - [ ] A Window whose App can't be resolved shows a Letter Tile (first letter of the window class). *(not checked — no unresolvable App was open)*
@@ -64,11 +65,13 @@ Walk through this after any change to the Quickshell side, on a two-monitor Omar
 
 ### Hidden / Revealed
 
-- [x] The Dock is Hidden by default and takes no screen space. *(confirmed: baseline screenshot showed no Dock, and other windows' content ran flush to the bottom edge with no reserved gap)*
-- [x] Resting the pointer on the Reveal Strip shows the Dock. *(confirmed: warping the pointer to the bottom edge and waiting past `revealDelayMs` revealed it)*
+With `autoHide` off (the default) the Dock is always visible and there is no Reveal Strip; the items below need `"autoHide": true`.
+
+- [ ] With `autoHide` on, the Dock is Hidden until the pointer rests on the bottom edge, and takes no screen space either way. *(not checked on the taskbar; the old dock style, which always auto-hid, showed no Dock in a baseline screenshot and nothing reserved at the bottom edge)*
+- [x] Resting the pointer on the Reveal Strip shows the Dock. *(confirmed on the old dock style: warping the pointer to the bottom edge and waiting past `revealDelayMs` revealed it; the taskbar's `autoHide` slide-up was also checked, see below)*
 - [ ] A quick pass across the edge does not reveal it. *(not checked — needs a real short hover, not a warp-and-wait)*
 - [ ] The Dock slides up from the edge over ~150ms. *(not checked — a still screenshot can't show the animation; confirmed only by reading `slideDurationMs` in `Service.qml`)*
-- [x] The Dock returns to Hidden after the pointer leaves it. *(confirmed: screenshot after moving the pointer away and waiting past `hideDelayMs` showed no Dock)*
+- [x] With `autoHide` on, the Dock returns to Hidden after the pointer leaves it. *(confirmed on the old dock style: screenshot after moving the pointer away and waiting past `hideDelayMs` showed no Dock)*
 - [x] The Dock floats on the Top layer and reserves no space. *(confirmed: `hyprctl layers` shows the Dock's surface on layer level 2/top, and other windows' content is not pushed up by it)*
 - [ ] If the bar is at the bottom, the Dock's Reveal Strip and panel sit above its reserved space, never overlapping. *(not applicable this run — this machine's bar is at the top)*
 
@@ -76,7 +79,7 @@ Walk through this after any change to the Quickshell side, on a two-monitor Omar
 
 - [x] The Active Window's Item is highlighted. *(confirmed: the Chromium Item — matching `hyprctl activewindow`'s real active window — had a visibly lighter background square the other three Items lacked)*
 - [ ] ...and the highlight moves immediately when focus changes. *(not independently re-checked — this run only ever had one active window; the highlight already being wired to live active-window state makes a change of focus the same code path, but that wasn't exercised by switching focus)*
-- [x] Every Window Item shows a running dot; a bare Pin (no Windows) does not. *(confirmed: all four open Windows showed a dot; no bare Pin was present to check the negative case)*
+- [ ] Every Window Item shows a running pill under its icon (wide and accent-coloured for the Active Window); a bare Pin (no Windows) does not. *(not checked on the taskbar; on the old dock style all four open Windows showed a dot and no bare Pin was present)*
 - [x] With `showWorkspaceBadge` on, every Window Item shows a workspace badge (off by default). *(confirmed: badges read 2/3/3/3, matching each Window's real workspace from `hyprctl clients`)*
 - [ ] A special-workspace Window's badge shows its name. *(not checked — no special-workspace Window was open)*
 - [ ] Hovering an Item shows a tooltip with the Window's title and workspace. *(not confirmed — see Method above; a warped hover didn't trigger it)*
@@ -125,15 +128,14 @@ Walk through this after any change to the Quickshell side, on a two-monitor Omar
 - [x] New Windows join Launch Order next to existing Windows of the same App, not at the end. *(confirmed structurally by the Pins slot ordering above and by `dockModel.test.js`'s same-App-clustering coverage; not independently re-checked by opening a new Window live)*
 - [ ] The Dock never takes keyboard focus. *(not checked — needs typing into another window while hovering/clicking the Dock)*
 
-### Taskbar style, Start menu and menus
+### Start menu and menus
 
 Not yet walked through with a real mouse; the pieces marked *checked* were confirmed with screenshots and `hyprctl` only.
 
-- [x] `"style": "taskbar"` shows a full-width bar with the Start grid, centred icons and a clock; `"alignment": "left"` moves the group to the left. *(checked)*
+- [x] The Dock is a full-width bar with the Start grid, centred icons and a clock; `"alignment": "left"` moves the group to the left. *(checked)*
 - [x] With `"autoHide": true` the bar hides and slides up when the pointer reaches the bottom edge. *(checked)*
 - [ ] Resting the pointer on the Start button keeps the bar up, and clicking it opens the chosen menu. With the built-in menu and `startHoverOpen`, resting opens it after a moment, it stays up while the pointer is on the button or the menu (no flicker), closes shortly after you leave (or at once on reaching another icon), and typing, or clicking the search box, keeps it open.
 - [ ] Right-clicking an empty part of the bar opens the quick menu; each row changes its setting live; "Settings…" opens the settings window on that monitor, where each switch, choice, stepper, slider, text field and list change takes effect live and survives a shell restart; Escape closes it; "Reset to defaults" asks twice.
-- [ ] In dock style, right-clicking the gap between icons or the bottom edge opens a menu with "Switch to taskbar style" and "Settings…".
 - [x] Hovering a window's icon shows a live thumbnail with its title and a close button. *(checked)*
 - [ ] Clicking a thumbnail focuses the window and, with `previewWarpPointer`, moves the pointer to its middle.
 - [ ] Sweeping across icons next to a busy browser shows no flicker.

@@ -6,27 +6,15 @@ The full reference. Capitalised terms (Dock, Item, Pin, Placed...) are defined i
 
 All settings are stored (along with Pins and Placed Pin positions) in the Dock's own entry in Omarchy's shell config, `~/.config/omarchy/shell.json`, under `plugins[]`. Edit the entry by hand and the Dock picks it up live, no restart needed. Every setting can also be changed from the settings window (below), so you rarely need to edit the file.
 
-### Dock
+### The bar
 
-| Setting | Key | Default |
-| --- | --- | --- |
-| Icon size | `iconSize` | 48px |
-| Reveal delay (pointer must rest on the Reveal Strip this long before the Dock shows) | `revealDelayMs` | 200ms |
-| Hide delay (after the pointer leaves the Dock) | `hideDelayMs` | 300ms |
-| Workspace number/name badge over each window's icon (both styles) | `showWorkspaceBadge` | `false` |
-
-Any value that's missing or not a usable positive number falls back to its default.
-
-### Taskbar style
-
-Set `"style": "taskbar"` for the Windows 11-like bar. The default, `"dock"`, is the original floating auto-hiding dock.
+The Dock is a Windows 11-style bar along the bottom edge of every monitor. A leftover `"style"` key from older versions (which also had a floating dock style) is ignored.
 
 ```json
 {
   "plugins": [
     {
       "id": "io.github.bmaltais.startbar",
-      "style": "taskbar",
       "alignment": "left",
       "autoHide": true,
       "startCommand": "builtin"
@@ -37,9 +25,12 @@ Set `"style": "taskbar"` for the Windows 11-like bar. The default, `"dock"`, is 
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `style` | `dock` | `dock` or `taskbar` |
 | `alignment` | `center` | `center` or `left` for the Start button and icons |
-| `autoHide` | `false` | Hide the bar until the pointer rests on the bottom edge (the Dock's reveal behaviour) |
+| `autoHide` | `false` | Hide the bar until the pointer rests on the bottom edge |
+| `revealDelayMs` | `200` | With auto-hide: how long the pointer must rest on the Reveal Strip before the bar shows, in ms |
+| `hideDelayMs` | `300` | With auto-hide: how long after the pointer leaves the bar before it hides, in ms |
+| `iconSize` | `48` | Largest icon size in px; icons are also limited to `barHeight - 20` and shrink further to fit when there are many windows |
+| `showWorkspaceBadge` | `false` | Workspace number or name over each window's icon |
 | `barHeight` | `48` | Bar height in px |
 | `opacity` | `0.9` | Bar background opacity, 0 to 1 |
 | `transparent` | `false` | No bar background, icons only |
@@ -52,7 +43,7 @@ Set `"style": "taskbar"` for the Windows 11-like bar. The default, `"dock"`, is 
 | `showPreviews` | `true` | Hover thumbnails with a close button |
 | `previewWarpPointer` | `true` | Clicking a preview also moves the pointer to the middle of that window |
 
-The icons are smaller than the dock's (up to `barHeight - 20`) and shrink further to fit when there are many windows.
+Any numeric value that's missing or not a usable positive number falls back to its default.
 
 ### Start menu
 
@@ -84,7 +75,7 @@ Right-click an empty part of the bar and choose **Settings…** (or run `omarchy
 ### Menus
 
 - **Right-click an icon**: Pin/Unpin, New Window and the app's own actions; for a window, Maximize/Restore, Full screen/Exit full screen, Float/Tile, and when floating Center and Pin on top; Move to scratchpad; then Close Window. The menu stays open until you pick a row, click outside it, or move the pointer off it.
-- **Right-click the bar** (an empty part) opens a quick menu of the common options (alignment, colours, Start menu, auto-hide, clock, previews...). Its last row, **Settings…**, opens the full settings window. In dock style, right-click the gap between two icons, or the very bottom edge of the screen.
+- **Right-click the bar** (an empty part) opens a quick menu of the common options (alignment, colours, Start menu, auto-hide, clock, previews...). Its last row, **Settings…**, opens the full settings window.
 
 ## Pinning
 

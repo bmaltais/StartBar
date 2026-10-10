@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "Bernard Maltais",
   "license": "MIT",
-  "description": "A Windows 11-style taskbar with a Start menu, or a macOS-style auto-hiding dock: every open window on every workspace and monitor, plus pinned apps.",
+  "description": "A Windows 11-style taskbar with a Start menu for Omarchy: every open window on every workspace and monitor, plus pinned apps.",
   "kinds": ["service"],
   "keepLoaded": true,
   "entryPoints": {

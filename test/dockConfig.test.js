@@ -207,7 +207,7 @@ test("garbage in the entry is defaulted rather than thrown on", () => {
     assert.deepEqual(view.recentApps, []);
     assert.equal(view.startPlaces, null);
     assert.equal(view.settings.iconSize, DEFAULT_ICON_SIZE);
-    assert.equal(view.taskbar.style, "dock");
+    assert.equal(view.taskbar.autoHide, false);
   }
 });
 
@@ -305,16 +305,16 @@ test("pushRecentApp moves an App to the front, de-duplicates and caps the list a
 });
 
 test("setSettings puts a setting back to its default when its patched value is undefined or null", () => {
-  const entry = { iconSize: 64, style: "taskbar" };
-  assert.deepEqual(applyIntent(entry, { type: "setSettings", patch: { iconSize: undefined } }), { style: "taskbar" });
-  assert.deepEqual(applyIntent(entry, { type: "setSetting", key: "style", value: null }), { iconSize: 64 });
+  const entry = { iconSize: 64, alignment: "left" };
+  assert.deepEqual(applyIntent(entry, { type: "setSettings", patch: { iconSize: undefined } }), { alignment: "left" });
+  assert.deepEqual(applyIntent(entry, { type: "setSetting", key: "alignment", value: null }), { iconSize: 64 });
 });
 
 test("resetSettings puts every setting back to its default but leaves Pins, Placed positions, Start pins and recents alone", () => {
   const entry = {
     id: PLUGIN_ID,
     iconSize: 64,
-    style: "taskbar",
+    alignment: "left",
     startPlaces: ["~/a"],
     startCommand: "builtin",
     pins: ["firefox"],
@@ -337,6 +337,6 @@ test("resetSettings puts every setting back to its default but leaves Pins, Plac
 });
 
 test("a bar menu row's patch applies through setSettings", () => {
-  const next = applyIntent({ style: "dock", iconSize: 64 }, { type: "setSettings", patch: { style: "taskbar" } });
-  assert.deepEqual(next, { style: "taskbar", iconSize: 64 });
+  const next = applyIntent({ alignment: "center", iconSize: 64 }, { type: "setSettings", patch: { alignment: "left" } });
+  assert.deepEqual(next, { alignment: "left", iconSize: 64 });
 });

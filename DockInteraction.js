@@ -67,8 +67,8 @@ function initialPreview() {
   return { hovered: null, shown: null };
 }
 
-// `enabled` is whether this Item can have a preview at all (taskbar style,
-// previews on, a Window Item); `dragging` suppresses it during a drag.
+// `enabled` is whether this Item can have a preview at all
+// (previews on, a Window Item); `dragging` suppresses it during a drag.
 function previewHoverStart(state, item, enabled, dragging) {
   if (dragging || !enabled) return { state: state, timers: {} };
   if (state.shown) return { state: { hovered: item, shown: item }, timers: { leave: "stop" } };

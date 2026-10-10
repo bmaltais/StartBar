@@ -1,6 +1,6 @@
 # StartBar
 
-A taskbar, Start menu and dock plugin for the Omarchy shell (Quickshell/QML). The agreed behaviour is in `docs/SPEC.md`; the vocabulary is in `CONTEXT.md`.
+A Windows 11-style taskbar with a Start menu, as a plugin for the Omarchy shell (Quickshell/QML). The agreed behaviour is in `docs/SPEC.md`; the vocabulary is in `CONTEXT.md`.
 
 ## Agent skills
 
