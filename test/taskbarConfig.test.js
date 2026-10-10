@@ -8,21 +8,24 @@ const {
 
 const effectiveTaskbar = (entry) => effectiveView(entry).taskbar;
 
-test("the taskbar view defaults to the original floating, auto-hiding dock", () => {
-  for (const entry of [null, {}, { style: "nonsense" }]) {
-    const s = effectiveTaskbar(entry);
-    assert.equal(s.style, "dock");
-    assert.equal(s.autoHide, true);
+test("a leftover style key, either value or nonsense, changes nothing", () => {
+  const plain = effectiveView({ alignment: "left", pins: ["a"] });
+  for (const style of ["dock", "taskbar", "nonsense", 3, null]) {
+    assert.deepEqual(effectiveView({ alignment: "left", pins: ["a"], style }), plain, String(style));
   }
+  assert.deepEqual(effectiveView({ style: "dock" }), effectiveView({}));
+  assert.deepEqual(effectiveView({ style: "dock" }), effectiveView(null));
+  assert.equal("style" in effectiveView({ style: "dock" }).taskbar, false);
+  assert.equal("style" in effectiveView({ style: "dock" }).values, false);
 });
 
-test("dock style always auto-hides, whatever autoHide says", () => {
-  assert.equal(effectiveTaskbar({ style: "dock", autoHide: false }).autoHide, true);
+test("a leftover style: dock does not force auto-hide on", () => {
+  assert.equal(effectiveTaskbar({ style: "dock" }).autoHide, false);
+  assert.equal(effectiveTaskbar({ style: "dock", autoHide: true }).autoHide, true);
 });
 
-test("taskbar style defaults: always visible, centred, theme colours, Start and clock shown", () => {
-  assert.deepEqual(effectiveTaskbar({ style: "taskbar" }), {
-    style: "taskbar",
+test("bar defaults: always visible, centred, theme colours, Start and clock shown", () => {
+  assert.deepEqual(effectiveTaskbar({}), {
     alignment: "center",
     colorScheme: "theme",
     autoHide: false,
@@ -40,9 +43,8 @@ test("taskbar style defaults: always visible, centred, theme colours, Start and 
   });
 });
 
-test("taskbar style honours valid values and autoHide", () => {
+test("the bar honours valid values and autoHide", () => {
   const s = effectiveTaskbar({
-    style: "taskbar",
     alignment: "left",
     colorScheme: "dark",
     autoHide: true,
@@ -66,18 +68,17 @@ test("taskbar style honours valid values and autoHide", () => {
   assert.equal(s.startIcon, "omarchy");
   assert.equal(s.showClock, false);
   assert.equal(s.showPreviews, false);
-  assert.equal(effectiveTaskbar({ style: "taskbar", startHoverOpen: false }).startHoverOpen, false);
-  assert.equal(effectiveTaskbar({ style: "taskbar", startHoverOpen: 1 }).startHoverOpen, true);
-  assert.equal(effectiveTaskbar({ style: "taskbar", showWorkspaceBadge: true }).showWorkspaceBadge, true);
-  assert.equal(effectiveTaskbar({ style: "dock", showWorkspaceBadge: true }).showWorkspaceBadge, true);
-  assert.equal(effectiveTaskbar({ style: "taskbar", showWorkspaceBadge: "yes" }).showWorkspaceBadge, false);
-  assert.equal(effectiveTaskbar({ style: "taskbar", previewWarpPointer: false }).previewWarpPointer, false);
-  assert.equal(effectiveTaskbar({ style: "taskbar", previewWarpPointer: "no" }).previewWarpPointer, true);
+  assert.equal(effectiveTaskbar({ startHoverOpen: false }).startHoverOpen, false);
+  assert.equal(effectiveTaskbar({ startHoverOpen: 1 }).startHoverOpen, true);
+  assert.equal(effectiveTaskbar({ showWorkspaceBadge: true }).showWorkspaceBadge, true);
+  assert.equal(effectiveTaskbar({ showWorkspaceBadge: true }).showWorkspaceBadge, true);
+  assert.equal(effectiveTaskbar({ showWorkspaceBadge: "yes" }).showWorkspaceBadge, false);
+  assert.equal(effectiveTaskbar({ previewWarpPointer: false }).previewWarpPointer, false);
+  assert.equal(effectiveTaskbar({ previewWarpPointer: "no" }).previewWarpPointer, true);
 });
 
 test("unusable taskbar values fall back to defaults; opacity is clamped to 0..1", () => {
   const s = effectiveTaskbar({
-    style: "taskbar",
     alignment: "right",
     colorScheme: "blue",
     barHeight: -3,
@@ -93,8 +94,8 @@ test("unusable taskbar values fall back to defaults; opacity is clamped to 0..1"
   assert.equal(s.startCommand, "omarchy-menu toggle apps");
   assert.equal(s.startIcon, "grid");
   assert.equal(s.showStart, true);
-  assert.equal(effectiveTaskbar({ style: "taskbar", opacity: 0 }).opacity, 0);
-  assert.equal(effectiveTaskbar({ style: "taskbar", opacity: -1 }).opacity, 0);
+  assert.equal(effectiveTaskbar({ opacity: 0 }).opacity, 0);
+  assert.equal(effectiveTaskbar({ opacity: -1 }).opacity, 0);
 });
 
 test("schemeColors is null for the theme and a full palette for dark and light", () => {
@@ -120,7 +121,7 @@ test("resolveStartIcon: grid, an absolute image path, or an icon-theme name", ()
 const { barMenuRows } = require("../DockConfig.js");
 
 test("barMenuRows lists the bar's options with the current choice checked", () => {
-  const rows = barMenuRows(effectiveTaskbar({ style: "taskbar", alignment: "left", colorScheme: "dark" }));
+  const rows = barMenuRows(effectiveTaskbar({ alignment: "left", colorScheme: "dark" }));
   const byLabel = Object.fromEntries(rows.map((r) => [r.label, r]));
 
   assert.equal(byLabel["Center icons"].checked, false);
@@ -132,7 +133,7 @@ test("barMenuRows lists the bar's options with the current choice checked", () =
 });
 
 test("each row's patch sets its own key; toggles flip the current value", () => {
-  const rows = barMenuRows(effectiveTaskbar({ style: "taskbar", showClock: true, autoHide: false }));
+  const rows = barMenuRows(effectiveTaskbar({ showClock: true, autoHide: false }));
   const patch = (label) => rows.find((r) => r.label === label).patch;
 
   assert.deepEqual(patch("Center icons"), { alignment: "center" });
@@ -145,35 +146,29 @@ test("each row's patch sets its own key; toggles flip the current value", () => 
   assert.deepEqual(patch("Start menu opens on hover"), { startHoverOpen: false });
   assert.deepEqual(patch("Transparent background"), { transparent: true });
   assert.deepEqual(patch("Start button"), { showStart: false });
-  assert.equal(rows.find((r) => r.label === "Switch to dock style"), undefined);
+  assert.equal(rows.some((r) => /style/i.test(r.label)), false);
 });
 
 test("groups are marked so the menu can draw a divider before each new one", () => {
-  const rows = barMenuRows(effectiveTaskbar({ style: "taskbar" }));
+  const rows = barMenuRows(effectiveTaskbar({}));
   const groups = rows.map((r) => r.group);
   assert.deepEqual(groups, [...groups].sort((a, b) => a - b));
   assert.ok(new Set(groups).size >= 3);
 });
 
-test("in dock style the menu offers the way to the taskbar style and Settings", () => {
-  const rows = barMenuRows(effectiveTaskbar({ style: "dock" }));
-  assert.deepEqual(rows.map((r) => r.label), ["Switch to taskbar style", "Settings\u2026"]);
-  assert.deepEqual(rows[0], { label: "Switch to taskbar style", checked: false, patch: { style: "taskbar" }, group: 0 });
-});
-
 test("the menu can switch the Start button between the built-in menu and the Omarchy menu", () => {
-  const omarchy = barMenuRows(effectiveTaskbar({ style: "taskbar" }));
+  const omarchy = barMenuRows(effectiveTaskbar({}));
   assert.equal(omarchy.find((r) => r.label === "Built-in Start menu").checked, false);
   assert.equal(omarchy.find((r) => r.label === "Omarchy menu on Start").checked, true);
   assert.deepEqual(omarchy.find((r) => r.label === "Built-in Start menu").patch, { startCommand: "builtin" });
 
-  const builtin = barMenuRows(effectiveTaskbar({ style: "taskbar", startCommand: "builtin" }));
+  const builtin = barMenuRows(effectiveTaskbar({ startCommand: "builtin" }));
   assert.equal(builtin.find((r) => r.label === "Built-in Start menu").checked, true);
   assert.deepEqual(builtin.find((r) => r.label === "Omarchy menu on Start").patch, { startCommand: "omarchy-menu toggle apps" });
 });
 
 test("the Start menu rows form their own group, divided from the toggles below", () => {
-  const rows = barMenuRows(effectiveTaskbar({ style: "taskbar" }));
+  const rows = barMenuRows(effectiveTaskbar({}));
   const labels = rows.map((r) => r.label);
   const group = (label) => rows.find((r) => r.label === label).group;
   const startGroup = ["Start button", "Built-in Start menu", "Omarchy menu on Start", "Start menu opens on hover"];

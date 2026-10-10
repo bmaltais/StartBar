@@ -54,12 +54,9 @@ Item {
   // window's bottom edge.
   readonly property int revealStripHeight: 4
 
-  // Taskbar style (docs/SPEC.md "Taskbar style"): the Windows-11-like bar is
-  // the same Items and behaviour in a different frame, picked by the
-  // `style` setting. The dock style never auto-hides off, so autoHide is
-  // always true for it (DockConfig.effectiveView).
+  // The bar's own settings (docs/SPEC.md "The bar"). autoHide is off by
+  // default; when on, the bar uses the Reveal Strip and Hidden/Revealed rules.
   readonly property var taskbar: dockSettings.taskbar
-  readonly property bool isTaskbar: taskbar.style === "taskbar"
   readonly property bool autoHide: taskbar.autoHide
   // A fixed palette for colorScheme dark/light, null to follow the theme.
   readonly property var scheme: DockConfig.schemeColors(taskbar.colorScheme)
@@ -389,7 +386,7 @@ Item {
     return /^[0-9a-fA-F]+$/.test(hex) ? "0x" + hex : null
   }
 
-  // A click on a hover preview (taskbar) can also bring the pointer along
+  // A click on a hover preview can also bring the pointer along
   // (previewWarpPointer): after focusing, the pointer is moved to the middle
   // of the Window, read from `hyprctl -j clients`, which also covers a
   // Window on another workspace or monitor once focus has switched to it.
@@ -515,7 +512,7 @@ Item {
   }
 
   // ---- Settings window (docs/SPEC.md "Settings window") -------------------
-  // Opened by a right click on the bar (or the dock's edge/gaps), or with
+  // Opened by a right click on the bar, or with
   // `omarchy-shell io.github.bmaltais.startbar settings`. One window, shown on the monitor
   // that was clicked. DockConfig.settingsSchema() lists every option and its
   // widget; every change is written straight back through dockSettings.apply,
@@ -619,7 +616,7 @@ Item {
           anchors.left: parent.left
           anchors.leftMargin: Style.spacing.lg
           anchors.verticalCenter: parent.verticalCenter
-          text: root.isTaskbar ? "Taskbar settings" : "Dock settings"
+          text: "Taskbar settings"
           color: Color.popups.text
           font.family: Style.font.family
           font.pixelSize: Style.font.body + 3
@@ -1268,16 +1265,6 @@ Item {
         HoverHandler {
           onHoveredChanged: revealState.set("strip", hovered)
         }
-
-        // Dock style has no bar to right-click, so the options menu (which
-        // there only offers the switch to the taskbar style) opens from here
-        // and from the gaps between Items (dockRow, below).
-        TapHandler {
-          acceptedButtons: Qt.RightButton
-          onTapped: function (eventPoint) {
-            barMenu.openAt(bar.mapToItem(panel.contentItem, eventPoint.position.x, 0).x)
-          }
-        }
       }
 
       // Hidden/Revealed and the reveal/hide timers (SPEC.md "How the Dock
@@ -1326,16 +1313,15 @@ Item {
         onTriggered: revealState.apply(DockInteraction.hideTimerFired(revealState.model))
       }
 
-      // The taskbar's full-width bar (taskbar style only; zero-height, so
-      // zero input area, for the dock style). Slides away with the same
-      // Hidden/Revealed rule as the dock when it auto-hides.
+      // The full-width bar. Slides away with the Hidden/Revealed rule when
+      // it auto-hides.
       Rectangle {
         id: bar
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.bottomMargin: panel.shown ? 0 : -height
-        height: root.isTaskbar ? root.taskbar.barHeight : 0
+        height: root.taskbar.barHeight
         color: root.taskbar.transparent ? "transparent" : Util.alpha(root.colBackground, root.taskbar.opacity)
 
         Behavior on anchors.bottomMargin {
@@ -1371,7 +1357,7 @@ Item {
       // centred group.
       Rectangle {
         id: startButton
-        visible: root.isTaskbar && root.taskbar.showStart
+        visible: root.taskbar.showStart
         width: visible ? root.taskbar.barHeight - 8 : 0
         height: width
         radius: Style.cornerRadius
@@ -1431,7 +1417,7 @@ Item {
         Connections {
           target: root
           function onStartMenuRequested(screenName, action) {
-            if (!root.isTaskbar || panel.screen.name !== screenName) return
+            if (panel.screen.name !== screenName) return
             startMenu.send({ type: "command", action: action })
           }
         }
@@ -1446,11 +1432,11 @@ Item {
         }
       }
 
-      // Clock at the bar's right end (taskbar style only). The wrapper's
-      // size is what the mask and layout see, zero while hidden.
+      // Clock at the bar's right end. The wrapper's size is what the mask and
+      // layout see, zero while hidden.
       Item {
         id: clock
-        visible: root.isTaskbar && root.taskbar.showClock
+        visible: root.taskbar.showClock
         width: visible ? clockLabel.implicitWidth : 0
         height: clockLabel.implicitHeight
         anchors.right: parent.right
@@ -1481,28 +1467,21 @@ Item {
       Row {
         id: dockRow
 
-        anchors.horizontalCenter: root.isTaskbar ? undefined : parent.horizontalCenter
         anchors.bottom: parent.bottom
-        // Hidden parks the Row below the visible edge without unmapping
-        // the panel itself; Revealed rests it at the usual gap. Slides
-        // between the two over slideDurationMs. In the taskbar it centres
-        // vertically in the bar instead.
-        anchors.bottomMargin: root.isTaskbar
-          ? (panel.shown ? (root.taskbar.barHeight - height) / 2 : -height)
-          : (revealState.revealed ? Style.gapsOut : -(height + Style.gapsOut))
-        spacing: root.isTaskbar ? 2 : Style.spacing.sm
+        // Centred vertically in the bar. Hidden parks the Row below the
+        // visible edge without unmapping the panel itself; Revealed rests it
+        // in the bar. Slides between the two over slideDurationMs.
+        anchors.bottomMargin: panel.shown ? (root.taskbar.barHeight - height) / 2 : -height
+        spacing: 2
 
-        // Taskbar horizontal placement: the Start button and the Items form
+        // Horizontal placement: the Start button and the Items form
         // one group, centred or pushed to the left edge.
         readonly property real startReserve: startButton.visible ? startButton.width + 4 : 0
         readonly property real clockReserve: clock.visible ? clock.width + 32 : 0
         readonly property real edgePad: 12
-        Binding on x {
-          when: root.isTaskbar
-          value: root.taskbar.alignment === "left"
-            ? dockRow.edgePad + dockRow.startReserve
-            : (panel.width - (dockRow.startReserve + dockRow.width)) / 2 + dockRow.startReserve
-        }
+        x: root.taskbar.alignment === "left"
+          ? dockRow.edgePad + dockRow.startReserve
+          : (panel.width - (dockRow.startReserve + dockRow.width)) / 2 + dockRow.startReserve
 
         Behavior on anchors.bottomMargin {
           NumberAnimation { duration: root.slideDurationMs; easing.type: Easing.InOutCubic }
@@ -1519,16 +1498,12 @@ Item {
           }
         }
 
-        // The taskbar's icons are smaller than the dock's and each Item has
+        // Icons are at most iconSize and fit inside the bar; each Item has
         // side padding for a roomier hit area; itemWidth is what one Item
         // occupies, and everything that steps through the Row uses it.
-        readonly property int baseIconSize: root.isTaskbar
-          ? Math.max(16, Math.min(root.iconSize, root.taskbar.barHeight - 20))
-          : root.iconSize
-        readonly property int pad: root.isTaskbar ? 16 : 0
-        readonly property real maxWidth: root.isTaskbar
-          ? Math.max(0, panel.width - edgePad * 2 - 2 * (startReserve + clockReserve))
-          : Math.max(0, panel.width - Style.gapsOut * 2)
+        readonly property int baseIconSize: Math.max(16, Math.min(root.iconSize, root.taskbar.barHeight - 20))
+        readonly property int pad: 16
+        readonly property real maxWidth: Math.max(0, panel.width - edgePad * 2 - 2 * (startReserve + clockReserve))
         readonly property int iconSize: {
           var count = repeater.count
           if (count <= 0) return baseIconSize
@@ -1793,10 +1768,10 @@ Item {
               anchors.top: icon.bottom
               anchors.topMargin: Style.spacing.xxs
               anchors.horizontalCenter: parent.horizontalCenter
-              width: root.isTaskbar ? (dockItem.active ? 16 : 6) : Style.spacing.xs
-              height: root.isTaskbar ? 3 : Style.spacing.xs
+              width: dockItem.active ? 16 : 6
+              height: 3
               radius: height / 2
-              color: root.isTaskbar && dockItem.active ? root.colAccent : root.colForeground
+              color: dockItem.active ? root.colAccent : root.colForeground
 
               Behavior on width {
                 NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
@@ -1875,7 +1850,7 @@ Item {
         color: root.colAccent
       }
 
-      // Hover previews (taskbar style, showPreviews): a live thumbnail of the
+      // Hover previews (showPreviews): a live thumbnail of the
       // hovered Window with its title and a close button. previewState holds
       // which Item is shown and the open/leave timers; hovering the popup
       // itself keeps it (and the bar, via revealState "preview") up.
@@ -1892,7 +1867,7 @@ Item {
         readonly property bool showing: shownItem !== null
 
         function enabledFor(item) {
-          return root.isTaskbar && root.taskbar.showPreviews && item.kind === "window"
+          return root.taskbar.showPreviews && item.kind === "window"
         }
 
         function apply(result) {
@@ -2122,7 +2097,7 @@ Item {
       }
 
 
-      // The bar's quick menu (taskbar style): right click on the bar
+      // The bar's quick menu: right click on the bar
       // itself. Rows come from DockConfig.barMenuRows; choosing one writes
       // its patch through the same write-back Pin/Unpin uses, so the bar
       // updates live. Closes on any choice or an outside click, and holds
@@ -2151,8 +2126,8 @@ Item {
           barMenu.pointX = x
           barMenu.visible = true
         }
-        // The menu sits just above whichever frame opened it.
-        readonly property real frameTop: root.isTaskbar ? panel.height - root.taskbar.barHeight : dockRow.y
+        // The menu sits just above the bar.
+        readonly property real frameTop: panel.height - root.taskbar.barHeight
 
         grabFocus: true
         visible: false

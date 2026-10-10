@@ -1,3 +1,5 @@
+> Superseded by [ADR 0002](0002-startbar-is-only-a-taskbar.md): the dock style was removed, so there is no `style` setting.
+
 # Taskbar style is a second frame on the same Dock, not a second plugin
 
 A Windows-11-like taskbar was requested after seeing another project's. We add it as a `style` setting (`dock` | `taskbar`) inside this plugin rather than forking or adding a plugin.

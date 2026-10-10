@@ -7,7 +7,7 @@
 <p align="center">
   <b>A taskbar with a Start menu for Omarchy.</b><br>
   Every open window on every workspace and monitor, your pinned apps, and a Start menu
-  with search, all a click away. Prefer a floating dock? It does that too.
+  with search, all a click away.
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
 omarchy plugin add https://github.com/bmaltais/StartBar --enable
 ```
 
-It starts as a floating dock at the bottom edge: rest the pointer there to reveal it. To get the taskbar and Start menu shown above, right-click the gap between two icons and choose **Switch to taskbar style**, then right-click the bar and choose **Built-in Start menu**.
+It shows a taskbar at the bottom of every monitor. The Start button opens the Omarchy menu by default; to use StartBar's own Start menu, shown below, right-click the bar and choose **Built-in Start menu**.
 
 ## Features
 
@@ -33,8 +33,7 @@ It starts as a floating dock at the bottom edge: rest the pointer there to revea
 | **Every window** | One icon per open window, across all workspaces and monitors. Click to jump to it. |
 | **Pins** | Keep apps in the bar whether or not they are running. Drag to reorder, drag out to unpin. |
 | **Start menu** | Search every installed app, a Pinned grid, an A-Z list, recently launched apps, your folders, and lock, sign out and power. |
-| **Two styles** | A full-width taskbar with a Start button and clock, or a floating dock that auto-hides. |
-| **Hover previews** | Live window thumbnails with a close button (taskbar style). |
+| **Hover previews** | Live window thumbnails with a close button. |
 | **Right-click menus** | The app's own actions, plus Maximize, Full screen, Float, Move to scratchpad and Close. |
 | **Follows your theme** | Colours and fonts track the current Omarchy theme live, or pick a fixed light or dark bar. |
 
@@ -48,12 +47,10 @@ It starts as a floating dock at the bottom edge: rest the pointer there to revea
     <td><img src="screenshots/search.png" alt="Typing in the Start menu filters every installed app"></td>
   </tr>
   <tr>
-    <th>Taskbar style</th>
-    <th>Dock style</th>
+    <th colspan="2">Taskbar</th>
   </tr>
   <tr valign="top">
-    <td><img src="screenshots/taskbar.png" alt="A full-width taskbar with a Start button, pinned apps and open windows"></td>
-    <td><img src="screenshots/dock.png" alt="A floating dock with pinned apps and open windows"></td>
+    <td colspan="2"><img src="screenshots/taskbar.png" alt="A full-width taskbar with a Start button, pinned apps and open windows"></td>
   </tr>
 </table>
 
@@ -95,7 +92,6 @@ Changes apply as you make them. Everything is saved in StartBar's own entry in `
   "plugins": [
     {
       "id": "io.github.bmaltais.startbar",
-      "style": "taskbar",
       "alignment": "center",
       "startCommand": "builtin"
     }

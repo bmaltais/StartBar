@@ -11,19 +11,19 @@ Agreed on 2026-09-11 after a design interview. Vocabulary is defined in [CONTEXT
 
 ## What the Dock shows
 
-- One Dock per monitor, bottom centre. Every Dock shows the same Items.
+- One Dock per monitor, a full-width bar along the bottom edge. Every Dock shows the same Items.
 - One Window Item per Window, across all workspaces and all monitors, including special workspaces.
 - A Window whose App cannot be resolved shows a Letter Tile and cannot be pinned.
 - Pins: an App kept in the Dock whether or not it has Windows. A Pin holds a slot; while its App has Windows their Window Items occupy that slot, otherwise the Pin is shown and launches the App on click. A Pin whose App is no longer installed shows a Letter Tile with a "missing" tooltip and stays until unpinned.
 - Ordering: Launch Order, with a new Window joining the Window Items of its own App. Any Item may be dragged to a Placed position; a Placed Pin keeps it permanently, a Placed Window Item until the Window closes. Dragging one Window of a pinned App moves only that Window.
-- Indicators: Active Window highlight, running dot on every Window Item, workspace badge on every Window Item when `showWorkspaceBadge` is on (default off, amended 2026-10-09; both styles), tooltip with title and workspace, urgent-colour tint for Attention. No magnification.
+- Indicators: Active Window highlight, running indicator on every Window Item, workspace badge on every Window Item when `showWorkspaceBadge` is on (default off, amended 2026-10-09), tooltip with title and workspace, urgent-colour tint for Attention. No magnification. The running dot is a small pill under the Window Item, a wide accent pill for the Active Window (see "The bar").
 - Overflow: icons shrink until every Item fits the monitor width.
 - Colours and fonts come from the current Omarchy theme and follow theme switches live.
 
 ## How the Dock behaves
 
-- Default state Hidden. The Reveal Strip spans the full bottom edge of each monitor, above any space the bar reserves. Pointer resting on it for the reveal delay (default 200 ms) makes the Dock Revealed; the Dock returns to Hidden after the hide delay (default 300 ms) once the pointer leaves it. Reveal slides up from the edge in about 150 ms.
-- The Dock stays Revealed while its context menu is open and for the whole of a drag; the hide timer starts after the drop or menu close.
+- The Dock is always visible (Revealed) unless `autoHide` is on (default off). With auto-hide on, the default state is Hidden: the Reveal Strip spans the full bottom edge of each monitor, above any space the bar reserves. Pointer resting on it for the reveal delay (default 200 ms) makes the Dock Revealed; the Dock returns to Hidden after the hide delay (default 300 ms) once the pointer leaves it. Reveal slides up from the edge in about 150 ms. Without auto-hide there is no Reveal Strip and no timers run.
+- With auto-hide on, the Dock stays Revealed while its context menu is open and for the whole of a drag; the hide timer starts after the drop or menu close.
 - The Dock floats on the Top layer and never reserves screen space, so fullscreen windows cover it.
 - Position is fixed at the bottom in version one.
 - Attention never reveals the Dock by itself.
@@ -39,13 +39,13 @@ Agreed on 2026-09-11 after a design interview. Vocabulary is defined in [CONTEXT
 
 ## Configuration
 
-Stored in the Dock's entry in Omarchy's shell config (`~/.config/omarchy/shell.json`, `plugins[]`), written through the shell's plugin write-back hook. Keys: icon size, reveal delay, hide delay, Pins, and each Placed Pin's own position (a Placed Window Item's position is never stored here — it lasts only until the Window closes). Nothing else is configurable in version one.
+Stored in the Dock's entry in Omarchy's shell config (`~/.config/omarchy/shell.json`, `plugins[]`), written through the shell's plugin write-back hook. Keys: the bar's settings (listed under "The bar" below and in docs/SETTINGS.md), Pins, and each Placed Pin's own position (a Placed Window Item's position is never stored here — it lasts only until the Window closes). A leftover `style` key from the removed dock style (docs/adr/0002) is ignored.
 
-## Taskbar style (added 2026-10-09; see docs/adr/0001)
+## The bar (added 2026-10-09; see docs/adr/0001 and docs/adr/0002)
 
-`style: "taskbar"` swaps the dock's frame for a full-width bar; Items, Pins, ordering, drag and the context menu are unchanged. `style: "dock"` (default) is exactly the original behaviour.
+The Dock is a full-width bar: Start button, Items, clock. It began as a second style beside a floating dock; the dock style was removed (docs/adr/0002), so this is the only frame.
 
-- Bar: full-width along the bottom, `barHeight` (48), `opacity` (0.9) or `transparent` (icons only). Floats on the Top layer, reserves no space.
+- Bar: full-width along the bottom, `barHeight` (48), `opacity` (0.9) or `transparent` (icons only). Floats on the Top layer, reserves no space. Icons are `iconSize` (48) at most and also fit inside the bar (`barHeight - 20`), so with the defaults they are 28px.
 - `alignment`: `center` or `left` for the group of Start button + Items.
 - Start button (`showStart`, true): runs `startCommand` (`omarchy-menu toggle apps`); `startIcon` is `grid` (drawn in QML, default), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path.
 - Start menu: with `startCommand: "builtin"` the Start button opens a popup anchored above it, modelled on Windows 11's (the Omarchy menu itself always centres on screen and can't be anchored):
@@ -68,12 +68,12 @@ Stored in the Dock's entry in Omarchy's shell config (`~/.config/omarchy/shell.j
 - Indicators: a small pill under each Window Item; a wide accent pill for the Active Window.
 - Previews (`showPreviews`, true): hovering a Window Item shows a live thumbnail with title, a close button, and click-to-focus. Pins without Windows keep the name tooltip. The thumbnail keeps the Window's own aspect ratio inside a fixed-size box and holds its last good frame if the live capture blanks. With `previewWarpPointer` (true) a click on the thumbnail also moves the pointer to the middle of that Window; false only focuses it. Clicking an Item itself never moves the pointer.
 - `colorScheme`: `theme` (default), `dark`, `light` fixed palettes, for the bar and everything that rises from it (Start menu, menus, previews).
-- Right click on the bar (not on an Item) opens a quick menu of the common options in divided groups: icon alignment; colour scheme; the Start button, built-in or Omarchy Start menu and open-on-hover; then auto-hide, clock, previews, pointer-follows-preview, workspace badge and transparent background; then Settings…. Choosing a row writes the setting and closes the menu; the bar updates live. Its last row, "Settings…", opens the full settings window (below). In dock style the same menu holds "Switch to taskbar style" and "Settings…", opened by right-clicking the gap between Items or the very bottom edge of the screen (the Reveal Strip).
-- `autoHide` (false): when true the bar uses the Dock's Reveal Strip and Hidden/Revealed rules unchanged.
+- Right click on the bar (not on an Item) opens a quick menu of the common options in divided groups: icon alignment; colour scheme; the Start button, built-in or Omarchy Start menu and open-on-hover; then auto-hide, clock, previews, pointer-follows-preview, workspace badge and transparent background; then Settings…. Choosing a row writes the setting and closes the menu; the bar updates live. Its last row, "Settings…", opens the full settings window (below).
+- `autoHide` (false): when true the bar uses the Reveal Strip and Hidden/Revealed rules ("How the Dock behaves").
 
 ## Settings window (added 2026-10-09)
 
-A window titled "Taskbar settings" (or "Dock settings" in dock style) with a widget for every option stored in the config file, so nothing needs hand-editing. It is a layer-shell window on the Overlay layer, centred on the monitor that was clicked, taking keyboard focus on demand; Escape or the close button closes it.
+A window titled "Taskbar settings" with a widget for every option stored in the config file, so nothing needs hand-editing. It is a layer-shell window on the Overlay layer, centred on the monitor that was clicked, taking keyboard focus on demand; Escape or the close button closes it.
 
 - Opened from the "Settings…" row of the bar's quick menu, and by `omarchy-shell io.github.bmaltais.startbar settings` (on the focused monitor; `closeSettings` closes it), so it can be bound to a key.
 - Driven by `DockConfig.settingsSchema()`: groups Appearance, Behavior and Start menu, each field a switch, choice buttons, stepper, slider, text field or list editor. A test keeps the schema in step with the keys the config module understands.
