@@ -2445,7 +2445,10 @@ Item {
             anchors.right: parent.right
             anchors.margins: Style.spacing.md
             height: Style.space(36)
-            radius: height / 2
+            // A slight rounding of its own: Style.cornerRadius follows
+            // Hyprland's window rounding, which many setups (this one
+            // included) set to 0, and a sharp search box looks out of place.
+            radius: Math.max(Style.cornerRadius, Style.space(6))
             color: Util.alpha(Color.popups.text, 0.08)
 
             // In a hover-opened menu, clicking the search box is how you say
@@ -2461,12 +2464,26 @@ Item {
               }
             }
 
+            // The magnifier is the Material Design "magnify" glyph (U+F0349)
+            // from the Nerd Font Omarchy already uses for its own icons, so it
+            // matches the rest of the desktop.
+            Text {
+              id: searchGlyph
+              anchors.verticalCenter: parent.verticalCenter
+              anchors.left: parent.left
+              anchors.leftMargin: Style.spacing.lg + 2
+              text: "\uDB80\uDF49"
+              color: Util.alpha(Color.popups.text, 0.7)
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body + 4
+            }
+
             Text {
               visible: searchInput.text.length === 0
               anchors.verticalCenter: parent.verticalCenter
-              anchors.left: parent.left
+              anchors.left: searchGlyph.right
               anchors.leftMargin: Style.spacing.md
-              text: "Search for apps"
+              text: "Search..."
               color: Util.alpha(Color.popups.text, 0.5)
               font.family: Style.font.family
               font.pixelSize: Style.font.body
@@ -2475,7 +2492,7 @@ Item {
             TextInput {
               id: searchInput
               anchors.fill: parent
-              anchors.leftMargin: Style.spacing.md
+              anchors.leftMargin: searchGlyph.x + searchGlyph.width + Style.spacing.md
               anchors.rightMargin: Style.spacing.md
               verticalAlignment: TextInput.AlignVCenter
               color: Color.popups.text
@@ -3415,8 +3432,19 @@ Item {
 
         property real pointX: 0
         readonly property int menuMargin: Style.spacing.xs
-        readonly property int rowWidth: Style.space(210)
         readonly property var rows: DockConfig.barMenuRows(root.taskbar)
+        // Sized to its longest label (plus the check column and padding), so
+        // nothing is cut off however long a row's label is; never narrower
+        // than a comfortable minimum.
+        readonly property int rowWidth: Math.max(Style.space(190),
+          Math.ceil(barMenuMetrics.advanceWidth) + Style.space(22) + Style.spacing.controlPaddingX * 2 + Style.spacing.xxs * 2 + Style.space(12))
+
+        TextMetrics {
+          id: barMenuMetrics
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          text: DockConfig.longestLabel(barMenu.rows)
+        }
 
         function close() { barMenu.visible = false }
         function openAt(x) {
@@ -3507,6 +3535,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.leftMargin: Style.spacing.controlPaddingX + Style.space(22)
                     anchors.rightMargin: Style.spacing.controlPaddingX
+                    elide: Text.ElideRight
                     text: barRow.modelData.label
                     color: Color.popups.text
                     font.family: Style.font.family
@@ -3548,7 +3577,17 @@ Item {
         property var menuItem: null
         readonly property var anchorWindow: contextMenu.anchorItem ? contextMenu.anchorItem.QsWindow.window : null
         readonly property int menuMargin: Style.spacing.xs
-        readonly property int rowWidth: Style.space(160)
+        // Sized to its longest row, since app actions ("New Private Window")
+        // and window rows ("Move to scratchpad") vary; see barMenu.rowWidth.
+        readonly property int rowWidth: Math.max(Style.space(160),
+          Math.ceil(contextMenuMetrics.advanceWidth) + Style.spacing.controlPaddingX * 2 + Style.spacing.xxs * 2 + Style.space(12))
+
+        TextMetrics {
+          id: contextMenuMetrics
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          text: DockConfig.longestLabel(contextMenu.rows)
+        }
 
         // Rows in three groups, divided in the menu: App rows (Pin/Unpin, New
         // Window and the App's own desktop actions, e.g. "New Private
@@ -3738,6 +3777,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.leftMargin: Style.spacing.controlPaddingX
                     anchors.rightMargin: Style.spacing.controlPaddingX
+                    elide: Text.ElideRight
                     text: menuRow.modelData.label
                     color: menuRow.modelData.enabled ? Color.popups.text : Color.muted
                     font.family: Style.font.family

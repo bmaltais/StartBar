@@ -163,6 +163,21 @@ function resolveStartIcon(value) {
 }
 
 
+// The longest label among menu rows (objects with a `label`) or plain strings,
+// so a menu can be sized to fit it. By character count: Omarchy's menu font is
+// monospace, and a proportional one only needs the width as a close estimate
+// (Service.qml adds slack).
+function longestLabel(items) {
+  var list = Array.isArray(items) ? items : [];
+  var best = "";
+  for (var i = 0; i < list.length; i++) {
+    var item = list[i];
+    var text = typeof item === "string" ? item : item && typeof item.label === "string" ? item.label : "";
+    if (text.length > best.length) best = text;
+  }
+  return best;
+}
+
 function uniqueStrings(value) {
   var raw = Array.isArray(value) ? value : [];
   var seen = {};
@@ -287,6 +302,7 @@ function barMenuRows(taskbar) {
     choice("Theme colors", "colorScheme", "theme", 1),
     choice("Dark colors", "colorScheme", "dark", 1),
     choice("Light colors", "colorScheme", "light", 1),
+    toggle("Start button", "showStart", 2),
     {
       label: "Built-in Start menu",
       checked: taskbar.startCommand === "builtin",
@@ -299,14 +315,13 @@ function barMenuRows(taskbar) {
       patch: { startCommand: DEFAULT_START_COMMAND },
       group: 2,
     },
-    toggle("Auto-hide", "autoHide", 2),
-    toggle("Start button", "showStart", 2),
-    toggle("Clock", "showClock", 2),
-    toggle("Window previews", "showPreviews", 2),
-    toggle("Pointer follows preview click", "previewWarpPointer", 2),
-    toggle("Workspace badge", "showWorkspaceBadge", 2),
     toggle("Start menu opens on hover", "startHoverOpen", 2),
-    toggle("Transparent background", "transparent", 2),
+    toggle("Auto-hide", "autoHide", 3),
+    toggle("Clock", "showClock", 3),
+    toggle("Window previews", "showPreviews", 3),
+    toggle("Pointer follows preview click", "previewWarpPointer", 3),
+    toggle("Workspace badge", "showWorkspaceBadge", 3),
+    toggle("Transparent background", "transparent", 3),
     SETTINGS_ROW,
   ];
 }
@@ -503,6 +518,7 @@ if (typeof module !== "undefined" && module.exports) {
     schemeColors: schemeColors,
     resolveStartIcon: resolveStartIcon,
     barMenuRows: barMenuRows,
+    longestLabel: longestLabel,
     settingsSchema: settingsSchema,
     settingsValues: settingsValues,
     effectiveStartPins: effectiveStartPins,

@@ -169,3 +169,29 @@ test("the menu can switch the Start button between the built-in menu and the Oma
   assert.equal(builtin.find((r) => r.label === "Built-in Start menu").checked, true);
   assert.deepEqual(builtin.find((r) => r.label === "Omarchy menu on Start").patch, { startCommand: "omarchy-menu toggle apps" });
 });
+
+test("the Start menu rows form their own group, divided from the toggles below", () => {
+  const rows = barMenuRows(effectiveTaskbar({ style: "taskbar" }));
+  const labels = rows.map((r) => r.label);
+  const group = (label) => rows.find((r) => r.label === label).group;
+  const startGroup = ["Start button", "Built-in Start menu", "Omarchy menu on Start", "Start menu opens on hover"];
+
+  for (const l of startGroup) assert.equal(group(l), group("Built-in Start menu"), l);
+  // contiguous, so one divider covers them
+  const at = startGroup.map((l) => labels.indexOf(l));
+  assert.equal(Math.max(...at) - Math.min(...at), startGroup.length - 1);
+  // and a different group from the colours above and the toggles below
+  assert.notEqual(group("Built-in Start menu"), group("Light colors"));
+  assert.notEqual(group("Built-in Start menu"), group("Auto-hide"));
+  assert.notEqual(group("Auto-hide"), group("Settings…"));
+});
+
+const { longestLabel } = require("../DockConfig.js");
+
+test("longestLabel picks the longest label from rows or strings, for sizing a menu", () => {
+  assert.equal(longestLabel([{ label: "Clock" }, { label: "Pointer follows preview click" }, { label: "Auto-hide" }]), "Pointer follows preview click");
+  assert.equal(longestLabel(["a", "abc", "ab"]), "abc");
+  assert.equal(longestLabel([]), "");
+  assert.equal(longestLabel(null), "");
+  assert.equal(longestLabel([{ label: "x" }, {}, null]), "x");
+});
