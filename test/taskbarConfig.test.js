@@ -149,11 +149,10 @@ test("groups are marked so the menu can draw a divider before each new one", () 
   assert.ok(new Set(groups).size >= 3);
 });
 
-test("in dock style the menu offers only the way to the taskbar style", () => {
+test("in dock style the menu offers the way to the taskbar style and Settings", () => {
   const rows = barMenuRows(effectiveTaskbar({ style: "dock" }));
-  assert.deepEqual(rows, [
-    { label: "Switch to taskbar style", checked: false, patch: { style: "taskbar" }, group: 0 },
-  ]);
+  assert.deepEqual(rows.map((r) => r.label), ["Switch to taskbar style", "Settings\u2026"]);
+  assert.deepEqual(rows[0], { label: "Switch to taskbar style", checked: false, patch: { style: "taskbar" }, group: 0 });
 });
 
 test("the menu can switch the Start button between the built-in menu and the Omarchy menu", () => {

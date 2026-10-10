@@ -490,6 +490,693 @@ Item {
     return (dockState.titles[item.window.id] || item.window.title || item.window.class || "") + "\nWorkspace: " + (item.badge || "")
   }
 
+  // ---- Settings window (docs/SPEC.md "Settings window") -------------------
+  // Opened by a right click on the bar (or the dock's edge/gaps), or with
+  // `omarchy-shell bernard.dock settings`. One window, shown on the monitor
+  // that was clicked. DockConfig.settingsSchema() lists every option and its
+  // widget; every change is written straight back through dockSettings.write,
+  // so the Dock updates live. Text fields commit when you press Enter or
+  // click away.
+  property var settingsScreen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+
+  // The monitor the keyboard/pointer focus is on, for opens that don't come
+  // from a click on a particular monitor's bar.
+  function focusedScreen() {
+    var name = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""
+    for (var i = 0; i < Quickshell.screens.length; i++) {
+      if (Quickshell.screens[i].name === name) return Quickshell.screens[i]
+    }
+    return null
+  }
+
+  function openSettings(screen) {
+    var target = screen || root.focusedScreen()
+    if (target) root.settingsScreen = target
+    settingsWindow.visible = true
+  }
+
+  IpcHandler {
+    target: "bernard.dock"
+    function settings(): void { root.openSettings(null) }
+    function closeSettings(): void { settingsWindow.visible = false }
+  }
+
+  FileView {
+    id: userDirsForSettings
+    path: Quickshell.env("HOME") + "/.config/user-dirs.dirs"
+    printErrors: false
+  }
+
+  PanelWindow {
+    id: settingsWindow
+
+    readonly property var values: DockConfig.settingsValues(dockSettings.rawEntry)
+    property bool confirmingReset: false
+
+    screen: root.settingsScreen
+    visible: false
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-dock-settings"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+    exclusionMode: ExclusionMode.Ignore
+
+    implicitWidth: Style.space(640)
+    implicitHeight: Math.min(Style.space(760), (root.settingsScreen ? root.settingsScreen.height : 900) - Style.space(80))
+
+    onVisibleChanged: if (!visible) settingsWindow.confirmingReset = false
+
+    function commit(key, value) {
+      var patch = {}
+      patch[key] = value
+      dockSettings.write(patch)
+    }
+
+    // Every setting back to its default; Pins, their positions and the Start
+    // menu's own pins and recents are left alone.
+    function resetAll() {
+      var patch = {}
+      var groups = DockConfig.settingsSchema()
+      for (var g = 0; g < groups.length; g++) {
+        for (var f = 0; f < groups[g].fields.length; f++) patch[groups[g].fields[f].key] = undefined
+      }
+      dockSettings.write(patch)
+    }
+
+    Timer {
+      id: resetConfirmTimer
+      interval: 3000
+      onTriggered: settingsWindow.confirmingReset = false
+    }
+
+    Rectangle {
+      anchors.fill: parent
+      radius: Style.cornerRadius
+      color: Color.popups.background
+      border.width: Style.normalBorderWidth
+      border.color: Color.popups.border
+      focus: true
+      Keys.onEscapePressed: settingsWindow.visible = false
+
+      // Header
+      Item {
+        id: settingsHeader
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: Style.space(52)
+
+        Text {
+          anchors.left: parent.left
+          anchors.leftMargin: Style.spacing.lg
+          anchors.verticalCenter: parent.verticalCenter
+          text: root.isTaskbar ? "Taskbar settings" : "Dock settings"
+          color: Color.popups.text
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body + 3
+          font.bold: true
+        }
+
+        Rectangle {
+          anchors.right: parent.right
+          anchors.rightMargin: Style.spacing.md
+          anchors.verticalCenter: parent.verticalCenter
+          width: Style.space(30)
+          height: width
+          radius: Style.cornerRadius
+          color: closeSettingsMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+
+          Text {
+            anchors.centerIn: parent
+            text: "✕"
+            color: Color.popups.text
+            font.pixelSize: Style.font.body
+          }
+
+          MouseArea {
+            id: closeSettingsMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: settingsWindow.visible = false
+          }
+        }
+      }
+
+      // Body: scrolls when the screen is short.
+      Flickable {
+        id: settingsFlick
+        anchors.top: settingsHeader.bottom
+        anchors.bottom: settingsFooter.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: Style.spacing.lg
+        anchors.rightMargin: Style.spacing.lg
+        contentHeight: settingsColumn.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+
+        Column {
+          id: settingsColumn
+          width: settingsFlick.width
+          spacing: Style.spacing.xs
+
+          Repeater {
+            model: DockConfig.settingsSchema()
+
+            delegate: Column {
+              id: groupBlock
+              required property var modelData
+              width: settingsColumn.width
+
+              Text {
+                topPadding: Style.spacing.md
+                bottomPadding: Style.spacing.xs
+                text: groupBlock.modelData.title
+                color: Color.accent
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                font.bold: true
+              }
+
+              Repeater {
+                model: groupBlock.modelData.fields
+
+                delegate: Item {
+                  id: fieldRow
+                  required property var modelData
+                  readonly property var field: fieldRow.modelData
+                  readonly property var value: settingsWindow.values[fieldRow.field.key]
+                  readonly property bool stacked: fieldRow.field.type === "list"
+
+                  width: groupBlock.width
+                  height: fieldRow.stacked
+                    ? labelColumn.implicitHeight + editorLoader.height + Style.spacing.md * 2
+                    : Math.max(labelColumn.implicitHeight, editorLoader.height) + Style.spacing.md * 2
+
+                  Rectangle {
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: 1
+                    color: Util.alpha(Color.popups.border, 0.5)
+                  }
+
+                  Column {
+                    id: labelColumn
+                    anchors.top: parent.top
+                    anchors.topMargin: Style.spacing.md
+                    anchors.left: parent.left
+                    width: fieldRow.stacked ? parent.width : parent.width - editorLoader.width - Style.spacing.md
+
+                    Text {
+                      width: parent.width
+                      elide: Text.ElideRight
+                      text: fieldRow.field.label
+                      color: Color.popups.text
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.body
+                    }
+
+                    Text {
+                      visible: !!fieldRow.field.hint
+                      width: parent.width
+                      wrapMode: Text.WordWrap
+                      text: fieldRow.field.hint || ""
+                      color: Util.alpha(Color.popups.text, 0.55)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                    }
+                  }
+
+                  Loader {
+                    id: editorLoader
+                    anchors.right: parent.right
+                    anchors.verticalCenter: fieldRow.stacked ? undefined : parent.verticalCenter
+                    anchors.bottom: fieldRow.stacked ? parent.bottom : undefined
+                    anchors.bottomMargin: fieldRow.stacked ? Style.spacing.md : 0
+                    width: fieldRow.stacked ? parent.width : implicitWidth
+                    sourceComponent: {
+                      switch (fieldRow.field.type) {
+                      case "bool": return switchEditor
+                      case "choice": return choiceEditor
+                      case "int": return stepperEditor
+                      case "slider": return sliderEditor
+                      case "text": return textEditor
+                      case "list": return listEditor
+                      }
+                      return null
+                    }
+                    onLoaded: {
+                      item.field = Qt.binding(function () { return fieldRow.field })
+                      item.value = Qt.binding(function () { return fieldRow.value })
+                    }
+
+                    Connections {
+                      target: editorLoader.item
+                      ignoreUnknownSignals: true
+                      function onCommit(next) { settingsWindow.commit(fieldRow.field.key, next) }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          Item { width: 1; height: Style.spacing.md }
+        }
+      }
+
+      // Footer
+      Item {
+        id: settingsFooter
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: Style.space(52)
+
+        Text {
+          anchors.left: parent.left
+          anchors.leftMargin: Style.spacing.lg
+          anchors.verticalCenter: parent.verticalCenter
+          text: "Changes apply instantly"
+          color: Util.alpha(Color.popups.text, 0.55)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+        }
+
+        Rectangle {
+          anchors.right: parent.right
+          anchors.rightMargin: Style.spacing.lg
+          anchors.verticalCenter: parent.verticalCenter
+          width: resetLabel.implicitWidth + Style.spacing.lg * 2
+          height: Style.space(32)
+          radius: Style.cornerRadius
+          color: settingsWindow.confirmingReset
+            ? Util.alpha(Color.urgent, 0.5)
+            : (resetMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08))
+
+          Text {
+            id: resetLabel
+            anchors.centerIn: parent
+            text: settingsWindow.confirmingReset ? "Click again to reset everything" : "Reset to defaults"
+            color: Color.popups.text
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+
+          MouseArea {
+            id: resetMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              if (settingsWindow.confirmingReset) {
+                settingsWindow.confirmingReset = false
+                resetConfirmTimer.stop()
+                settingsWindow.resetAll()
+              } else {
+                settingsWindow.confirmingReset = true
+                resetConfirmTimer.restart()
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // --- Editors: each is given `field` and `value` and emits commit(next).
+
+    Component {
+      id: switchEditor
+      Rectangle {
+        id: sw
+        property var field: null
+        property var value: false
+        signal commit(var next)
+        implicitWidth: Style.space(42)
+        implicitHeight: Style.space(24)
+        width: implicitWidth
+        height: implicitHeight
+        radius: height / 2
+        color: sw.value ? Color.accent : Util.alpha(Color.popups.text, 0.25)
+
+        Rectangle {
+          width: parent.height - 6
+          height: width
+          radius: width / 2
+          y: 3
+          x: sw.value ? parent.width - width - 3 : 3
+          color: Color.popups.background
+
+          Behavior on x { NumberAnimation { duration: 100 } }
+        }
+
+        MouseArea {
+          anchors.fill: parent
+          cursorShape: Qt.PointingHandCursor
+          onClicked: sw.commit(!sw.value)
+        }
+      }
+    }
+
+    Component {
+      id: choiceEditor
+      Row {
+        id: choices
+        property var field: null
+        property var value: ""
+        signal commit(var next)
+        spacing: 2
+
+        Repeater {
+          model: choices.field ? choices.field.options : []
+
+          delegate: Rectangle {
+            id: choice
+            required property var modelData
+            required property int index
+            readonly property bool selected: choices.value === choice.modelData.value
+            width: choiceLabel.implicitWidth + Style.spacing.lg * 2
+            height: Style.space(28)
+            radius: Style.cornerRadius
+            color: choice.selected ? Color.accent : (choiceMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08))
+
+            Text {
+              id: choiceLabel
+              anchors.centerIn: parent
+              text: choice.modelData.label
+              color: choice.selected ? Color.background : Color.popups.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+            }
+
+            MouseArea {
+              id: choiceMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: choices.commit(choice.modelData.value)
+            }
+          }
+        }
+      }
+    }
+
+    Component {
+      id: stepperEditor
+      Row {
+        id: stepper
+        property var field: null
+        property var value: 0
+        signal commit(var next)
+        spacing: Style.spacing.sm
+
+        function step(direction) {
+          var f = stepper.field
+          var next = Number(stepper.value) + direction * f.step
+          stepper.commit(Math.max(f.min, Math.min(f.max, next)))
+        }
+
+        Rectangle {
+          width: Style.space(28)
+          height: width
+          radius: Style.cornerRadius
+          color: minusMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
+          Text { anchors.centerIn: parent; text: "−"; color: Color.popups.text; font.pixelSize: Style.font.body }
+          MouseArea { id: minusMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: stepper.step(-1) }
+        }
+
+        Text {
+          anchors.verticalCenter: undefined
+          width: Style.space(66)
+          height: Style.space(28)
+          horizontalAlignment: Text.AlignHCenter
+          verticalAlignment: Text.AlignVCenter
+          text: stepper.value + (stepper.field && stepper.field.unit ? " " + stepper.field.unit : "")
+          color: Color.popups.text
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+        }
+
+        Rectangle {
+          width: Style.space(28)
+          height: width
+          radius: Style.cornerRadius
+          color: plusMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
+          Text { anchors.centerIn: parent; text: "+"; color: Color.popups.text; font.pixelSize: Style.font.body }
+          MouseArea { id: plusMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: stepper.step(1) }
+        }
+      }
+    }
+
+    Component {
+      id: sliderEditor
+      Row {
+        id: slider
+        property var field: null
+        property var value: 0
+        signal commit(var next)
+        spacing: Style.spacing.md
+        // The knob follows the pointer while dragging; the value is written
+        // once, on release, so a drag is one config write, not hundreds.
+        property real dragValue: -1
+        readonly property real shown: slider.dragValue >= 0 ? slider.dragValue : Number(slider.value)
+
+        Item {
+          id: track
+          width: Style.space(160)
+          height: Style.space(24)
+
+          Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width
+            height: 4
+            radius: 2
+            color: Util.alpha(Color.popups.text, 0.25)
+
+            Rectangle {
+              width: slider.field ? parent.width * (slider.shown - slider.field.min) / (slider.field.max - slider.field.min) : 0
+              height: parent.height
+              radius: 2
+              color: Color.accent
+            }
+          }
+
+          Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            width: Style.space(14)
+            height: width
+            radius: width / 2
+            color: Color.accent
+            x: slider.field ? (track.width - width) * (slider.shown - slider.field.min) / (slider.field.max - slider.field.min) : 0
+          }
+
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            function valueAt(x) {
+              var f = slider.field
+              var ratio = Math.max(0, Math.min(1, x / track.width))
+              var raw = f.min + ratio * (f.max - f.min)
+              return Math.round(raw / f.step) * f.step
+            }
+            onPressed: function (mouse) { slider.dragValue = valueAt(mouse.x) }
+            onPositionChanged: function (mouse) { if (pressed) slider.dragValue = valueAt(mouse.x) }
+            onReleased: {
+              var next = slider.dragValue
+              slider.dragValue = -1
+              if (next >= 0) slider.commit(Math.round(next * 100) / 100)
+            }
+          }
+        }
+
+        Text {
+          width: Style.space(40)
+          height: Style.space(24)
+          verticalAlignment: Text.AlignVCenter
+          text: Math.round(slider.shown * 100) + "%"
+          color: Color.popups.text
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+        }
+      }
+    }
+
+    Component {
+      id: textEditor
+      Rectangle {
+        id: textBox
+        property var field: null
+        property var value: ""
+        signal commit(var next)
+        implicitWidth: Style.space(260)
+        implicitHeight: Style.space(30)
+        width: implicitWidth
+        height: implicitHeight
+        radius: Style.cornerRadius
+        color: Util.alpha(Color.popups.text, 0.08)
+        border.width: input.activeFocus ? 1 : 0
+        border.color: Color.accent
+
+        TextInput {
+          id: input
+          anchors.fill: parent
+          anchors.leftMargin: Style.spacing.md
+          anchors.rightMargin: Style.spacing.md
+          verticalAlignment: TextInput.AlignVCenter
+          clip: true
+          selectByMouse: true
+          color: Color.popups.text
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          text: textBox.value === undefined || textBox.value === null ? "" : String(textBox.value)
+          onEditingFinished: {
+            if (input.text !== String(textBox.value)) textBox.commit(input.text)
+          }
+        }
+      }
+    }
+
+    Component {
+      id: listEditor
+      Column {
+        id: listBox
+        property var field: null
+        property var value: null
+        signal commit(var next)
+        spacing: Style.spacing.xs
+
+        // Unset means the Start menu uses your XDG folders.
+        readonly property bool isDefault: listBox.value === null || listBox.value === undefined
+        readonly property var items: listBox.isDefault ? [] : listBox.value
+
+        function seedFromDefaults() {
+          var places = DockConfig.effectivePlaces(dockSettings.rawEntry, userDirsForSettings.text(), Quickshell.env("HOME") || "")
+          var paths = []
+          for (var i = 0; i < places.length; i++) paths.push(places[i].path)
+          listBox.commit(paths)
+        }
+
+        function replaceAt(index, text) {
+          var next = listBox.items.slice()
+          next[index] = text
+          listBox.commit(next)
+        }
+
+        function removeAt(index) {
+          var next = listBox.items.slice()
+          next.splice(index, 1)
+          listBox.commit(next)
+        }
+
+        Text {
+          visible: listBox.isDefault
+          text: "Default: Home and your Documents, Downloads, Pictures, Music and Videos folders"
+          color: Util.alpha(Color.popups.text, 0.7)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+        }
+
+        Repeater {
+          model: listBox.items
+
+          delegate: Row {
+            id: placeEntry
+            required property string modelData
+            required property int index
+            spacing: Style.spacing.sm
+
+            Rectangle {
+              width: listBox.width - Style.space(34)
+              height: Style.space(30)
+              radius: Style.cornerRadius
+              color: Util.alpha(Color.popups.text, 0.08)
+              border.width: placeInput.activeFocus ? 1 : 0
+              border.color: Color.accent
+
+              TextInput {
+                id: placeInput
+                anchors.fill: parent
+                anchors.leftMargin: Style.spacing.md
+                anchors.rightMargin: Style.spacing.md
+                verticalAlignment: TextInput.AlignVCenter
+                clip: true
+                selectByMouse: true
+                color: Color.popups.text
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                text: placeEntry.modelData
+                onEditingFinished: if (placeInput.text !== placeEntry.modelData) listBox.replaceAt(placeEntry.index, placeInput.text)
+              }
+            }
+
+            Rectangle {
+              width: Style.space(28)
+              height: width
+              radius: Style.cornerRadius
+              color: removeMouse.containsMouse ? Util.alpha(Color.urgent, 0.5) : "transparent"
+              Text { anchors.centerIn: parent; text: "✕"; color: Color.popups.text; font.pixelSize: Style.font.caption }
+              MouseArea { id: removeMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: listBox.removeAt(placeEntry.index) }
+            }
+          }
+        }
+
+        Row {
+          spacing: Style.spacing.sm
+
+          Rectangle {
+            width: addLabel.implicitWidth + Style.spacing.lg * 2
+            height: Style.space(28)
+            radius: Style.cornerRadius
+            color: addMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
+            Text {
+              id: addLabel
+              anchors.centerIn: parent
+              text: listBox.isDefault ? "Customize" : "Add folder"
+              color: Color.popups.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+            }
+            MouseArea {
+              id: addMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                if (listBox.isDefault) listBox.seedFromDefaults()
+                else listBox.commit(listBox.items.concat(["~/"]))
+              }
+            }
+          }
+
+          Rectangle {
+            visible: !listBox.isDefault
+            width: useDefaultLabel.implicitWidth + Style.spacing.lg * 2
+            height: Style.space(28)
+            radius: Style.cornerRadius
+            color: useDefaultMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
+            Text {
+              id: useDefaultLabel
+              anchors.centerIn: parent
+              text: "Use defaults"
+              color: Color.popups.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+            }
+            MouseArea {
+              id: useDefaultMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: listBox.commit(undefined)
+            }
+          }
+        }
+      }
+    }
+  }
+
   Variants {
     model: Quickshell.screens
 
@@ -554,7 +1241,7 @@ Item {
         TapHandler {
           acceptedButtons: Qt.RightButton
           onTapped: function (eventPoint) {
-            barMenu.openAt(revealStrip.mapToItem(panel.contentItem, eventPoint.position.x, 0).x)
+            barMenu.openAt(bar.mapToItem(panel.contentItem, eventPoint.position.x, 0).x)
           }
         }
       }
@@ -633,7 +1320,7 @@ Item {
         TapHandler {
           acceptedButtons: Qt.RightButton
           onTapped: function (eventPoint) {
-            barMenu.openAt(bar.mapToItem(panel.contentItem, eventPoint.position.x, 0).x)
+            barMenu.openAt(revealStrip.mapToItem(panel.contentItem, eventPoint.position.x, 0).x)
           }
         }
 
@@ -2221,7 +2908,7 @@ Item {
         }
       }
 
-      // The bar's options menu (taskbar style): right click on the bar
+      // The bar's quick menu (taskbar style): right click on the bar
       // itself. Rows come from DockConfig.barMenuRows; choosing one writes
       // its patch through the same write-back Pin/Unpin uses, so the bar
       // updates live. Closes on any choice or an outside click, and holds
@@ -2335,8 +3022,13 @@ Item {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                      dockSettings.write(barRow.modelData.patch)
+                      // The Settings row opens the full window; every other
+                      // row writes its setting. Close first so the menu never
+                      // lingers over the window it opens.
+                      var row = barRow.modelData
                       barMenu.close()
+                      if (row.action === "settings") root.openSettings(panel.screen)
+                      else dockSettings.write(row.patch)
                     }
                   }
                 }

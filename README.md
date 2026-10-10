@@ -12,7 +12,7 @@ See [docs/SPEC.md](docs/SPEC.md) for the agreed behaviour and [CONTEXT.md](CONTE
 - **Taskbar style**: a full-width Windows 11-like bar with centred or left-aligned icons, a Start button, a clock, pill indicators, light/dark/theme colours, opacity or fully transparent, and optional auto-hide.
 - **Built-in Start menu**: rises from the Start button with search, a Pinned grid, an All apps A-Z list, Recommended (recently launched), a Places column (Home, Documents, Downloads...), right-click pin/unpin, and an account and power row.
 - **Hover previews** (taskbar): live thumbnails with the window's title and a close button; click to focus, optionally moving the pointer to the window.
-- **Right-click menus**: on an icon, the app's own actions (e.g. "New Private Window") plus Maximize, Full screen, Float, Center, Pin on top and Move to scratchpad; on the bar itself, a settings menu.
+- **Right-click menus**: on an icon, the app's own actions (e.g. "New Private Window") plus Maximize, Full screen, Float, Center, Pin on top and Move to scratchpad; on the bar itself, a quick menu of common options with a Settings… row that opens a full settings window with a widget for every option.
 - Colours and fonts follow the current Omarchy theme live.
 
 ## Install
@@ -39,7 +39,7 @@ omarchy plugin update bernard.dock --yes && omarchy restart shell
 
 ## Settings
 
-All settings are stored (along with Pins and Placed Pin positions) in the Dock's own entry in Omarchy's shell config, `~/.config/omarchy/shell.json`, under `plugins[]`. Edit the entry by hand and the Dock picks it up live, no restart needed. Most taskbar settings can also be changed from the bar's right-click menu (below).
+All settings are stored (along with Pins and Placed Pin positions) in the Dock's own entry in Omarchy's shell config, `~/.config/omarchy/shell.json`, under `plugins[]`. Edit the entry by hand and the Dock picks it up live, no restart needed. Every setting can also be changed from the settings window (below), so you rarely need to edit the file.
 
 ### Dock
 
@@ -107,10 +107,14 @@ It is the one part of the Dock that takes keyboard focus, and only while open.
 | `recentApps` | `[]` | Maintained automatically |
 | `startPlaces` | XDG folders | List of paths (`~` allowed) replacing the Places column; `[]` hides it |
 
+### Settings window
+
+Right-click an empty part of the bar and choose **Settings…** (or run `omarchy-shell bernard.dock settings`, handy for a keybinding) to open a window with a widget for every option in the tables above: switches, choice buttons, steppers, a slider for opacity, text fields, and an editor for the Start menu's Places folders. Changes apply instantly and are saved to `shell.json`. "Reset to defaults" (click twice) puts every setting back; your Pins and Start menu pins are kept.
+
 ### Menus
 
 - **Right-click an icon**: Pin/Unpin, New Window and the app's own actions; for a window, Maximize/Restore, Full screen/Exit full screen, Float/Tile, and when floating Center and Pin on top; Move to scratchpad; then Close Window. The menu stays open until you pick a row, click outside it, or move the pointer off it.
-- **Right-click the bar** (an empty part): icon alignment, colour scheme, built-in or Omarchy Start menu, auto-hide, Start button, clock, previews, pointer-follows-preview, workspace badge and transparent background. In dock style, right-click the gap between two icons or the very bottom edge of the screen to get "Switch to taskbar style".
+- **Right-click the bar** (an empty part) opens a quick menu of the common options (alignment, colours, Start menu, auto-hide, clock, previews...). Its last row, **Settings…**, opens the full settings window. In dock style, right-click the gap between two icons, or the very bottom edge of the screen.
 
 ## Pinning
 
@@ -255,8 +259,8 @@ Not yet walked through with a real mouse; the pieces marked *checked* were confi
 - [x] `"style": "taskbar"` shows a full-width bar with the Start grid, centred icons and a clock; `"alignment": "left"` moves the group to the left. *(checked)*
 - [x] With `"autoHide": true` the bar hides and slides up when the pointer reaches the bottom edge. *(checked)*
 - [ ] Resting the pointer on the Start button keeps the bar up, and clicking it opens the chosen menu.
-- [ ] Right-clicking an empty part of the bar opens the options menu; each row changes the setting live.
-- [ ] In dock style, right-clicking the gap between icons or the bottom edge offers "Switch to taskbar style".
+- [ ] Right-clicking an empty part of the bar opens the quick menu; each row changes its setting live; "Settings…" opens the settings window on that monitor, where each switch, choice, stepper, slider, text field and list change takes effect live and survives a shell restart; Escape closes it; "Reset to defaults" asks twice.
+- [ ] In dock style, right-clicking the gap between icons or the bottom edge opens a menu with "Switch to taskbar style" and "Settings…".
 - [x] Hovering a window's icon shows a live thumbnail with its title and a close button. *(checked)*
 - [ ] Clicking a thumbnail focuses the window and, with `previewWarpPointer`, moves the pointer to its middle.
 - [ ] Sweeping across icons next to a busy browser shows no flicker.
