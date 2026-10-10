@@ -163,7 +163,7 @@ The shell watches `~/.config/omarchy/plugins/` for changes and reloads automatic
 omarchy-shell shell rescanPlugins
 ```
 
-Changes to `Service.qml` itself (a `keepLoaded` service) need `omarchy restart shell` instead of a rescan. Check `journalctl --user -t omarchy-shell` for load warnings or errors.
+Changes to `Service.qml` or `StartMenuView.qml` (loaded as part of the `keepLoaded` service) need `omarchy restart shell` instead of a rescan. Check `journalctl --user -t omarchy-shell` for load warnings or errors.
 
 ### Tests
 

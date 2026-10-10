@@ -7,7 +7,6 @@
 // context menu for Pin/Unpin/New Window/Close Window, and drag to reorder
 // or drag out to unpin/snap back (CONTEXT.md "Placed").
 import QtQuick
-import QtQuick.Effects
 import QtQml.Models
 import Quickshell
 import Quickshell.Io
@@ -58,7 +57,7 @@ Item {
   // Taskbar style (docs/SPEC.md "Taskbar style"): the Windows-11-like bar is
   // the same Items and behaviour in a different frame, picked by the
   // `style` setting. The dock style never auto-hides off, so autoHide is
-  // always true for it (DockConfig.effectiveTaskbar).
+  // always true for it (DockConfig.effectiveView).
   readonly property var taskbar: dockSettings.taskbar
   readonly property bool isTaskbar: taskbar.style === "taskbar"
   readonly property bool autoHide: taskbar.autoHide
@@ -74,48 +73,69 @@ Item {
   // own entry in the shell config's plugins[] array and written back
   // through shell.updateEntryInline, the write-back hook the shell gives
   // every plugin for its own entry (PluginShellApi.updateEntryInline).
-  // rawEntry keeps the entry exactly as last read so write() can fold a
-  // change onto it (DockConfig.mergeSettings) instead of replacing it
-  // outright — updateEntryInline persists whatever object it's given as
-  // the whole entry, so losing rawEntry's other keys here would lose them
-  // from shell.json too. pins re-triggers dockState.refresh() on change
-  // (below) the same way a Hyprland event does, so a hand edit to the
-  // Pins list applies live exactly like a hand edit to a setting does.
+  // This object is only the adapter around DockConfig.js, which owns the
+  // keys and defaults: effectiveView turns the entry into the properties
+  // below, and apply(intent) hands a named intent to DockConfig.applyIntent
+  // and persists the next entry. updateEntryInline persists whatever object
+  // it's given as the whole entry, so each intent folds onto the entry as
+  // last read, or onto the entry an earlier intent in the same tick already
+  // produced (pendingEntry) — the file hasn't been re-read by then, and
+  // folding onto rawEntry again would lose the first change. pins re-triggers
+  // dockState.refresh() on change (below) the same way a Hyprland event
+  // does, so a hand edit to the Pins list applies live exactly like a hand
+  // edit to a setting does.
   QtObject {
     id: dockSettings
 
     readonly property string pluginId: root.shell && root.shell.pluginId ? root.shell.pluginId : "bernard.dock"
     property var rawEntry: null
+    property var pendingEntry: null
     property int iconSize: DockConfig.DEFAULT_ICON_SIZE
     property int revealDelayMs: DockConfig.DEFAULT_REVEAL_DELAY_MS
     property int hideDelayMs: DockConfig.DEFAULT_HIDE_DELAY_MS
     property var pins: []
-    property var taskbar: DockConfig.effectiveTaskbar(null)
+    property var taskbar: DockConfig.effectiveView(null).taskbar
     // A Placed Pin's own position (CONTEXT.md "Placed"), persisted here
     // the same way pins is. A Placed Window Item's lives only in
     // dockState.windowPlacements — it has no business surviving a
     // restart — so it isn't part of this settings object at all.
     property var placements: []
+    // The Start menu's own pinned list and recent apps, its custom Places
+    // folders (null: the user's XDG folders), and every settings-window
+    // field's current value.
+    property var startPins: []
+    property var recentApps: []
+    property var startPlaces: null
+    property var values: DockConfig.effectiveView(null).values
 
     onPinsChanged: dockState.refresh()
     onPlacementsChanged: dockState.refresh()
 
     function applyShellConfig(shellConfig) {
       var entry = DockConfig.findPluginEntry(shellConfig, dockSettings.pluginId)
-      var effective = DockConfig.effectiveSettings(entry)
+      var view = DockConfig.effectiveView(entry)
       dockSettings.rawEntry = entry
-      dockSettings.iconSize = effective.iconSize
-      dockSettings.revealDelayMs = effective.revealDelayMs
-      dockSettings.hideDelayMs = effective.hideDelayMs
-      dockSettings.taskbar = DockConfig.effectiveTaskbar(entry)
-      dockSettings.pins = DockConfig.effectivePins(entry)
-      dockSettings.placements = DockConfig.effectivePlacements(entry)
+      dockSettings.pendingEntry = null
+      dockSettings.iconSize = view.settings.iconSize
+      dockSettings.revealDelayMs = view.settings.revealDelayMs
+      dockSettings.hideDelayMs = view.settings.hideDelayMs
+      dockSettings.taskbar = view.taskbar
+      dockSettings.pins = view.pins
+      dockSettings.placements = view.placements
+      dockSettings.startPins = view.startPins
+      dockSettings.recentApps = view.recentApps
+      dockSettings.startPlaces = view.startPlaces
+      dockSettings.values = view.values
     }
 
-    function write(patch) {
+    function apply(intent) {
       if (!root.shell || typeof root.shell.updateEntryInline !== "function") return false
-      var merged = DockConfig.mergeSettings(dockSettings.rawEntry, patch)
-      return root.shell.updateEntryInline(dockSettings.pluginId, merged)
+      var base = dockSettings.pendingEntry !== null ? dockSettings.pendingEntry : dockSettings.rawEntry
+      var next = DockConfig.applyIntent(base, intent)
+      dockSettings.pendingEntry = next
+      var written = root.shell.updateEntryInline(dockSettings.pluginId, next)
+      if (!written) dockSettings.pendingEntry = null
+      return written
     }
   }
 
@@ -432,24 +452,24 @@ Item {
       "bash", normalized])
   }
 
-  // Pin/Unpin (docs/SPEC.md "Input", the context menu): DockModel.nextPins
-  // computes the Pins list's new contents; this only hands it to
-  // dockSettings.write, the same write-back path a hand edit to Pins
+  // Pin/Unpin (docs/SPEC.md "Input", the context menu): DockConfig.applyIntent
+  // computes the Pins list's new contents; this only hands the intent to
+  // dockSettings.apply, the same write-back path a hand edit to Pins
   // already applies live through.
   function togglePin(appId, pinned) {
     if (!appId) return
-    dockSettings.write({ pins: DockModel.nextPins(dockSettings.pins, appId, pinned) })
+    dockSettings.apply({ type: pinned ? "unpinApp" : "pinApp", appId: appId })
   }
 
   // Drag within the Dock (docs/SPEC.md "Input": "reorder"; CONTEXT.md
-  // "Placed"): a Pin Item's own drop is persisted through dockSettings.write
+  // "Placed"): a Pin Item's own drop is persisted through dockSettings.apply
   // exactly like Pin/Unpin already is, so it survives a restart. A Window
   // Item's drop only updates dockState.windowPlacements directly — it has
   // no write-back of its own to trigger dockState.refresh() the way a
   // settings change does, so this calls it explicitly.
   function placeItem(item, targetIndex) {
     if (item.kind === "pin") {
-      dockSettings.write({ placements: DockModel.placeAt(dockSettings.placements, item.key, targetIndex) })
+      dockSettings.apply({ type: "placeItem", key: item.key, index: targetIndex })
       return
     }
     dockState.windowPlacements[item.window.id] = targetIndex
@@ -458,19 +478,14 @@ Item {
 
   // Drag out of the Dock, for an Item whose App is pinned (docs/SPEC.md
   // "Input": "Drag out of the Dock: unpin the Item's App if pinned"): one
-  // write so dropping the App from Pins and dropping its own Pin's Placed
-  // position (CONTEXT.md "Placed") land in the same shellConfig update —
-  // two separate dockSettings.write calls here would each merge onto the
-  // same pre-write rawEntry, and the first's change would be lost under
-  // the second's. Dragging an unpinned Window Item out is a snap-back
+  // intent so dropping the App from Pins and dropping its own Pin's Placed
+  // position (CONTEXT.md "Placed") land in the same shellConfig update.
+  // Dragging an unpinned Window Item out is a snap-back
   // (docs/SPEC.md "Input"): the Dock itself has nothing to persist for
   // that, so it never calls this at all.
   function unpinFromDrag(appId) {
     if (!appId) return
-    dockSettings.write({
-      pins: DockModel.nextPins(dockSettings.pins, appId, true),
-      placements: DockModel.unplace(dockSettings.placements, "pin:" + appId),
-    })
+    dockSettings.apply({ type: "unpinAppFromDrag", appId: appId })
   }
 
   // A Pin's tooltip (docs/SPEC.md "What the Dock shows": "a 'missing'
@@ -497,7 +512,7 @@ Item {
   // Opened by a right click on the bar (or the dock's edge/gaps), or with
   // `omarchy-shell bernard.dock settings`. One window, shown on the monitor
   // that was clicked. DockConfig.settingsSchema() lists every option and its
-  // widget; every change is written straight back through dockSettings.write,
+  // widget; every change is written straight back through dockSettings.apply,
   // so the Dock updates live. Text fields commit when you press Enter or
   // click away.
   property var settingsScreen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
@@ -545,7 +560,7 @@ Item {
   PanelWindow {
     id: settingsWindow
 
-    readonly property var values: DockConfig.settingsValues(dockSettings.rawEntry)
+    readonly property var values: dockSettings.values
     property bool confirmingReset: false
 
     screen: root.settingsScreen
@@ -562,20 +577,13 @@ Item {
     onVisibleChanged: if (!visible) settingsWindow.confirmingReset = false
 
     function commit(key, value) {
-      var patch = {}
-      patch[key] = value
-      dockSettings.write(patch)
+      dockSettings.apply({ type: "setSetting", key: key, value: value })
     }
 
     // Every setting back to its default; Pins, their positions and the Start
     // menu's own pins and recents are left alone.
     function resetAll() {
-      var patch = {}
-      var groups = DockConfig.settingsSchema()
-      for (var g = 0; g < groups.length; g++) {
-        for (var f = 0; f < groups[g].fields.length; f++) patch[groups[g].fields[f].key] = undefined
-      }
-      dockSettings.write(patch)
+      dockSettings.apply({ type: "resetSettings" })
     }
 
     Timer {
@@ -1067,7 +1075,7 @@ Item {
         readonly property var items: listBox.isDefault ? [] : listBox.value
 
         function seedFromDefaults() {
-          var places = StartMenu.effectivePlaces(dockSettings.rawEntry, userDirsForSettings.text(), Quickshell.env("HOME") || "")
+          var places = StartMenu.effectivePlaces(dockSettings.startPlaces, userDirsForSettings.text(), Quickshell.env("HOME") || "")
           var paths = []
           for (var i = 0; i < places.length; i++) paths.push(places[i].path)
           listBox.commit(paths)
@@ -1208,7 +1216,7 @@ Item {
       // Exclusive while the built-in Start menu is open, hover-shown or not,
       // so typing searches it wherever the pointer is. (A popup's grab would
       // have pulled pointer focus off the Start button; this does not.)
-      WlrLayershell.keyboardFocus: startMenu.visible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+      WlrLayershell.keyboardFocus: startMenu.open ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
       // exclusiveZone 0 with Normal mode reserves no space of our own but
       // still keeps us out of any space another layer surface (the bar)
@@ -1410,41 +1418,15 @@ Item {
           onHoveredChanged: revealState.set("start", hovered)
         }
 
-        // Resting the pointer here opens the built-in menu after a moment, like
-        // a hover preview (startHoverOpen). Such a menu is in hoverMode: it
-        // takes no focus grab (a grab would pull pointer focus off this
-        // button, which would then read as "pointer left" and close the
-        // menu, over and over) and closes when the pointer is on neither the
-        // button nor the menu, or at once when the pointer reaches another
-        // icon. Only clicking its search box takes the grab and keeps it
-        // open (startMenu.takeFocus); clicking this button does not.
+        // The built-in menu's open/close rules (resting here opens it after a
+        // moment, clicking toggles it, a hover-opened one closes when the
+        // pointer leaves) live in StartMenu.js; this only reports what the
+        // pointer and the keyboard command did.
         Connections {
           target: root
           function onStartMenuRequested(screenName, action) {
             if (!root.isTaskbar || panel.screen.name !== screenName) return
-            if (root.taskbar.startCommand !== "builtin") {
-              // Not the built-in menu: the key does what the Start button does.
-              if (action === "toggle") Quickshell.execDetached(["bash", "-lc", root.taskbar.startCommand])
-              return
-            }
-            if (action === "close" || startMenu.visible) {
-              startMenu.visible = false
-            } else {
-              // Opened for the keyboard: a real grab, never hover mode.
-              startMenu.hoverMode = false
-              startMenu.visible = true
-            }
-          }
-        }
-
-        Timer {
-          id: startHoverTimer
-          interval: 400
-          onTriggered: {
-            if (root.taskbar.startCommand === "builtin" && root.taskbar.startHoverOpen && !startMenu.visible) {
-              startMenu.hoverMode = true
-              startMenu.visible = true
-            }
+            startMenu.send({ type: "command", action: action })
           }
         }
 
@@ -1453,28 +1435,8 @@ Item {
           anchors.fill: parent
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
-          onContainsMouseChanged: {
-            if (startMouse.containsMouse) {
-              startHoverTimer.restart()
-            } else {
-              startHoverTimer.stop()
-              startLeaveTimer.restart()
-            }
-          }
-          onClicked: {
-            if (root.taskbar.startCommand !== "builtin") {
-              Quickshell.execDetached(["bash", "-lc", root.taskbar.startCommand])
-            } else if (startMenu.visible && startMenu.hoverMode) {
-              // A menu that hover opened stays a hover menu: a click here
-              // doesn't make it permanent. Move off and it goes; click its
-              // search box to keep it and type.
-            } else if (startMenu.visible) {
-              startMenu.visible = false
-            } else {
-              startMenu.hoverMode = false
-              startMenu.visible = true
-            }
-          }
+          onContainsMouseChanged: startMenu.send({ type: "buttonHover", hovered: startMouse.containsMouse })
+          onClicked: startMenu.send({ type: "buttonClick" })
         }
       }
 
@@ -1938,7 +1900,7 @@ Item {
         function hoverStart(delegate) {
           // Moving on to an icon takes over from a hover-opened Start menu at
           // once, instead of both showing until the menu's leave timer fires.
-          if (startMenu.visible && startMenu.hoverMode) startMenu.visible = false
+          startMenu.send({ type: "itemHovered" })
           if (root.dragInProgress || !enabledFor(delegate.modelData)) return
           var point = delegate.mapToItem(panel.contentItem, delegate.width / 2, 0)
           previewState.anchorX = point.x
@@ -2122,1294 +2084,36 @@ Item {
       Item {
         id: startDismiss
         z: 40
-        width: (startMenu.visible && !startMenu.hoverMode) ? panel.width : 0
-        height: (startMenu.visible && !startMenu.hoverMode) ? panel.height : 0
+        width: (startMenu.open && !startMenu.hoverMode) ? panel.width : 0
+        height: (startMenu.open && !startMenu.hoverMode) ? panel.height : 0
 
         MouseArea {
           anchors.fill: parent
           acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-          onPressed: startMenu.visible = false
+          onPressed: startMenu.send({ type: "dismiss" })
         }
       }
 
-      // The built-in Start menu (startCommand "builtin"), modelled on the
-      // Windows 11 one (docs/SPEC.md "Start menu"): a popup rising from the
-      // Start button with search, a Pinned grid, an "All apps" A-Z list, a
-      // Recommended list of recently launched apps, right-click to pin/unpin,
-      // and an account + power row. Unlike the rest of the Dock it takes
-      // keyboard focus while open, so typing searches. DockModel's
-      // filterApps/groupAlphabetically/pushRecent and DockConfig's
-      // effectiveStartPins/effectiveRecent/startPowerActions hold the logic.
-      //
-      // It is an Item of the panel (a full-screen layer surface) rather than a
-      // popup window. A popup's keyboard grab needs a recent click inside our
-      // own window, which a menu opened by hover or by the keyboard command
-      // doesn't have, so the compositor refused it and typing went to
-      // whatever window was focused. The panel instead claims the keyboard
-      // itself while the menu is open (see keyboardFocus on the panel), the
-      // way Omarchy's own menu does.
-      Item {
+      // The built-in Start menu (startCommand "builtin"): StartMenuView.qml,
+      // driven by StartMenu.js. Part of the panel, not a popup, so it can
+      // hold the keyboard (see keyboardFocus on the panel); `send()` is the
+      // only way in.
+      StartMenuView {
         id: startMenu
         z: 50
 
-        readonly property int menuMargin: Style.spacing.xs
-        readonly property var allApps: {
-          var values = DesktopEntries.applications.values
-          var list = []
-          for (var i = 0; i < values.length; i++) {
-            var entry = values[i]
-            list.push({
-              id: entry.id,
-              name: entry.name || entry.id,
-              genericName: entry.genericName || "",
-              keywords: entry.keywords || [],
-              noDisplay: !!entry.noDisplay,
-              icon: entry.icon,
-              entry: entry,
-            })
-          }
-          return list
-        }
-        readonly property var appsById: {
-          var map = ({})
-          for (var i = 0; i < startMenu.allApps.length; i++) map[startMenu.allApps[i].id] = startMenu.allApps[i]
-          return map
-        }
-        readonly property var startPinIds: StartMenu.effectiveStartPins(dockSettings.rawEntry, dockSettings.pins)
-        readonly property var recentIds: StartMenu.effectiveRecent(dockSettings.rawEntry)
-        readonly property var pinnedApps: startMenu.resolve(startMenu.startPinIds)
-        readonly property var recentApps: startMenu.resolve(startMenu.recentIds)
-        readonly property bool searching: searchInput.text.trim().length > 0
-        readonly property var results: StartMenu.filterApps(startMenu.allApps, searchInput.text)
-        // "All apps" flattened for a sectioned ListView: each app carries
-        // its section letter.
-        readonly property var allAppsFlat: {
-          var groups = StartMenu.groupAlphabetically(startMenu.allApps)
-          var flat = []
-          for (var g = 0; g < groups.length; g++) {
-            for (var a = 0; a < groups[g].apps.length; a++) {
-              var app = groups[g].apps[a]
-              flat.push({ id: app.id, name: app.name, icon: app.icon, entry: app.entry, letter: groups[g].letter })
-            }
-          }
-          return flat
-        }
-        // Places column on the left (Home, Documents, Downloads...): from the
-        // user's XDG folders or a `startPlaces` list (StartMenu.effectivePlaces).
-        property string userDirsText: ""
-        readonly property var places: StartMenu.effectivePlaces(dockSettings.rawEntry, startMenu.userDirsText, Quickshell.env("HOME") || "")
-        readonly property real placesWidth: startMenu.places.length > 0 ? Style.space(150) : 0
-
-        FileView {
-          path: Quickshell.env("HOME") + "/.config/user-dirs.dirs"
-          printErrors: false
-          onLoaded: startMenu.userDirsText = text()
-        }
-
-        // Whether ~/.face exists, so the avatar never tries to load a missing file.
-        property bool hasFace: false
-
-        Process {
-          running: true
-          command: ["test", "-f", Quickshell.env("HOME") + "/.face"]
-          onExited: function (exitCode) { startMenu.hasFace = exitCode === 0 }
-        }
-
-        Process {
-          running: true
-          command: ["getent", "passwd", Quickshell.env("USER") || ""]
-          stdout: StdioCollector {
-            onStreamFinished: startMenu.fullName = StartMenu.parseFullName(text, "")
-          }
-        }
-
-        readonly property string userName: {
-          var name = Quickshell.env("USER") || ""
-          return name.length > 0 ? name.charAt(0).toUpperCase() + name.slice(1) : "User"
-        }
-
-        // Opened by resting on the Start button rather than a click, and not
-        // yet used: it closes once the pointer is on neither the button nor
-        // the menu. It already has the keyboard; takeFocus() (a keystroke or a
-        // click on the search box) ends hover mode, and the menu then stays
-        // until dismissed, like a clicked-open one.
-        property bool hoverMode: false
-        readonly property bool pointerAround: startMouse.containsMouse || startMenuHover.hovered
-
-        function arrowName(key) {
-          if (key === Qt.Key_Left) return "left"
-          if (key === Qt.Key_Right) return "right"
-          if (key === Qt.Key_Up) return "up"
-          if (key === Qt.Key_Down) return "down"
-          return ""
-        }
-
-        function moveHomeSelection(direction) {
-          var next = StartMenu.moveSelection(
-            { section: startMenu.navSection, index: startMenu.navIndex },
-            direction,
-            { pinned: startMenu.pinnedApps.length, recent: startMenu.recentApps.length })
-          startMenu.navSection = next.section
-          startMenu.navIndex = next.index
-          if (next.section === "pinned") pinnedGrid.positionViewAtIndex(next.index, GridView.Contain)
-        }
-
-        // The app Enter launches: the arrow-selected one on the home screen,
-        // the highlighted row in All apps.
-        function selectedApp() {
-          if (startMenu.showAll) return startMenu.allAppsFlat[allList.currentIndex] || null
-          if (startMenu.navSection === "pinned") return startMenu.pinnedApps[startMenu.navIndex] || null
-          if (startMenu.navSection === "recent") return startMenu.recentApps[startMenu.navIndex] || null
-          return null
-        }
-
-        // Drag to reorder a pinned app. The slot under the ghost's centre,
-        // from the grid's own geometry (-1 outside the grid).
-        function updatePinDrag() {
-          if (startMenu.dragPinId === "") return
-          var p = pinnedGrid.mapFromItem(pinGhost.parent, pinGhost.x + pinGhost.width / 2, pinGhost.y + pinGhost.height / 2)
-          startMenu.dragPinSlot = StartMenu.pinSlotAt(
-            p,
-            { width: pinnedGrid.width, height: pinnedGrid.height, cellWidth: pinnedGrid.cellWidth, cellHeight: pinnedGrid.cellHeight, contentY: pinnedGrid.contentY },
-            startMenu.pinnedApps.length, StartMenu.PINNED_COLUMNS)
-        }
-
-        // On release: write the new order. The grid skips pins whose app is
-        // gone, so the slot is mapped back to the saved list by app id.
-        function finishPinDrag() {
-          var id = startMenu.dragPinId
-          var slot = startMenu.dragPinSlot
-          startMenu.dragPinId = ""
-          startMenu.dragPinSlot = -1
-          pinGhost.visible = false
-          var shown = startMenu.pinnedApps.map(function (app) { return app.id })
-          var next = StartMenu.reorderedPins(startMenu.startPinIds, shown, id, slot)
-          if (next) dockSettings.write({ startPins: next })
-        }
-
-        function resetNavigation() {
-          startMenu.navSection = ""
-          startMenu.navIndex = -1
-          allList.currentIndex = -1
-          startMenu.showLetters = false
-        }
-
-        onShowAllChanged: startMenu.resetNavigation()
-
-        // Ends hover mode: the menu stays until dismissed.
-        function takeFocus() {
-          if (!startMenu.hoverMode) return
-          startMenu.hoverMode = false
-          Qt.callLater(function () { searchInput.forceActiveFocus() })
-        }
-
-        // Arrow-key selection on the home screen (StartMenu.moveSelection):
-        // which of Pinned / Recommended and the index in it; "" is none.
-        property string navSection: ""
-        property int navIndex: -1
-        // The A-Z jump grid in All apps, and the letter -> first-row map.
-        property bool showLetters: false
-        readonly property var letterRows: StartMenu.letterIndex(startMenu.allAppsFlat)
-        // Drag-to-reorder of a pinned app: the id being dragged, and the slot
-        // in Pinned it would land on (-1 none).
-        property string dragPinId: ""
-        property int dragPinSlot: -1
-        // Account: real name from the system account (falls back to the login).
-        property string fullName: ""
-        readonly property string accountName: startMenu.fullName.length > 0 ? startMenu.fullName : startMenu.userName
-
-        property bool showAll: false
-        property bool powerOpen: false
-        // The menu behind the user's name (Lock, Sign out).
-        property bool userOpen: false
-        // The right-clicked app (null when its menu is closed) and where.
-        property var menuApp: null
-        property real menuX: 0
-        property real menuY: 0
-
-        function resolve(ids) {
-          var out = []
-          for (var i = 0; i < ids.length; i++) {
-            if (startMenu.appsById[ids[i]]) out.push(startMenu.appsById[ids[i]])
-          }
-          return out
-        }
-
-        function launch(app) {
-          if (!app) return
-          startMenu.visible = false
-          root.launchApp(app.entry)
-          dockSettings.write({ recentApps: StartMenu.pushRecent(startMenu.recentIds, app.id) })
-        }
-
-        function openAppMenu(app, item, mouse) {
-          var point = item.mapToItem(card, mouse.x, mouse.y)
-          startMenu.menuX = Math.min(point.x, card.width - Style.space(200))
-          startMenu.menuY = Math.min(point.y, card.height - Style.space(130))
-          startMenu.powerOpen = false
-          startMenu.userOpen = false
-          startMenu.menuApp = app
-        }
-
-        function closeOverlays() {
-          startMenu.menuApp = null
-          startMenu.powerOpen = false
-          startMenu.userOpen = false
-        }
-
-        readonly property var menuRows: {
-          var app = startMenu.menuApp
-          if (!app) return []
-          var startPinned = startMenu.startPinIds.indexOf(app.id) >= 0
-          var dockPinned = dockSettings.pins.indexOf(app.id) >= 0
-          return [
-            {
-              label: startPinned ? "Unpin from Start" : "Pin to Start",
-              run: function () { dockSettings.write({ startPins: DockModel.nextPins(startMenu.startPinIds, app.id, startPinned) }) },
-            },
-            {
-              label: dockPinned ? "Unpin from Dock" : "Pin to Dock",
-              run: function () { root.togglePin(app.id, dockPinned) },
-            },
-            { label: "Open", run: function () { startMenu.launch(app) } },
-          ]
-        }
-
-        visible: false
-        // Zero-sized while closed, so the panel's input mask (which goes by
-        // item geometry) takes nothing from the windows beneath.
-        readonly property real fullWidth: Style.space(600) + startMenu.placesWidth
-        readonly property real fullHeight: Math.min(Style.space(640), Math.max(Style.space(240), panel.height - root.taskbar.barHeight - startMenu.menuMargin * 2))
-        width: startMenu.visible ? startMenu.fullWidth : 0
-        height: startMenu.visible ? startMenu.fullHeight : 0
-        // Centred icons: the menu is centred on the screen. Left-aligned: its
-        // left edge lines up with the Start button. Either way it stays on screen.
-        readonly property real anchorX: root.taskbar.alignment === "left"
-          ? startButton.x
-          : (panel.width - startMenu.fullWidth) / 2
-        x: Math.round(Math.max(startMenu.menuMargin, Math.min(startMenu.anchorX, panel.width - startMenu.fullWidth - startMenu.menuMargin)))
-        y: Math.round(Math.max(startMenu.menuMargin, panel.height - root.taskbar.barHeight - startMenu.fullHeight - startMenu.menuMargin))
-
-        Timer {
-          id: startLeaveTimer
-          interval: 500
-          onTriggered: {
-            if (startMenu.visible && startMenu.hoverMode && !startMenu.pointerAround) startMenu.visible = false
-          }
-        }
-
-        onVisibleChanged: {
-          revealState.set("menu", startMenu.visible)
-          if (!startMenu.visible) {
-            startMenu.hoverMode = false
-            startLeaveTimer.stop()
-          }
-          if (startMenu.visible) {
-            searchInput.text = ""
-            startMenu.showAll = false
-            startMenu.closeOverlays()
-            startMenu.resetNavigation()
-            resultList.currentIndex = 0
-            searchInput.forceActiveFocus()
-          }
-        }
-
-        Rectangle {
-          id: card
-          anchors.fill: parent
-          radius: Style.cornerRadius
-          color: Color.popups.background
-          border.width: Style.normalBorderWidth
-          border.color: Color.popups.border
-
-          HoverHandler {
-            id: startMenuHover
-            onHoveredChanged: if (!hovered) startLeaveTimer.restart()
-          }
-
-          Rectangle {
-            id: searchBox
-            anchors.top: parent.top
-            anchors.left: placesPane.right
-            anchors.right: parent.right
-            anchors.margins: Style.spacing.md
-            height: Style.space(36)
-            // A slight rounding of its own: Style.cornerRadius follows
-            // Hyprland's window rounding, which many setups (this one
-            // included) set to 0, and a sharp search box looks out of place.
-            radius: Math.max(Style.cornerRadius, Style.space(6))
-            color: Util.alpha(Color.popups.text, 0.08)
-
-            // In a hover-opened menu, clicking the search box is how you say
-            // "I want to type": it takes the focus grab (and the keyboard).
-            MouseArea {
-              anchors.fill: parent
-              z: 2
-              enabled: startMenu.hoverMode
-              propagateComposedEvents: true
-              onPressed: function (mouse) {
-                startMenu.takeFocus()
-                mouse.accepted = false
-              }
-            }
-
-            // The magnifier is the Material Design "magnify" glyph (U+F0349)
-            // from the Nerd Font Omarchy already uses for its own icons, so it
-            // matches the rest of the desktop.
-            Text {
-              id: searchGlyph
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.left: parent.left
-              anchors.leftMargin: Style.spacing.lg + 2
-              text: "\uDB80\uDF49"
-              color: Util.alpha(Color.popups.text, 0.7)
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body + 4
-            }
-
-            Text {
-              visible: searchInput.text.length === 0
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.left: searchGlyph.right
-              anchors.leftMargin: Style.spacing.md
-              text: "Search..."
-              color: Util.alpha(Color.popups.text, 0.5)
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body
-            }
-
-            TextInput {
-              id: searchInput
-              anchors.fill: parent
-              anchors.leftMargin: searchGlyph.x + searchGlyph.width + Style.spacing.md
-              anchors.rightMargin: Style.spacing.md
-              verticalAlignment: TextInput.AlignVCenter
-              color: Color.popups.text
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body
-              clip: true
-              focus: true
-              onTextChanged: {
-                resultList.currentIndex = 0
-                startMenu.closeOverlays()
-                startMenu.resetNavigation()
-              }
-
-              Keys.onPressed: function (event) {
-                // Using the keyboard means you want the menu: a hover-shown
-                // one stays open from here on.
-                startMenu.takeFocus()
-                if (event.key === Qt.Key_Down && startMenu.searching) {
-                  resultList.currentIndex = Math.min(resultList.count - 1, resultList.currentIndex + 1)
-                  event.accepted = true
-                } else if (event.key === Qt.Key_Up && startMenu.searching) {
-                  resultList.currentIndex = Math.max(0, resultList.currentIndex - 1)
-                  event.accepted = true
-                } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && startMenu.searching) {
-                  startMenu.launch(startMenu.results[resultList.currentIndex])
-                  event.accepted = true
-                } else if (!startMenu.searching && !startMenu.showAll && startMenu.arrowName(event.key) !== "") {
-                  // Home screen: arrow keys walk Pinned, then Recommended.
-                  startMenu.moveHomeSelection(startMenu.arrowName(event.key))
-                  event.accepted = true
-                } else if (!startMenu.searching && startMenu.showAll && !startMenu.showLetters
-                           && (event.key === Qt.Key_Down || event.key === Qt.Key_Up)) {
-                  // All apps: Up/Down walk the A-Z list.
-                  var next = allList.currentIndex + (event.key === Qt.Key_Down ? 1 : -1)
-                  allList.currentIndex = Math.max(0, Math.min(allList.count - 1, next))
-                  allList.positionViewAtIndex(allList.currentIndex, ListView.Contain)
-                  event.accepted = true
-                } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !startMenu.searching) {
-                  startMenu.launch(startMenu.selectedApp())
-                  event.accepted = true
-                } else if (event.key === Qt.Key_Escape) {
-                  // Back out one layer at a time: overlay, jump grid, search, All apps, menu.
-                  if (startMenu.menuApp || startMenu.powerOpen || startMenu.userOpen) startMenu.closeOverlays()
-                  else if (startMenu.showLetters) startMenu.showLetters = false
-                  else if (startMenu.searching) searchInput.text = ""
-                  else if (startMenu.showAll) startMenu.showAll = false
-                  else startMenu.visible = false
-                  event.accepted = true
-                }
-              }
-            }
-          }
-
-          // Places: one click opens the folder in the default file manager.
-          Item {
-            id: placesPane
-            anchors.top: parent.top
-            anchors.bottom: footer.top
-            anchors.left: parent.left
-            width: startMenu.placesWidth
-            visible: startMenu.placesWidth > 0
-
-            Column {
-              anchors.top: parent.top
-              anchors.left: parent.left
-              anchors.right: parent.right
-              anchors.margins: Style.spacing.md
-              spacing: 2
-
-              Repeater {
-                model: startMenu.places
-
-                delegate: Rectangle {
-                  id: placeRow
-                  required property var modelData
-                  width: parent.width
-                  height: Style.space(38)
-                  radius: Style.cornerRadius
-                  color: placeMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
-
-                  Image {
-                    id: placeIcon
-                    anchors.left: parent.left
-                    anchors.leftMargin: Style.spacing.sm
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Style.space(22)
-                    height: width
-                    fillMode: Image.PreserveAspectFit
-                    asynchronous: true
-                    sourceSize.width: width * Screen.devicePixelRatio
-                    sourceSize.height: height * Screen.devicePixelRatio
-                    source: Quickshell.iconPath(placeRow.modelData.icon, true)
-                  }
-
-                  Text {
-                    anchors.left: placeIcon.right
-                    anchors.leftMargin: Style.spacing.md
-                    anchors.right: parent.right
-                    anchors.rightMargin: Style.spacing.sm
-                    anchors.verticalCenter: parent.verticalCenter
-                    elide: Text.ElideRight
-                    text: placeRow.modelData.label
-                    color: Color.popups.text
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                  }
-
-                  MouseArea {
-                    id: placeMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                      startMenu.visible = false
-                      Quickshell.execDetached(["xdg-open", placeRow.modelData.path])
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-          // Settings: the way on to Omarchy's setup menu, like the gear on
-          // Windows 10's left rail. Sits at the bottom of the Places column.
-          Rectangle {
-            visible: startMenu.placesWidth > 0
-            anchors.left: placesPane.left
-            anchors.bottom: placesPane.bottom
-            anchors.margins: Style.spacing.md
-            width: startMenu.placesWidth - Style.spacing.md * 2
-            height: Style.space(38)
-            radius: Style.cornerRadius
-            color: settingsRailMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
-
-            Image {
-              id: settingsRailIcon
-              anchors.left: parent.left
-              anchors.leftMargin: Style.spacing.sm
-              anchors.verticalCenter: parent.verticalCenter
-              width: Style.space(22)
-              height: width
-              fillMode: Image.PreserveAspectFit
-              asynchronous: true
-              sourceSize.width: width * Screen.devicePixelRatio
-              sourceSize.height: height * Screen.devicePixelRatio
-              source: Quickshell.iconPath("preferences-system", true)
-            }
-
-            Text {
-              anchors.left: settingsRailIcon.right
-              anchors.leftMargin: Style.spacing.md
-              anchors.right: parent.right
-              anchors.rightMargin: Style.spacing.sm
-              anchors.verticalCenter: parent.verticalCenter
-              elide: Text.ElideRight
-              text: "Settings"
-              color: Color.popups.text
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body
-            }
-
-            MouseArea {
-              id: settingsRailMouse
-              anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: {
-                startMenu.visible = false
-                Quickshell.execDetached(["bash", "-lc", "omarchy-menu summon setup"])
-              }
-            }
-          }
-
-          Item {
-            id: body
-            anchors.top: searchBox.bottom
-            anchors.topMargin: Style.spacing.sm
-            anchors.bottom: footer.top
-            anchors.left: placesPane.right
-            anchors.right: parent.right
-            anchors.leftMargin: Style.spacing.md
-            anchors.rightMargin: Style.spacing.md
-
-            // Search results.
-            ListView {
-              id: resultList
-              visible: startMenu.searching
-              anchors.fill: parent
-              clip: true
-              model: startMenu.results
-              boundsBehavior: Flickable.StopAtBounds
-              highlightMoveDuration: 0
-
-              delegate: Rectangle {
-                id: resultRow
-                required property var modelData
-                required property int index
-                width: resultList.width
-                height: Style.space(44)
-                radius: Style.cornerRadius
-                color: (resultList.currentIndex === index || resultMouse.containsMouse)
-                  ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
-
-                Image {
-                  id: resultIcon
-                  anchors.left: parent.left
-                  anchors.leftMargin: Style.spacing.sm
-                  anchors.verticalCenter: parent.verticalCenter
-                  width: Style.space(28)
-                  height: width
-                  fillMode: Image.PreserveAspectFit
-                  asynchronous: true
-                  sourceSize.width: width * Screen.devicePixelRatio
-                  sourceSize.height: height * Screen.devicePixelRatio
-                  source: resultRow.modelData.icon ? Quickshell.iconPath(resultRow.modelData.icon, true) : ""
-                }
-
-                Text {
-                  anchors.left: resultIcon.right
-                  anchors.leftMargin: Style.spacing.md
-                  anchors.right: parent.right
-                  anchors.rightMargin: Style.spacing.sm
-                  anchors.verticalCenter: parent.verticalCenter
-                  elide: Text.ElideRight
-                  text: resultRow.modelData.name
-                  color: Color.popups.text
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.body
-                }
-
-                MouseArea {
-                  id: resultMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  acceptedButtons: Qt.LeftButton | Qt.RightButton
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: function (mouse) {
-                    if (mouse.button === Qt.RightButton) startMenu.openAppMenu(resultRow.modelData, resultMouse, mouse)
-                    else startMenu.launch(resultRow.modelData)
-                  }
-                }
-              }
-            }
-
-            // All apps: A-Z with letter headings.
-            ListView {
-              id: allList
-              visible: !startMenu.searching && startMenu.showAll
-              anchors.fill: parent
-              clip: true
-              model: startMenu.allAppsFlat
-              currentIndex: -1
-              boundsBehavior: Flickable.StopAtBounds
-
-              section.property: "letter"
-              section.criteria: ViewSection.FullString
-              section.delegate: Item {
-                required property string section
-                width: allList.width
-                height: Style.space(30)
-
-                Text {
-                  anchors.left: parent.left
-                  anchors.leftMargin: Style.spacing.sm
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: parent.section
-                  color: Color.accent
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.body
-                  font.bold: true
-                }
-
-                // Click a letter heading for the A-Z jump grid.
-                MouseArea {
-                  anchors.fill: parent
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: startMenu.showLetters = true
-                }
-              }
-
-              header: Item {
-                width: allList.width
-                height: Style.space(34)
-
-                Text {
-                  anchors.left: parent.left
-                  anchors.leftMargin: Style.spacing.sm
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: "‹  Back"
-                  color: Color.popups.text
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.body
-
-                  MouseArea {
-                    anchors.fill: parent
-                    anchors.margins: -Style.spacing.sm
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: startMenu.showAll = false
-                  }
-                }
-              }
-
-              delegate: Rectangle {
-                id: allRow
-                required property var modelData
-                required property int index
-                width: allList.width
-                height: Style.space(40)
-                radius: Style.cornerRadius
-                color: (allMouse.containsMouse || allList.currentIndex === allRow.index)
-                  ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
-
-                Image {
-                  id: allIcon
-                  anchors.left: parent.left
-                  anchors.leftMargin: Style.spacing.sm
-                  anchors.verticalCenter: parent.verticalCenter
-                  width: Style.space(26)
-                  height: width
-                  fillMode: Image.PreserveAspectFit
-                  asynchronous: true
-                  sourceSize.width: width * Screen.devicePixelRatio
-                  sourceSize.height: height * Screen.devicePixelRatio
-                  source: allRow.modelData.icon ? Quickshell.iconPath(allRow.modelData.icon, true) : ""
-                }
-
-                Text {
-                  anchors.left: allIcon.right
-                  anchors.leftMargin: Style.spacing.md
-                  anchors.right: parent.right
-                  anchors.rightMargin: Style.spacing.sm
-                  anchors.verticalCenter: parent.verticalCenter
-                  elide: Text.ElideRight
-                  text: allRow.modelData.name
-                  color: Color.popups.text
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.body
-                }
-
-                MouseArea {
-                  id: allMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  acceptedButtons: Qt.LeftButton | Qt.RightButton
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: function (mouse) {
-                    if (mouse.button === Qt.RightButton) startMenu.openAppMenu(allRow.modelData, allMouse, mouse)
-                    else startMenu.launch(allRow.modelData)
-                  }
-                }
-              }
-            }
-
-            // The A-Z jump grid: letters that have apps are lit, the rest dim.
-            Rectangle {
-              id: lettersOverlay
-              visible: startMenu.showLetters && startMenu.showAll && !startMenu.searching
-              anchors.fill: parent
-              z: 5
-              color: Color.popups.background
-
-              MouseArea { anchors.fill: parent; onClicked: startMenu.showLetters = false }
-
-              Text {
-                anchors.top: parent.top
-                anchors.topMargin: Style.spacing.md
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: "Jump to"
-                color: Util.alpha(Color.popups.text, 0.6)
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-              }
-
-              Grid {
-                anchors.centerIn: parent
-                columns: 6
-                spacing: Style.spacing.md
-
-                Repeater {
-                  model: ["#", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-                          "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
-
-                  delegate: Rectangle {
-                    id: letterCell
-                    required property string modelData
-                    readonly property bool present: startMenu.letterRows[letterCell.modelData] !== undefined
-                    width: Style.space(52)
-                    height: width
-                    radius: Style.cornerRadius
-                    color: letterCell.present && letterMouse.containsMouse
-                      ? Style.hoverFillFor(Color.foreground, Color.accent)
-                      : (letterCell.present ? Util.alpha(Color.popups.text, 0.08) : "transparent")
-
-                    Text {
-                      anchors.centerIn: parent
-                      text: letterCell.modelData
-                      color: letterCell.present ? Color.accent : Util.alpha(Color.popups.text, 0.25)
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.body + 2
-                      font.bold: letterCell.present
-                    }
-
-                    MouseArea {
-                      id: letterMouse
-                      anchors.fill: parent
-                      hoverEnabled: true
-                      enabled: letterCell.present
-                      cursorShape: Qt.PointingHandCursor
-                      onClicked: {
-                        startMenu.showLetters = false
-                        allList.positionViewAtIndex(startMenu.letterRows[letterCell.modelData], ListView.Beginning)
-                      }
-                    }
-                  }
-                }
-              }
-            }
-
-            // Home: Pinned grid and Recommended list.
-            Item {
-              id: home
-              visible: !startMenu.searching && !startMenu.showAll
-              anchors.fill: parent
-
-              Text {
-                id: pinnedTitle
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.leftMargin: Style.spacing.sm
-                text: "Pinned"
-                color: Color.popups.text
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
-                font.bold: true
-              }
-
-              Rectangle {
-                id: allAppsButton
-                anchors.verticalCenter: pinnedTitle.verticalCenter
-                anchors.right: parent.right
-                width: allAppsLabel.implicitWidth + Style.spacing.md * 2
-                height: Style.space(26)
-                radius: Style.cornerRadius
-                color: allAppsMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
-
-                Text {
-                  id: allAppsLabel
-                  anchors.centerIn: parent
-                  text: "All apps  ›"
-                  color: Color.popups.text
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.caption
-                }
-
-                MouseArea {
-                  id: allAppsMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: startMenu.showAll = true
-                }
-              }
-
-              GridView {
-                id: pinnedGrid
-                anchors.top: pinnedTitle.bottom
-                anchors.topMargin: Style.spacing.sm
-                anchors.bottom: recommendedTitle.top
-                anchors.bottomMargin: Style.spacing.sm
-                anchors.left: parent.left
-                anchors.right: parent.right
-                clip: true
-                cellWidth: Math.floor(width / 6)
-                cellHeight: Style.space(88)
-                model: startMenu.pinnedApps
-                boundsBehavior: Flickable.StopAtBounds
-
-                delegate: Item {
-                  id: pinnedTile
-                  required property var modelData
-                  required property int index
-                  width: pinnedGrid.cellWidth
-                  height: pinnedGrid.cellHeight
-                  opacity: startMenu.dragPinId === pinnedTile.modelData.id ? 0.25 : 1
-
-                  Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: 2
-                    radius: Style.cornerRadius
-                    color: (pinnedMouse.containsMouse || (startMenu.navSection === "pinned" && startMenu.navIndex === pinnedTile.index))
-                      ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
-                  }
-
-                  Image {
-                    id: pinnedIcon
-                    anchors.top: parent.top
-                    anchors.topMargin: Style.spacing.md
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: Style.space(36)
-                    height: width
-                    fillMode: Image.PreserveAspectFit
-                    asynchronous: true
-                    sourceSize.width: width * Screen.devicePixelRatio
-                    sourceSize.height: height * Screen.devicePixelRatio
-                    source: pinnedTile.modelData.icon ? Quickshell.iconPath(pinnedTile.modelData.icon, true) : ""
-                  }
-
-                  Text {
-                    anchors.top: pinnedIcon.bottom
-                    anchors.topMargin: Style.spacing.xs
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.leftMargin: 4
-                    anchors.rightMargin: 4
-                    horizontalAlignment: Text.AlignHCenter
-                    elide: Text.ElideRight
-                    text: pinnedTile.modelData.name
-                    color: Color.popups.text
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.caption
-                  }
-
-                  MouseArea {
-                    id: pinnedMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    cursorShape: Qt.PointingHandCursor
-                    // Left-drag a pin to reorder it: the ghost (a sibling of
-                    // the grid) follows the pointer, the slot under it is
-                    // outlined, and releasing writes the new order.
-                    preventStealing: true
-                    drag.target: pinGhost
-                    drag.threshold: 8
-                    // A drag still ends in a click event; this stops the drop
-                    // from also launching the app.
-                    property bool wasDragged: false
-
-                    onPressed: function (mouse) {
-                      pinnedMouse.wasDragged = false
-                      if (mouse.button !== Qt.LeftButton) {
-                        pinnedMouse.drag.target = null
-                        return
-                      }
-                      pinnedMouse.drag.target = pinGhost
-                      var origin = pinnedTile.mapToItem(home, 0, 0)
-                      pinGhost.x = origin.x
-                      pinGhost.y = origin.y
-                      pinGhost.width = pinnedTile.width
-                      pinGhost.height = pinnedTile.height
-                      pinGhost.app = pinnedTile.modelData
-                    }
-
-                    drag.onActiveChanged: {
-                      if (pinnedMouse.drag.active) {
-                        pinnedMouse.wasDragged = true
-                        startMenu.dragPinId = pinnedTile.modelData.id
-                        pinGhost.visible = true
-                        startMenu.updatePinDrag()
-                      } else if (startMenu.dragPinId === pinnedTile.modelData.id) {
-                        startMenu.finishPinDrag()
-                      }
-                    }
-
-                    onClicked: function (mouse) {
-                      if (pinnedMouse.wasDragged) return
-                      if (mouse.button === Qt.RightButton) startMenu.openAppMenu(pinnedTile.modelData, pinnedMouse, mouse)
-                      else startMenu.launch(pinnedTile.modelData)
-                    }
-                  }
-                }
-
-                Text {
-                  visible: startMenu.pinnedApps.length === 0
-                  anchors.centerIn: parent
-                  text: "Right-click an app in All apps to pin it here"
-                  color: Util.alpha(Color.popups.text, 0.5)
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.caption
-                }
-              }
-
-              // The icon that follows the pointer while a pin is dragged, and
-              // an outline on the slot it would land in.
-              Item {
-                id: pinGhost
-                property var app: null
-                visible: false
-                z: 100
-                opacity: 0.85
-                onXChanged: if (startMenu.dragPinId !== "") startMenu.updatePinDrag()
-                onYChanged: if (startMenu.dragPinId !== "") startMenu.updatePinDrag()
-
-                Image {
-                  anchors.top: parent.top
-                  anchors.topMargin: Style.spacing.md
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  width: Style.space(36)
-                  height: width
-                  fillMode: Image.PreserveAspectFit
-                  asynchronous: true
-                  sourceSize.width: width * Screen.devicePixelRatio
-                  sourceSize.height: height * Screen.devicePixelRatio
-                  source: pinGhost.app && pinGhost.app.icon ? Quickshell.iconPath(pinGhost.app.icon, true) : ""
-                }
-              }
-
-              Rectangle {
-                id: pinDropMark
-                visible: startMenu.dragPinId !== "" && startMenu.dragPinSlot >= 0
-                z: 99
-                width: pinnedGrid.cellWidth - 4
-                height: pinnedGrid.cellHeight - 4
-                radius: Style.cornerRadius
-                color: "transparent"
-                border.width: 2
-                border.color: Color.accent
-                x: pinnedGrid.x + (startMenu.dragPinSlot % 6) * pinnedGrid.cellWidth + 2
-                y: pinnedGrid.y + Math.floor(startMenu.dragPinSlot / 6) * pinnedGrid.cellHeight - pinnedGrid.contentY + 2
-              }
-
-              Text {
-                id: recommendedTitle
-                anchors.bottom: recommendedGrid.top
-                anchors.bottomMargin: Style.spacing.sm
-                anchors.left: parent.left
-                anchors.leftMargin: Style.spacing.sm
-                text: "Recommended"
-                color: Color.popups.text
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
-                font.bold: true
-              }
-
-              GridView {
-                id: recommendedGrid
-                anchors.bottom: parent.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: Style.space(48) * 3
-                clip: true
-                cellWidth: Math.floor(width / 2)
-                cellHeight: Style.space(48)
-                model: startMenu.recentApps
-                interactive: false
-
-                delegate: Item {
-                  id: recentTile
-                  required property var modelData
-                  required property int index
-                  width: recommendedGrid.cellWidth
-                  height: recommendedGrid.cellHeight
-
-                  Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: 2
-                    radius: Style.cornerRadius
-                    color: (recentMouse.containsMouse || (startMenu.navSection === "recent" && startMenu.navIndex === recentTile.index))
-                      ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
-                  }
-
-                  Image {
-                    id: recentIcon
-                    anchors.left: parent.left
-                    anchors.leftMargin: Style.spacing.md
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Style.space(28)
-                    height: width
-                    fillMode: Image.PreserveAspectFit
-                    asynchronous: true
-                    sourceSize.width: width * Screen.devicePixelRatio
-                    sourceSize.height: height * Screen.devicePixelRatio
-                    source: recentTile.modelData.icon ? Quickshell.iconPath(recentTile.modelData.icon, true) : ""
-                  }
-
-                  Text {
-                    anchors.left: recentIcon.right
-                    anchors.leftMargin: Style.spacing.md
-                    anchors.right: parent.right
-                    anchors.rightMargin: Style.spacing.sm
-                    anchors.verticalCenter: parent.verticalCenter
-                    elide: Text.ElideRight
-                    text: recentTile.modelData.name
-                    color: Color.popups.text
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                  }
-
-                  MouseArea {
-                    id: recentMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: function (mouse) {
-                      if (mouse.button === Qt.RightButton) startMenu.openAppMenu(recentTile.modelData, recentMouse, mouse)
-                      else startMenu.launch(recentTile.modelData)
-                    }
-                  }
-                }
-
-                Text {
-                  visible: startMenu.recentApps.length === 0
-                  anchors.left: parent.left
-                  anchors.leftMargin: Style.spacing.sm
-                  anchors.top: parent.top
-                  text: "Apps you open from here show up here"
-                  color: Util.alpha(Color.popups.text, 0.5)
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.caption
-                }
-              }
-            }
-          }
-
-          // Account and power row.
-          Rectangle {
-            id: footer
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: Style.space(56)
-            radius: Style.cornerRadius
-            color: Util.alpha(Color.popups.text, 0.05)
-
-            // Clicking the account (avatar or name) opens Lock / Sign out.
-            Rectangle {
-              id: userButton
-              anchors.left: parent.left
-              anchors.leftMargin: Style.spacing.xs
-              anchors.verticalCenter: parent.verticalCenter
-              width: userNameText.x + userNameText.width + Style.spacing.md
-              height: Style.space(44)
-              radius: Style.cornerRadius
-              color: userMouse.containsMouse || startMenu.userOpen ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
-
-              MouseArea {
-                id: userMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                  startMenu.menuApp = null
-                  startMenu.powerOpen = false
-                  startMenu.userOpen = !startMenu.userOpen
-                }
-              }
-            }
-
-            Rectangle {
-              id: avatar
-              anchors.left: parent.left
-              anchors.leftMargin: Style.spacing.md
-              anchors.verticalCenter: parent.verticalCenter
-              width: Style.space(32)
-              height: width
-              radius: width / 2
-              color: Color.accent
-
-              Text {
-                anchors.centerIn: parent
-                text: startMenu.accountName.charAt(0).toUpperCase()
-                color: Color.background
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
-                font.bold: true
-              }
-
-              // Your picture, ~/.face, cropped to a circle; the initial above
-              // shows when there isn't one.
-              Item {
-                anchors.fill: parent
-                visible: faceImage.status === Image.Ready
-                layer.enabled: true
-                layer.effect: MultiEffect {
-                  maskEnabled: true
-                  maskSource: avatarMask
-                  maskThresholdMin: 0.5
-                  maskSpreadAtMin: 1.0
-                }
-
-                Image {
-                  id: faceImage
-                  anchors.fill: parent
-                  source: startMenu.hasFace ? "file://" + Quickshell.env("HOME") + "/.face" : ""
-                  fillMode: Image.PreserveAspectCrop
-                  asynchronous: true
-                  cache: false
-                  sourceSize.width: width * Screen.devicePixelRatio
-                  sourceSize.height: height * Screen.devicePixelRatio
-                }
-              }
-
-              Item {
-                id: avatarMask
-                anchors.fill: parent
-                visible: false
-                layer.enabled: true
-                Rectangle { anchors.fill: parent; radius: width / 2 }
-              }
-            }
-
-            Text {
-              id: userNameText
-              anchors.left: avatar.right
-              anchors.leftMargin: Style.spacing.md
-              anchors.verticalCenter: parent.verticalCenter
-              text: startMenu.accountName
-              color: Color.popups.text
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body
-            }
-
-            Rectangle {
-              id: powerButton
-              anchors.right: parent.right
-              anchors.rightMargin: Style.spacing.md
-              anchors.verticalCenter: parent.verticalCenter
-              width: Style.space(36)
-              height: width
-              radius: Style.cornerRadius
-              color: powerMouse.containsMouse || startMenu.powerOpen ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
-
-              Text {
-                anchors.centerIn: parent
-                text: "⏻"
-                color: Color.popups.text
-                font.pixelSize: Style.font.body + 4
-              }
-
-              MouseArea {
-                id: powerMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                  startMenu.menuApp = null
-                  startMenu.userOpen = false
-                  startMenu.powerOpen = !startMenu.powerOpen
-                }
-              }
-            }
-          }
-
-          // Click anywhere else closes an open overlay menu.
-          MouseArea {
-            anchors.fill: parent
-            z: 20
-            visible: startMenu.menuApp !== null || startMenu.powerOpen || startMenu.userOpen
-            acceptedButtons: Qt.LeftButton | Qt.RightButton
-            onClicked: startMenu.closeOverlays()
-          }
-
-          // Right-click menu on an app, and the power menu.
-          Rectangle {
-            id: overlayMenu
-            z: 30
-            visible: startMenu.menuApp !== null || startMenu.powerOpen || startMenu.userOpen
-            width: Style.space(190)
-            height: overlayColumn.implicitHeight + Style.spacing.xxs * 2
-            radius: Style.cornerRadius
-            color: Color.popups.background
-            border.width: Style.normalBorderWidth
-            border.color: Color.popups.border
-            x: startMenu.powerOpen ? card.width - width - Style.spacing.md
-              : (startMenu.userOpen ? Style.spacing.md : startMenu.menuX)
-            y: (startMenu.powerOpen || startMenu.userOpen) ? footer.y - height - Style.spacing.xs : startMenu.menuY
-
-            Column {
-              id: overlayColumn
-              anchors.left: parent.left
-              anchors.right: parent.right
-              anchors.top: parent.top
-              anchors.margins: Style.spacing.xxs
-
-              Repeater {
-                model: startMenu.powerOpen ? StartMenu.startPowerActions()
-                  : (startMenu.userOpen ? StartMenu.startUserActions() : startMenu.menuRows)
-
-                delegate: Rectangle {
-                  id: overlayRow
-                  required property var modelData
-                  width: overlayColumn.width
-                  height: Style.spacing.popupRowHeight
-                  radius: Style.cornerRadius
-                  color: overlayMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
-
-                  Text {
-                    anchors.left: parent.left
-                    anchors.leftMargin: Style.spacing.controlPaddingX
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: overlayRow.modelData.label
-                    color: Color.popups.text
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                  }
-
-                  MouseArea {
-                    id: overlayMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                      // Take local references and run the action before
-                      // touching any state: closing the overlay changes this
-                      // Repeater's model, which destroys this delegate, and
-                      // a handler that then reaches for `startMenu` by id
-                      // dies with "startMenu is not defined" — before the
-                      // action ever ran.
-                      var menu = startMenu
-                      var system = menu.powerOpen || menu.userOpen
-                      var row = overlayRow.modelData
-                      if (system) {
-                        Quickshell.execDetached(["bash", "-lc", row.command])
-                        menu.closeOverlays()
-                        menu.visible = false
-                      } else {
-                        row.run()
-                        menu.closeOverlays()
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+        taskbar: root.taskbar
+        settings: dockSettings
+        panelWidth: panel.width
+        panelHeight: panel.height
+        buttonX: startButton.x
+        buttonHovered: startMouse.containsMouse
+
+        onLaunchRequested: function (entry) { root.launchApp(entry) }
+        onTogglePinRequested: function (appId, pinned) { root.togglePin(appId, pinned) }
+        onDockHoldRequested: function (held) { revealState.set("menu", held) }
       }
+
 
       // The bar's quick menu (taskbar style): right click on the bar
       // itself. Rows come from DockConfig.barMenuRows; choosing one writes
@@ -3543,7 +2247,7 @@ Item {
                       var row = barRow.modelData
                       barMenu.close()
                       if (row.action === "settings") root.openSettings(panel.screen)
-                      else dockSettings.write(row.patch)
+                      else dockSettings.apply({ type: "setSettings", patch: row.patch })
                     }
                   }
                 }
