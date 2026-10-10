@@ -36,10 +36,10 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 | `transparent` | `false` | No bar background, icons only |
 | `colorScheme` | `theme` | `theme` (follow Omarchy), `dark` or `light`; applies to the bar, the Start menu, the menus and the previews |
 | `showStart` | `true` | Show the Start button |
-| `startCommand` | `omarchy-menu toggle apps` | What the Start button runs; `builtin` opens the built-in Start menu |
+| `startCommand` | `builtin` | What the Start button runs; `builtin` opens the built-in Start menu, `omarchy-menu toggle apps` the Omarchy menu |
 | `startHoverOpen` | `true` | With the built-in menu, resting the pointer on the Start button opens it after a moment; it closes when you leave; typing (or clicking its search box) keeps it open; moving to another icon closes it |
 | `startIcon` | `grid` | `grid` (drawn in QML), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path |
-| `showClock` | `true` | Clock at the right end |
+| `showClock` | `false` | Clock at the right end |
 | `showPreviews` | `true` | Hover thumbnails with a close button |
 | `previewWarpPointer` | `true` | Clicking a preview also moves the pointer to the middle of that window |
 
@@ -47,7 +47,7 @@ Any numeric value that's missing or not a usable positive number falls back to i
 
 ### Start menu
 
-Set `"startCommand": "builtin"` and the Start button opens a menu anchored right above it (the Omarchy menu always centres on screen and can't be anchored):
+With `"startCommand": "builtin"`, the default, the Start button opens a menu anchored right above it (the Omarchy menu always centres on screen and can't be anchored):
 
 - Opens on a click, or by resting the pointer on the Start button (`startHoverOpen`); a hover-opened menu goes away when you move off it, until you start typing or click its search box, which keeps it open. Clicking the grid icon doesn't keep it, and moving on to another icon closes it so that icon's preview shows.
 - **Search** at the top: type to filter every installed app; Up/Down and Enter launch; Escape backs out one layer at a time.

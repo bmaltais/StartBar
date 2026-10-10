@@ -11,7 +11,7 @@ What StartBar does today. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); 
 
 ## What the Dock shows
 
-- One Dock per monitor: a full-width bar along the bottom edge with the Start button, the Items and a clock. Every Dock shows the same Items.
+- One Dock per monitor: a full-width bar along the bottom edge with the Start button, the Items and an optional clock. Every Dock shows the same Items.
 - One Window Item per Window, across all workspaces and all monitors, including special workspaces.
 - A Window whose App cannot be resolved shows a Letter Tile and cannot be pinned.
 - Pins: an App kept in the Dock whether or not it has Windows. A Pin holds a slot; while its App has Windows their Window Items occupy that slot, otherwise the Pin is shown and launches the App on click. A Pin whose App is no longer installed shows a Letter Tile with a "missing" tooltip and stays until unpinned.
@@ -26,8 +26,8 @@ What StartBar does today. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); 
 - Full-width along the bottom, `barHeight` (48) tall, with `opacity` (0.9) or `transparent` (icons only).
 - Icons are `iconSize` (48) at most and also fit inside the bar (`barHeight - 20`), so with the defaults they are 28px.
 - `alignment`: `center` or `left` for the group of Start button and Items.
-- Start button (`showStart`, on) at the start of that group. It runs `startCommand`, which is `omarchy-menu toggle apps` by default; `builtin` opens the Start menu instead. `startIcon` is `grid` (drawn by the plugin, the default), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path.
-- Clock (`showClock`, on) at the right end.
+- Start button (`showStart`, on) at the start of that group. It runs `startCommand`, which is `builtin` by default and opens the Start menu; any other value is run as a command, such as `omarchy-menu toggle apps` for the Omarchy menu. `startIcon` is `grid` (drawn by the plugin, the default), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path.
+- Clock (`showClock`, off) at the right end.
 - `colorScheme`: `theme` (default) follows Omarchy; `dark` and `light` are fixed palettes. It applies to the bar and everything that rises from it: the Start menu, the menus and the Previews. Tooltips and the settings window always follow the theme.
 
 ## How the Dock behaves
@@ -52,7 +52,7 @@ What StartBar does today. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); 
 
 ## Start menu
 
-With `startCommand: "builtin"` the Start button opens StartBar's own menu, anchored above the button (the Omarchy menu always centres on screen and can't be anchored). With centred icons it is centred on the monitor.
+With `startCommand: "builtin"`, the default, the Start button opens StartBar's own menu, anchored above the button (the Omarchy menu always centres on screen and can't be anchored). With centred icons it is centred on the monitor.
 
 - Opening: a click on the Start button, or, with `startHoverOpen` (on), the pointer resting on the Start button for 400 ms.
 - Hover mode: a menu opened by resting the pointer. It already has the keyboard, so typing searches at once, but it closes 500 ms after the pointer is on neither the button nor the menu. Clicking the Start button does not make it stay, and moving the pointer on to an Item closes it at once so that Item's Preview takes over. Typing a key, or clicking the search box, ends hover mode: the menu then stays until dismissed, like a clicked-open one.

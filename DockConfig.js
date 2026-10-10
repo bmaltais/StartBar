@@ -98,7 +98,8 @@ function effectivePlacements(entry) {
 // The bar's settings (docs/SPEC.md "The bar").
 var DEFAULT_BAR_HEIGHT = 48;
 var DEFAULT_OPACITY = 0.9;
-var DEFAULT_START_COMMAND = "omarchy-menu toggle apps";
+var DEFAULT_START_COMMAND = "builtin";
+var OMARCHY_MENU_COMMAND = "omarchy-menu toggle apps";
 var DEFAULT_START_ICON = "grid";
 
 function oneOf(value, allowed, fallback) {
@@ -130,7 +131,7 @@ function effectiveTaskbar(entry) {
     showStart: booleanOr(source.showStart, true),
     startCommand: nonBlankStringOr(source.startCommand, DEFAULT_START_COMMAND),
     startIcon: nonBlankStringOr(source.startIcon, DEFAULT_START_ICON),
-    showClock: booleanOr(source.showClock, true),
+    showClock: booleanOr(source.showClock, false),
     showPreviews: booleanOr(source.showPreviews, true),
     previewWarpPointer: booleanOr(source.previewWarpPointer, true),
     showWorkspaceBadge: booleanOr(source.showWorkspaceBadge, false),
@@ -210,7 +211,7 @@ function barMenuRows(taskbar) {
     {
       label: "Omarchy menu on Start",
       checked: taskbar.startCommand !== "builtin",
-      patch: { startCommand: DEFAULT_START_COMMAND },
+      patch: { startCommand: OMARCHY_MENU_COMMAND },
       group: 2,
     },
     toggle("Start menu opens on hover", "startHoverOpen", 2),

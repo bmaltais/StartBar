@@ -9,7 +9,7 @@ The plugin's name, as users see it. It is not a part of the plugin: the panel is
 _Avoid_: using StartBar for the panel or the Start menu
 
 **Dock**:
-The full-width bar along the bottom edge of a monitor that holds Items, with a Start button at its left end and a clock at its right. Every monitor gets its own Dock, and each Dock shows the same Items. It is always visible unless auto-hide is on, when it is Hidden or Revealed. Users know it as the taskbar.
+The full-width bar along the bottom edge of a monitor that holds Items, with a Start button at its left end and an optional clock at its right. Every monitor gets its own Dock, and each Dock shows the same Items. It is always visible unless auto-hide is on, when it is Hidden or Revealed. Users know it as the taskbar.
 _Avoid_: panel; a bare "bar" where it could be read as the Omarchy bar at the top of the screen
 
 **Item**:
