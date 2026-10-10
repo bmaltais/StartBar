@@ -77,7 +77,7 @@ Walk through this after any change to the Quickshell side, on a two-monitor Omar
 - [x] The Active Window's Item is highlighted. *(confirmed: the Chromium Item — matching `hyprctl activewindow`'s real active window — had a visibly lighter background square the other three Items lacked)*
 - [ ] ...and the highlight moves immediately when focus changes. *(not independently re-checked — this run only ever had one active window; the highlight already being wired to live active-window state makes a change of focus the same code path, but that wasn't exercised by switching focus)*
 - [x] Every Window Item shows a running dot; a bare Pin (no Windows) does not. *(confirmed: all four open Windows showed a dot; no bare Pin was present to check the negative case)*
-- [x] With `showWorkspaceBadge` on, every Window Item shows a workspace badge (off by default since 1.1.1). *(confirmed: badges read 2/3/3/3, matching each Window's real workspace from `hyprctl clients`)*
+- [x] With `showWorkspaceBadge` on, every Window Item shows a workspace badge (off by default). *(confirmed: badges read 2/3/3/3, matching each Window's real workspace from `hyprctl clients`)*
 - [ ] A special-workspace Window's badge shows its name. *(not checked — no special-workspace Window was open)*
 - [ ] Hovering an Item shows a tooltip with the Window's title and workspace. *(not confirmed — see Method above; a warped hover didn't trigger it)*
 - [ ] Hovering the tooltip never restarts or blocks the hide timer, and it disappears when the Dock hides. *(not checked, follows from the item above)*
@@ -125,7 +125,7 @@ Walk through this after any change to the Quickshell side, on a two-monitor Omar
 - [x] New Windows join Launch Order next to existing Windows of the same App, not at the end. *(confirmed structurally by the Pins slot ordering above and by `dockModel.test.js`'s same-App-clustering coverage; not independently re-checked by opening a new Window live)*
 - [ ] The Dock never takes keyboard focus. *(not checked — needs typing into another window while hovering/clicking the Dock)*
 
-### Taskbar style, Start menu and menus (added in 1.1.0)
+### Taskbar style, Start menu and menus
 
 Not yet walked through with a real mouse; the pieces marked *checked* were confirmed with screenshots and `hyprctl` only.
 
