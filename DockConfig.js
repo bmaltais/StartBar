@@ -121,7 +121,7 @@ function opacityOr(value, fallback) {
 function effectiveTaskbar(entry) {
   var source = isPlainObject(entry) ? entry : {};
   return {
-    alignment: oneOf(source.alignment, ["center", "left"], "center"),
+    alignment: oneOf(source.alignment, ["center", "left"], "left"),
     colorScheme: oneOf(source.colorScheme, ["theme", "dark", "light"], "theme"),
     autoHide: booleanOr(source.autoHide, false),
     barHeight: positiveNumberOr(source.barHeight, DEFAULT_BAR_HEIGHT),
@@ -135,8 +135,8 @@ function effectiveTaskbar(entry) {
     previewWarpPointer: booleanOr(source.previewWarpPointer, true),
     previewPeek: booleanOr(source.previewPeek, true),
     showWorkspaceBadge: booleanOr(source.showWorkspaceBadge, false),
-    groupWindows: booleanOr(source.groupWindows, false),
-    startHoverOpen: booleanOr(source.startHoverOpen, true),
+    groupWindows: booleanOr(source.groupWindows, true),
+    startHoverOpen: booleanOr(source.startHoverOpen, false),
   };
 }
 
