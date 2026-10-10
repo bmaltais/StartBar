@@ -96,6 +96,8 @@ A window titled "Taskbar settings" with a control for every setting, so nothing 
 - A position other than the bottom edge, and enabling the Dock on some monitors only.
 - In the Start menu: pin folders, Uninstall, web search results and recent files (there is no index of them to read).
 
+Candidates for later releases, and ideas considered and set aside, are in [IDEAS.md](IDEAS.md).
+
 ## Verification
 
 The pure JavaScript modules (ordering, Pins, Placed, configuration, the Start menu's rules, the reveal, preview and drag rules) are covered by `npm test`. Everything that depends on Quickshell or Hyprland is checked by hand with the checklist in [CONTRIBUTING.md](../CONTRIBUTING.md), on a two-monitor Omarchy machine.

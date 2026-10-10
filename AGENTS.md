@@ -8,6 +8,8 @@ A Windows 11-style taskbar with a Start menu, as a plugin for the Omarchy shell 
 
 Issues are GitHub Issues on bmaltais/StartBar, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
+Candidates that are not issues yet live in `docs/IDEAS.md`.
+
 ### Triage labels
 
 The five default triage labels, unchanged. See `docs/agents/triage-labels.md`.
@@ -23,4 +25,4 @@ Single-context: `CONTEXT.md` at the root, ADRs under `docs/adr/`. See `docs/agen
 
 ## Releasing
 
-Merging to `main` ships to every user. Before merging to `main`, tagging or publishing a release, read `docs/agents/release.md`.
+Merging to `main` ships to every user. Read `docs/agents/release.md` before a merge, tag, or publish, and when a `release/<version>` branch is in question.
