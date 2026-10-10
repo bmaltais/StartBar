@@ -113,6 +113,9 @@ Item {
 
     onPinsChanged: dockState.refresh()
     onPlacementsChanged: dockState.refresh()
+    // groupWindows changes the Items themselves; any other bar setting
+    // leaves the signature unchanged, so refresh() drops it again.
+    onTaskbarChanged: dockState.refresh()
 
     function applyShellConfig(shellConfig) {
       var entry = DockConfig.findPluginEntry(shellConfig, dockSettings.pluginId)
@@ -194,8 +197,8 @@ Item {
     // settings, plus this session's Placed Window Items.
     function placements() {
       var combined = dockSettings.placements.slice()
-      for (var address in dockState.windowPlacements) {
-        combined.push({ key: "window:" + address, index: dockState.windowPlacements[address] })
+      for (var key in dockState.windowPlacements) {
+        combined.push({ key: key, index: dockState.windowPlacements[key] })
       }
       return combined
     }
@@ -241,12 +244,6 @@ Item {
       dockState.openedAtByAddress = keptOpenedAt
       dockState.toplevelByAddress = handles
 
-      var keptPlacements = {}
-      for (var placedAddress in dockState.windowPlacements) {
-        if (seenAddresses[placedAddress]) keptPlacements[placedAddress] = dockState.windowPlacements[placedAddress]
-      }
-      dockState.windowPlacements = keptPlacements
-
       var titles = {}
       for (var t = 0; t < windows.length; t++) titles[windows[t].id] = windows[t].title
       dockState.titles = titles
@@ -258,7 +255,15 @@ Item {
       // change nothing the Dock shows, so only assign when the visible
       // content differs. The signature leaves out `title` (tracked in
       // dockState.titles) and reduces each App to its id.
-      var next = DockModel.buildDockItems(windows, resolveApp, dockSettings.pins, resolveAppById, dockState.placements())
+      var next = DockModel.buildDockItems(windows, resolveApp, dockSettings.pins, resolveAppById, dockState.placements(), !!(root.taskbar && root.taskbar.groupWindows))
+      // A Placed Window or Group Item lasts only while its Item exists.
+      var itemKeys = {}
+      for (var n = 0; n < next.length; n++) itemKeys[next[n].key] = true
+      var keptPlacements = {}
+      for (var placedKey in dockState.windowPlacements) {
+        if (itemKeys[placedKey]) keptPlacements[placedKey] = dockState.windowPlacements[placedKey]
+      }
+      dockState.windowPlacements = keptPlacements
       var signature = JSON.stringify(next, function (key, value) {
         if (key === "title") return undefined
         if (key === "app") return value ? value.id : null
@@ -297,6 +302,8 @@ Item {
   // no Windows opened since the last shell restart). Hyprland.refreshToplevels()
   // force-fetches the missing data via `hyprctl -j clients`.
   Component.onCompleted: {
+    // A peek the last shell never got to undo (it restarted mid-hover).
+    root.peekRestore()
     Hyprland.refreshToplevels()
     dockState.refresh()
   }
@@ -475,7 +482,7 @@ Item {
       dockSettings.apply({ type: "placeItem", key: item.key, index: targetIndex })
       return
     }
-    dockState.windowPlacements[item.window.id] = targetIndex
+    dockState.windowPlacements[item.key] = targetIndex
     dockState.refresh()
   }
 
@@ -507,7 +514,134 @@ Item {
     return item.kind === "pin" ? item.appId : (item.app ? item.app.id : null)
   }
 
+  // Peek (previewPeek): hovering a preview thumbnail focuses its Window to
+  // show it, and leaving puts things back. The first peek saves the
+  // focused Window and each monitor's workspace in a state file; peekRestore
+  // replays it, peekCommit (a click picked the Window) throws it away.
+  // `peeking` is the in-QML truth, so a restore never runs after a commit.
+  property bool peeking: false
+  readonly property string peekNoWarps: "orig=false; hyprctl -j getoption cursor:no_warps | grep -q '\"bool\": true' && orig=true; "
+    + "hyprctl eval 'hl.config({ cursor = { no_warps = true } })' >/dev/null; "
+  readonly property string peekWarpsBack: "hyprctl eval \"hl.config({ cursor = { no_warps = $orig } })\" >/dev/null"
+  readonly property string peekState: "\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek\""
+
+  // Peek scripts run one at a time, in the order asked for (a plain
+  // execDetached per script let a restore overtake a peek).
+  property var peekQueue: []
+
+  Process {
+    id: peekRunner
+    onExited: root.peekNext()
+  }
+
+  function peekRun(script, arg) {
+    root.peekQueue.push(arg === undefined ? ["bash", "-lc", script, "bash"] : ["bash", "-lc", script, "bash", arg])
+    if (!peekRunner.running) root.peekNext()
+  }
+
+  function peekNext() {
+    if (root.peekQueue.length === 0) return
+    peekRunner.command = root.peekQueue.shift()
+    peekRunner.running = true
+  }
+
+  function peekWindow(address) {
+    var normalized = normalizedAddress(address)
+    if (!normalized) return
+    root.peeking = true
+    var script = "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek.lock\"; flock 9\n"
+      + "undo() {\n"
+      + "  echo \"$rest\" | while read -r kind a b; do\n"
+      + "    [ \"$kind\" = f ] || continue\n"
+      + "    cur=$(hyprctl -j clients | jq -r --arg a \"$a\" '.[] | select(.address == $a) | .fullscreen')\n"
+      + "    [ \"$cur\" = 0 ] || continue\n"
+      + "    mode=maximized; [ \"$b\" = 2 ] && mode=fullscreen\n"
+      + "    hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$mode\\\", action = \\\"set\\\", window = \\\"address:$a\\\" })\" >/dev/null\n"
+      + "  done\n"
+      + "  echo \"$rest\" | while read -r kind name ws; do\n"
+      + "    [ \"$kind\" = m ] || continue\n"
+      + "    cur=$(hyprctl -j monitors | jq -r --arg n \"$name\" '.[] | select(.name == $n) | .activeWorkspace.id')\n"
+      + "    if [ \"$cur\" != \"$ws\" ]; then\n"
+      + "      hyprctl dispatch \"hl.dsp.focus({ monitor = \\\"$name\\\" })\" >/dev/null\n"
+      + "      hyprctl dispatch \"hl.dsp.focus({ workspace = \\\"$ws\\\" })\" >/dev/null\n"
+      + "    fi\n"
+      + "  done\n"
+      + "}\n"
+      + "addr=\"$1\"; state=\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek\"\n"
+      + root.peekNoWarps
+      + "if [ -f \"$state\" ]; then\n"
+      + "  # Moving on from an earlier peek: put its changes back first, keeping the\n"
+      + "  # saved original state, so only this window's peek is in effect.\n"
+      + "  rest=$(tail -n +2 \"$state\")\n"
+      + "  undo\n"
+      + "else\n"
+      + "  {\n"
+      + "    hyprctl -j activewindow | jq -r '.address // \"\"'\n"
+      + "    hyprctl -j monitors | jq -r '.[] | \"m \\(.name) \\(.activeWorkspace.id)\"'\n"
+      + "    hyprctl -j clients | jq -r '.[] | select(.fullscreen != 0) | \"f \\(.address) \\(.fullscreen)\"'\n"
+      + "  } > \"$state\"\n"
+      + "fi\n"
+      + "hyprctl -j clients | jq -r --arg a \"$addr\" '. as $c | ($c[] | select(.address == $a) | .workspace.id) as $w | $c[] | select(.workspace.id == $w and .fullscreen != 0 and .address != $a) | \"\\(.address) \\(.fullscreen)\"' | while read -r other fs; do\n"
+      + "  mode=maximized; [ \"$fs\" = 2 ] && mode=fullscreen\n"
+      + "  hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$mode\\\", action = \\\"unset\\\", window = \\\"address:$other\\\" })\" >/dev/null\n"
+      + "done\n"
+      + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\" >/dev/null\n"
+      + root.peekWarpsBack
+    root.peekRun(script, normalized)
+  }
+
+  function peekRestore() {
+    // Unconditional: the script does nothing without a state file, and a
+    // restore skipped because `peeking` was stale would leave the peeked
+    // window showing.
+    root.peeking = false
+    var script = "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek.lock\"; flock 9\n"
+      + "undo() {\n"
+      + "  echo \"$rest\" | while read -r kind a b; do\n"
+      + "    [ \"$kind\" = f ] || continue\n"
+      + "    cur=$(hyprctl -j clients | jq -r --arg a \"$a\" '.[] | select(.address == $a) | .fullscreen')\n"
+      + "    [ \"$cur\" = 0 ] || continue\n"
+      + "    mode=maximized; [ \"$b\" = 2 ] && mode=fullscreen\n"
+      + "    hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$mode\\\", action = \\\"set\\\", window = \\\"address:$a\\\" })\" >/dev/null\n"
+      + "  done\n"
+      + "  echo \"$rest\" | while read -r kind name ws; do\n"
+      + "    [ \"$kind\" = m ] || continue\n"
+      + "    cur=$(hyprctl -j monitors | jq -r --arg n \"$name\" '.[] | select(.name == $n) | .activeWorkspace.id')\n"
+      + "    if [ \"$cur\" != \"$ws\" ]; then\n"
+      + "      hyprctl dispatch \"hl.dsp.focus({ monitor = \\\"$name\\\" })\" >/dev/null\n"
+      + "      hyprctl dispatch \"hl.dsp.focus({ workspace = \\\"$ws\\\" })\" >/dev/null\n"
+      + "    fi\n"
+      + "  done\n"
+      + "}\n"
+      + "state=\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek\"; [ -f \"$state\" ] || exit 0\n"
+      + "prev=$(head -n1 \"$state\"); rest=$(tail -n +2 \"$state\"); rm -f \"$state\"\n"
+      + root.peekNoWarps
+      + "undo\n"
+      + "[ -n \"$prev\" ] && hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$prev\\\" })\" >/dev/null\n"
+      + root.peekWarpsBack
+    root.peekRun(script)
+  }
+
+  function peekCommit() {
+    root.peeking = false
+    root.peekRun("exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek.lock\"; flock 9; rm -f " + root.peekState)
+  }
+
+  // Previews off: a click on a Group Item focuses the Window after the
+  // Active one, wrapping round.
+  function focusNextInGroup(item) {
+    var windows = item.windows || []
+    var at = -1
+    for (var i = 0; i < windows.length; i++) if (windows[i].active) at = i
+    var next = windows[(at + 1) % windows.length]
+    if (next) root.focusWindow(next.id)
+  }
+
   function windowTooltipText(item) {
+    if (item.count > 1) {
+      var name = (item.app && item.app.name) || item.window.class || ""
+      return name + "\n" + item.count + " windows"
+    }
     return (dockState.titles[item.window.id] || item.window.title || item.window.class || "") + "\nWorkspace: " + (item.badge || "")
   }
 
@@ -1622,6 +1756,23 @@ Item {
               color: Util.alpha(Color.urgent, 0.35)
             }
 
+            // A Group Item (groupWindows, docs/SPEC.md "Grouping") shows the
+            // edges of the Windows stacked behind its icon, as Windows does.
+            Repeater {
+              model: Math.min(dockItem.modelData.count || 1, 3) - 1
+
+              Rectangle {
+                required property int index
+                z: -1 - index
+                x: icon.x + icon.width - Style.space(2) + (index + 1) * Style.space(3)
+                y: icon.y + icon.height * 0.15
+                width: Style.space(3)
+                height: icon.height * 0.7
+                radius: width / 2
+                color: Util.alpha(root.colForeground, 0.35 - index * 0.1)
+              }
+            }
+
             Item {
               id: icon
               anchors.top: parent.top
@@ -1741,6 +1892,13 @@ Item {
                     root.launchApp(dockItem.modelData.app)
                     return
                   }
+                  // A Group Item with a preview to pick from does nothing on
+                  // click, as on Windows (docs/SPEC.md "Grouping"); without
+                  // previews the click steps through the group's Windows.
+                  if (dockItem.modelData.count > 1) {
+                    if (!root.taskbar.showPreviews) root.focusNextInGroup(dockItem.modelData)
+                    return
+                  }
                   if (dockItem.active) return
                   root.focusWindow(dockItem.modelData.window.id)
                 }
@@ -1762,19 +1920,32 @@ Item {
             // The running dot (SPEC.md "Indicators"): every Window Item
             // shows one; a Pin with no Windows (CONTEXT.md "Pin") is the
             // only Item without it.
-            Rectangle {
+            // A Group Item shows up to three dots, one per Window; the
+            // Active Window's is the wide accent pill.
+            Row {
               id: runningDot
               visible: !dockItem.isPin
               anchors.top: icon.bottom
               anchors.topMargin: Style.spacing.xxs
               anchors.horizontalCenter: parent.horizontalCenter
-              width: dockItem.active ? 16 : 6
               height: 3
-              radius: height / 2
-              color: dockItem.active ? root.colAccent : root.colForeground
+              spacing: 3
 
-              Behavior on width {
-                NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+              Repeater {
+                model: Math.min(dockItem.modelData.count || 1, 3)
+
+                Rectangle {
+                  required property int index
+                  readonly property bool lead: index === 0
+                  width: lead && dockItem.active ? 16 : 6
+                  height: 3
+                  radius: height / 2
+                  color: lead && dockItem.active ? root.colAccent : root.colForeground
+
+                  Behavior on width {
+                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+                  }
+                }
               }
             }
           }
@@ -1923,21 +2094,115 @@ Item {
         }
       }
 
+      // One thumbnail per Window of the shown Item: a lone Window Item shows
+      // its one, a Group Item (groupWindows) a row of them to pick from.
+      // `liveItem` is the shown Item as the Dock has it now, matched by
+      // Window id since a Group Item's key changes as Windows come and go,
+      // so a Window closed from the popup drops out of it at once and the
+      // popup closes with the last one.
       PopupWindow {
         id: previewPopup
 
-        readonly property int thumbWidth: Style.space(220)
-        readonly property int thumbHeight: Style.space(124)
-        readonly property var toplevel: previewState.shownItem
-          ? dockState.toplevelByAddress[previewState.shownItem.window.id] || null
-          : null
+        readonly property var liveItem: {
+          var shown = previewState.shownItem
+          if (!shown) return null
+          var ids = {}
+          var shownWindows = shown.windows || [shown.window]
+          for (var i = 0; i < shownWindows.length; i++) ids[shownWindows[i].id] = true
+          for (var j = 0; j < dockState.items.length; j++) {
+            var item = dockState.items[j]
+            if (item.kind !== "window") continue
+            var windows = item.windows || [item.window]
+            for (var k = 0; k < windows.length; k++) if (ids[windows[k].id]) return item
+          }
+          return null
+        }
+        readonly property var liveWindows: liveItem ? (liveItem.windows || [liveItem.window]) : []
+        // The thumbnail cells are keyed by Window id and only rebuilt when
+        // the set of Windows changes. A peek moves focus, which rebuilds
+        // the Items and so liveWindows; if the cells were rebuilt with it,
+        // the one under the pointer would be destroyed, its hover would
+        // end and the peek would be undone at once.
+        property var windowIds: []
+        onLiveWindowsChanged: {
+          var ids = []
+          for (var i = 0; i < liveWindows.length; i++) ids.push(liveWindows[i].id)
+          if (JSON.stringify(ids) !== JSON.stringify(windowIds)) windowIds = ids
+        }
 
-        visible: previewState.showing
+        function windowFor(id) {
+          for (var i = 0; i < liveWindows.length; i++) if (liveWindows[i].id === id) return liveWindows[i]
+          return { id: id }
+        }
+        readonly property int thumbWidth: {
+          var n = Math.max(1, windowIds.length)
+          var room = panel.width - Style.spacing.xs * 2 - Style.spacing.sm * 2 - (Style.spacing.xs * 2 + Style.spacing.xs) * n
+          return Math.max(Style.space(80), Math.min(Style.space(220), Math.floor(room / n)))
+        }
+        readonly property int thumbHeight: Math.round(thumbWidth * 124 / 220)
+
+        readonly property color textColor: root.colPopupText
+        readonly property color accentColor: root.colAccent
+
+        // The delegates below can't see `root`, so they act through these.
+        function focusPicked(window) {
+          peekTimer.stop()
+          root.peekCommit()
+          previewState.dismiss()
+          if (root.taskbar.previewWarpPointer) root.focusWindowAndWarp(window.id)
+          else root.focusWindow(window.id)
+        }
+
+        // Peek, debounced so sweeping the pointer along the thumbnails
+        // doesn't flash every window in turn, and so passing between two
+        // cells doesn't restore in between.
+        // Qt can report the next cell's enter before the previous cell's
+        // leave, so a leave only counts if it is from the cell we think the
+        // pointer is on; a stale one must not cancel the new cell's peek.
+        property var peekTarget: null
+        function peekHover(window, hovered) {
+          if (!root.taskbar.previewPeek || !window) return
+          if (hovered) {
+            peekRestoreTimer.stop()
+            peekTarget = window
+            peekTimer.restart()
+          } else if (peekTarget && peekTarget.id === window.id) {
+            peekTarget = null
+            peekTimer.stop()
+            peekRestoreTimer.restart()
+          }
+        }
+
+        Timer {
+          id: peekTimer
+          interval: 150
+          onTriggered: if (previewPopup.peekTarget) root.peekWindow(previewPopup.peekTarget.id)
+        }
+
+        Timer {
+          id: peekRestoreTimer
+          interval: 200
+          onTriggered: root.peekRestore()
+        }
+
+        function closePicked(window) {
+          root.closeWindow(window.id)
+        }
+
+        visible: previewState.showing && liveItem !== null
         color: "transparent"
-        implicitWidth: thumbWidth + Style.spacing.sm * 2
-        implicitHeight: previewColumn.implicitHeight + Style.spacing.sm * 2
+        implicitWidth: previewRow.implicitWidth + Style.spacing.sm * 2
+        implicitHeight: previewRow.implicitHeight + Style.spacing.sm * 2
 
-        onVisibleChanged: revealState.set("preview", previewPopup.visible)
+        onVisibleChanged: {
+          revealState.set("preview", previewPopup.visible)
+          if (!previewPopup.visible) {
+            previewPopup.peekTarget = null
+            peekTimer.stop()
+            root.peekRestore()
+          }
+        }
+        onImplicitWidthChanged: if (visible) previewPopup.anchor.updateAnchor()
 
         anchor {
           id: previewAnchor
@@ -1967,93 +2232,134 @@ Item {
             onHoveredChanged: previewState.popupHover(hovered)
           }
 
-          Column {
-            id: previewColumn
+          Row {
+            id: previewRow
             anchors.fill: parent
             anchors.margins: Style.spacing.sm
             spacing: Style.spacing.xs
 
-            Row {
-              width: parent.width
-              spacing: Style.spacing.xs
+            Repeater {
+              model: previewPopup.windowIds
 
-              Text {
-                width: parent.width - closeButton.width - parent.spacing
-                anchors.verticalCenter: parent.verticalCenter
-                elide: Text.ElideRight
-                color: root.colPopupText
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-                text: previewState.shownItem ? (dockState.titles[previewState.shownItem.window.id] || previewState.shownItem.window.title || previewState.shownItem.window.class) : ""
-              }
+              // One Window's cell: a tinted background under the pointer, so
+              // it is clear which thumbnail a click will pick.
+              Item {
+                id: cell
+                required property var modelData
+                readonly property var win: previewPopup.windowFor(cell.modelData)
+                readonly property var toplevel: dockState.toplevelByAddress[cell.modelData] || null
+                readonly property int pad: Style.spacing.xs
+                implicitWidth: cellColumn.implicitWidth + pad * 2
+                implicitHeight: cellColumn.implicitHeight + pad * 2
 
-              Rectangle {
-                id: closeButton
-                width: Style.space(20)
-                height: width
-                radius: Style.cornerRadius
-                color: closeMouse.containsMouse ? Util.alpha(Color.urgent, 0.5) : "transparent"
-
-                Text {
-                  anchors.centerIn: parent
-                  text: "\u2715"
-                  color: root.colPopupText
-                  font.pixelSize: Style.font.caption
+                Rectangle {
+                  anchors.fill: parent
+                  radius: Style.cornerRadius
+                  color: cellHover.hovered ? Style.selectedFill : "transparent"
                 }
 
-                MouseArea {
-                  id: closeMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: {
-                    var id = previewState.shownItem ? previewState.shownItem.window.id : null
-                    previewState.dismiss()
-                    if (id) root.closeWindow(id)
+                HoverHandler {
+                  id: cellHover
+                  onHoveredChanged: previewPopup.peekHover(cell.win, hovered)
+                }
+
+              Column {
+                id: cellColumn
+                x: cell.pad
+                y: cell.pad
+                spacing: Style.spacing.xs
+
+                Row {
+                  width: previewPopup.thumbWidth
+                  spacing: Style.spacing.xs
+
+                  Text {
+                    width: parent.width - closeButton.width - parent.spacing
+                    anchors.verticalCenter: parent.verticalCenter
+                    elide: Text.ElideRight
+                    color: previewPopup.textColor
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    text: dockState.titles[cell.modelData] || cell.win.title || cell.win.class || ""
+                  }
+
+                  Rectangle {
+                    id: closeButton
+                    width: Style.space(20)
+                    height: width
+                    radius: Style.cornerRadius
+                    color: closeMouse.containsMouse ? Util.alpha(Color.urgent, 0.5) : "transparent"
+
+                    Text {
+                      anchors.centerIn: parent
+                      text: "\u2715"
+                      color: previewPopup.textColor
+                      font.pixelSize: Style.font.caption
+                    }
+
+                    MouseArea {
+                      id: closeMouse
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: {
+                        // The last Window closing takes the popup with it
+                        // (liveItem goes null); otherwise it stays up so
+                        // the rest can still be picked.
+                        previewPopup.closePicked(cell.win)
+                      }
+                    }
+                  }
+                }
+
+                // The thumbnail: a fixed-size box (so a Window that resizes or
+                // changes shape never resizes the popup), holding a live capture
+                // scaled to the Window's own aspect ratio. Live capture can
+                // blank for a frame when the Window's content changes a lot (a
+                // busy browser); the ShaderEffectSource underneath keeps the
+                // last frame the capture actually had, so that frame shows
+                // through instead of a flicker. Left-clicking the thumbnail
+                // focuses the Window, like its Item. In a group, the Active
+                // Window's thumbnail is outlined.
+                Item {
+                  width: previewPopup.thumbWidth
+                  height: previewPopup.thumbHeight
+
+                  ShaderEffectSource {
+                    anchors.centerIn: parent
+                    width: capture.width
+                    height: capture.height
+                    sourceItem: capture
+                    live: capture.hasContent
+                    hideSource: false
+                  }
+
+                  ScreencopyView {
+                    id: capture
+                    anchors.centerIn: parent
+                    constraintSize: Qt.size(previewPopup.thumbWidth, previewPopup.thumbHeight)
+                    captureSource: previewPopup.visible ? cell.toplevel && cell.toplevel.wayland : null
+                    live: true
+                  }
+
+                  Rectangle {
+                    visible: previewPopup.windowIds.length > 1 && !!cell.win.active
+                    anchors.fill: parent
+                    color: "transparent"
+                    radius: Style.cornerRadius
+                    border.width: Style.selectedBorderWidth
+                    border.color: previewPopup.accentColor
+                  }
+
+                  MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                      previewPopup.focusPicked(cell.win)
+                    }
                   }
                 }
               }
-            }
-
-            // The thumbnail: a fixed-size box (so a Window that resizes or
-            // changes shape never resizes the popup), holding a live capture
-            // scaled to the Window's own aspect ratio. Live capture can
-            // blank for a frame when the Window's content changes a lot (a
-            // busy browser); the ShaderEffectSource underneath keeps the
-            // last frame the capture actually had, so that frame shows
-            // through instead of a flicker. Left-clicking the thumbnail
-            // focuses the Window, like its Item.
-            Item {
-              width: previewPopup.thumbWidth
-              height: previewPopup.thumbHeight
-
-              ShaderEffectSource {
-                anchors.centerIn: parent
-                width: capture.width
-                height: capture.height
-                sourceItem: capture
-                live: capture.hasContent
-                hideSource: false
-              }
-
-              ScreencopyView {
-                id: capture
-                anchors.centerIn: parent
-                constraintSize: Qt.size(previewPopup.thumbWidth, previewPopup.thumbHeight)
-                captureSource: previewPopup.visible ? previewPopup.toplevel && previewPopup.toplevel.wayland : null
-                live: true
-              }
-
-              MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                  var item = previewState.shownItem
-                  previewState.dismiss()
-                  if (!item) return
-                  if (root.taskbar.previewWarpPointer) root.focusWindowAndWarp(item.window.id)
-                  else if (!item.active) root.focusWindow(item.window.id)
-                }
               }
             }
           }
@@ -2192,14 +2498,14 @@ Item {
                   width: parent.width
                   height: Style.spacing.popupRowHeight
                   radius: Style.cornerRadius
-                  color: barRowMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : "transparent"
+                  color: barRowMouse.containsMouse ? Style.hoverFillFor(root.colForeground, previewPopup.accentColor) : "transparent"
 
                   Text {
                     anchors.left: parent.left
                     anchors.leftMargin: Style.spacing.controlPaddingX
                     anchors.verticalCenter: parent.verticalCenter
                     text: barRow.modelData.checked ? "\u2713" : ""
-                    color: root.colPopupText
+                    color: previewPopup.textColor
                     font.family: Style.font.family
                     font.pixelSize: Style.font.body
                   }
@@ -2212,7 +2518,7 @@ Item {
                     anchors.rightMargin: Style.spacing.controlPaddingX
                     elide: Text.ElideRight
                     text: barRow.modelData.label
-                    color: root.colPopupText
+                    color: previewPopup.textColor
                     font.family: Style.font.family
                     font.pixelSize: Style.font.body
                   }
@@ -2297,7 +2603,7 @@ Item {
               trigger: (function (action) { return function () { action.execute() } })(appActions[i]),
             })
           }
-          if (item.kind === "window") {
+          if (item.kind === "window" && !(item.count > 1)) {
             var states = DockModel.windowActions(item.window)
             for (var j = 0; j < states.length; j++) {
               list.push({
@@ -2308,11 +2614,17 @@ Item {
               })
             }
           }
+          // A Group Item's menu acts on the whole group: the window-state
+          // rows are left out and Close closes every Window in it.
+          var grouped = item.count > 1
           list.push({
-            label: "Close Window",
+            label: grouped ? "Close all " + item.count + " windows" : "Close Window",
             enabled: menu.canClose,
             group: 2,
-            trigger: function () { root.closeWindow(item.window.id) },
+            trigger: function () {
+              var windows = grouped ? item.windows : [item.window]
+              for (var w = 0; w < windows.length; w++) root.closeWindow(windows[w].id)
+            },
           })
           return list
         }
@@ -2443,7 +2755,7 @@ Item {
                   // containsMouse, not a HoverHandler, to match Button.qml's
                   // own hover-fill convention.
                   color: menuRow.modelData.enabled && rowMouse.containsMouse
-                    ? Style.hoverFillFor(root.colForeground, root.colAccent)
+                    ? Style.hoverFillFor(root.colForeground, previewPopup.accentColor)
                     : "transparent"
 
                   Text {
@@ -2454,7 +2766,7 @@ Item {
                     anchors.rightMargin: Style.spacing.controlPaddingX
                     elide: Text.ElideRight
                     text: menuRow.modelData.label
-                    color: menuRow.modelData.enabled ? root.colPopupText : root.colMuted
+                    color: menuRow.modelData.enabled ? previewPopup.textColor : root.colMuted
                     font.family: Style.font.family
                     font.pixelSize: Style.font.body
                   }

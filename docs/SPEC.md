@@ -14,6 +14,7 @@ Agreed on 2026-09-11 after a design interview. Vocabulary is defined in [CONTEXT
 - One Dock per monitor, a full-width bar along the bottom edge. Every Dock shows the same Items.
 - One Window Item per Window, across all workspaces and all monitors, including special workspaces.
 - A Window whose App cannot be resolved shows a Letter Tile and cannot be pinned.
+- Grouping (`groupWindows`, false; added 2026-10-10): with it on, an App's Windows collapse into one Group Item when it has two or more; a lone Window is a plain Window Item as ever. See "Grouping" below.
 - Pins: an App kept in the Dock whether or not it has Windows. A Pin holds a slot; while its App has Windows their Window Items occupy that slot, otherwise the Pin is shown and launches the App on click. A Pin whose App is no longer installed shows a Letter Tile with a "missing" tooltip and stays until unpinned.
 - Ordering: Launch Order, with a new Window joining the Window Items of its own App. Any Item may be dragged to a Placed position; a Placed Pin keeps it permanently, a Placed Window Item until the Window closes. Dragging one Window of a pinned App moves only that Window.
 - Indicators: Active Window highlight, running indicator on every Window Item, workspace badge on every Window Item when `showWorkspaceBadge` is on (default off, amended 2026-10-09), tooltip with title and workspace, urgent-colour tint for Attention. No magnification. The running dot is a small pill under the Window Item, a wide accent pill for the Active Window (see "The bar").
@@ -67,9 +68,20 @@ The Dock is a full-width bar: Start button, Items, clock. It began as a second s
 - Clock (`showClock`, true) at the right end.
 - Indicators: a small pill under each Window Item; a wide accent pill for the Active Window.
 - Previews (`showPreviews`, true): hovering a Window Item shows a live thumbnail with title, a close button, and click-to-focus. Pins without Windows keep the name tooltip. The thumbnail keeps the Window's own aspect ratio inside a fixed-size box and holds its last good frame if the live capture blanks. With `previewWarpPointer` (true) a click on the thumbnail also moves the pointer to the middle of that Window; false only focuses it. Clicking an Item itself never moves the pointer.
+- Peek (`previewPeek`, true; added 2026-10-10): hovering a thumbnail for 150ms shows that Window by focusing it, as Windows' Aero Peek does: its workspace comes into view, and a maximized or full-screen Window covering it on that workspace is un-maximized for the peek. Moving to another thumbnail first undoes the previous peek, then applies the new one. Leaving the thumbnails (200ms) or closing the popup restores the focused Window, each monitor's workspace and the maximized state; a click on the thumbnail keeps the Window focused instead. State is saved in `$XDG_RUNTIME_DIR/startbar-peek` and any leftover is restored when the shell starts. Hyprland cannot unset a window's opacity, so the peek focuses rather than fading other windows.
 - `colorScheme`: `theme` (default), `dark`, `light` fixed palettes, for the bar and everything that rises from it (Start menu, menus, previews).
-- Right click on the bar (not on an Item) opens a quick menu of the common options in divided groups: icon alignment; colour scheme; the Start button, built-in or Omarchy Start menu and open-on-hover; then auto-hide, clock, previews, pointer-follows-preview, workspace badge and transparent background; then Settings…. Choosing a row writes the setting and closes the menu; the bar updates live. Its last row, "Settings…", opens the full settings window (below).
+- Right click on the bar (not on an Item) opens a quick menu of the common options in divided groups: icon alignment; colour scheme; the Start button, built-in or Omarchy Start menu and open-on-hover; then auto-hide, clock, previews, pointer-follows-preview, show-window-on-hover, group windows, workspace badge and transparent background; then Settings…. Choosing a row writes the setting and closes the menu; the bar updates live. Its last row, "Settings…", opens the full settings window (below).
 - `autoHide` (false): when true the bar uses the Reveal Strip and Hidden/Revealed rules ("How the Dock behaves").
+
+## Grouping (added 2026-10-10)
+
+Optional, off by default (`groupWindows`; also a row in the bar's right-click menu and in the settings window). Modelled on the Windows taskbar. The "one Window Item per Window" rule above holds while it is off.
+
+- Windows of one App (Windows with no App group by window class) become a single Group Item, in the slot Launch Order or the App's Pin gives them. The icon has the edges of the other Windows stacked behind it, and the running indicator shows one dot per Window (at most three). The Group Item is highlighted when any of its Windows is the Active Window, and tinted when any is in Attention. Its workspace badge shows only when all its Windows are on one workspace.
+- Hover: the preview popup shows one thumbnail per Window in a row, each with title and close button; the Active Window's is outlined. Thumbnails shrink to fit the screen. Clicking a thumbnail focuses that Window; closing one leaves the popup up for the rest, and the last one closing takes it away. With `showPreviews` off the tooltip gives the App name and Window count.
+- Left click on a Group Item does nothing (pick from the preview, as on Windows), except with previews off, where it focuses the Window after the Active one. Middle click launches a new instance.
+- Right click: Pin/Unpin, New Window and the App's actions as for any Item; the Window-state rows are left out; "Close all N windows" replaces Close Window.
+- Placed: a Group Item's position is kept until the App's last Window closes. Dragging it moves the whole group, and dragging a pinned App's group out unpins the App.
 
 ## Settings window (added 2026-10-09)
 
