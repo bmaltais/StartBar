@@ -33,13 +33,37 @@ Agreed on 2026-09-11 after a design interview. Vocabulary is defined in [CONTEXT
 - Left click on a Window Item: focus the Window, switching workspace and monitor as needed; a special-workspace Window is toggled into view. Clicking the Active Window's Item does nothing.
 - Left click on a Pin with no Windows: launch the App.
 - Middle click on any Item with a resolvable App: launch a new instance.
-- Right click: menu with exactly Pin/Unpin, New Window, Close Window. Pin is disabled on Letter Tile Items.
+- Right click: menu in three groups. (1) Pin/Unpin, New Window, and the App's own desktop actions (e.g. "New Private Window"). (2) For a Window Item, its state: Maximize/Restore, Full screen/Exit full screen, Float/Tile, and, when floating, Center and Pin on top/Unpin from top; Move to scratchpad (hidden once there). (3) Close Window. Pin is disabled on Letter Tile Items. The state rows act on that Window whether or not it is focused. (Amended 2026-10-09; originally exactly Pin/Unpin, New Window, Close Window.)
 - Drag within the Dock: reorder (see Placed). Drag out of the Dock: unpin the Item's App if pinned, otherwise snap back.
 - The Dock never takes keyboard focus.
 
 ## Configuration
 
 Stored in the Dock's entry in Omarchy's shell config (`~/.config/omarchy/shell.json`, `plugins[]`), written through the shell's plugin write-back hook. Keys: icon size, reveal delay, hide delay, Pins, and each Placed Pin's own position (a Placed Window Item's position is never stored here — it lasts only until the Window closes). Nothing else is configurable in version one.
+
+## Taskbar style (added 2026-10-09; see docs/adr/0001)
+
+`style: "taskbar"` swaps the dock's frame for a full-width bar; Items, Pins, ordering, drag and the context menu are unchanged. `style: "dock"` (default) is exactly the original behaviour.
+
+- Bar: full-width along the bottom, `barHeight` (48), `opacity` (0.9) or `transparent` (icons only). Floats on the Top layer, reserves no space.
+- `alignment`: `center` or `left` for the group of Start button + Items.
+- Start button (`showStart`, true): runs `startCommand` (`omarchy-menu toggle apps`); `startIcon` is `grid` (drawn in QML, default), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path.
+- Start menu: with `startCommand: "builtin"` the Start button opens a popup anchored above it, modelled on Windows 11's (the Omarchy menu itself always centres on screen and can't be anchored):
+  - Search box on top (`DockModel.filterApps`): type to filter all Apps, Up/Down, Enter launches.
+  - Pinned: a six-column grid of the Start menu's own pins (`startPins`; until it is first changed it shows the Dock's Pins). "All apps ›" switches to an A-Z list with letter headings (`groupAlphabetically`) and a Back link.
+  - Recommended: the last six Apps launched from the menu (`recentApps`, `pushRecent`). Recent files are out of scope: there is no equivalent index.
+  - Right-click an App: Pin to / Unpin from Start, Pin to / Unpin from Dock, Open.
+  - Places column on the left: Home and the user's XDG folders (Documents, Downloads, Pictures, Music, Videos; any that is just Home is skipped, read from `~/.config/user-dirs.dirs`). One click opens the folder with `xdg-open`. A `startPlaces` list of paths (`~` allowed) replaces the defaults; an empty list hides the column.
+  - Footer: account name with an initial avatar, and a power button: Lock, Sleep, Log out, Restart, Shut down (Omarchy's system commands).
+  - Escape backs out one layer (overlay, search, All apps, menu); an outside click closes it.
+  - It takes keyboard focus while open, the one exception to "never takes keyboard focus".
+  - Not implemented: drag to reorder pins, pin folders, Uninstall, web search results, recent files.
+- Clock (`showClock`, true) at the right end.
+- Indicators: a small pill under each Window Item; a wide accent pill for the Active Window.
+- Previews (`showPreviews`, true): hovering a Window Item shows a live thumbnail with title, a close button, and click-to-focus. Pins without Windows keep the name tooltip. The thumbnail keeps the Window's own aspect ratio inside a fixed-size box and holds its last good frame if the live capture blanks. With `previewWarpPointer` (true) a click on the thumbnail also moves the pointer to the middle of that Window; false only focuses it. Clicking an Item itself never moves the pointer.
+- `colorScheme`: `theme` (default), `dark`, `light` fixed palettes.
+- Right click on the bar (not on an Item) opens an options menu: icon alignment, colour scheme, auto-hide, Start button, clock, previews, transparent background. Choosing a row writes the setting and closes the menu; the bar updates live. In dock style the same menu holds one row, "Switch to taskbar style", opened by right-clicking the gap between Items or the very bottom edge of the screen (the Reveal Strip).
+- `autoHide` (false): when true the bar uses the Dock's Reveal Strip and Hidden/Revealed rules unchanged.
 
 ## Out of scope for version one
 

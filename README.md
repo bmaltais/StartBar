@@ -43,7 +43,27 @@ Edit the entry by hand and the Dock picks it up live, no restart needed:
 }
 ```
 
-Any value that's missing or not a usable positive number falls back to its default. Nothing else is configurable in version one — see "Out of scope" in the spec.
+Any value that's missing or not a usable positive number falls back to its default.
+
+### Taskbar style
+
+Set `"style": "taskbar"` for a Windows-11-like bar. The default, `"dock"`, is the original floating auto-hiding dock.
+
+| Key | Default | |
+| --- | --- | --- |
+| `alignment` | `center` | `center` or `left` |
+| `autoHide` | `false` | Reuses the Dock's reveal behaviour |
+| `barHeight` | `48` | px |
+| `opacity` / `transparent` | `0.9` / `false` | Background; `transparent` shows icons only |
+| `colorScheme` | `theme` | `theme`, `dark`, `light` |
+| `showStart` / `startCommand` / `startIcon` | `true` / `omarchy-menu toggle apps` / `grid` | Icon: `grid`, `omarchy`, `arch`, `linux`, icon name, or absolute path |
+| `showClock` | `true` | |
+
+Set `startCommand` to `"builtin"` for a Windows-11-style Start menu that rises from the Start button: search, a Pinned grid, an All apps A-Z list, Recommended (recently launched), right-click to pin/unpin, and an account and power row (lock, sleep, log out, restart, shut down). It is the one part of the Dock that takes keyboard focus, while open. A column on the left lists Home, Documents, Downloads and your other folders; one click opens them in your file manager. Its own pins live in `startPins`, recents in `recentApps`, and `startPlaces` (a list of paths) replaces the folder list.
+| `showPreviews` | `true` | Hover thumbnails with close button |
+| `previewWarpPointer` | `true` | Clicking a preview also moves the pointer to the middle of that window |
+
+Right-click an empty part of the bar to change most of these from a menu instead of editing the file. In dock style, right-click the gap between two icons, or the very bottom edge of the screen, to get "Switch to taskbar style".
 
 ## Pinning
 
@@ -146,7 +166,7 @@ Walk through this after any change to the Quickshell side, on a two-monitor Omar
 - [ ] Left click on a special-workspace Window's Item toggles it into view.
 - [ ] Left click on a Pin with no Windows launches its App.
 - [ ] Middle click on any Item with a resolvable App launches a new instance; middle click on a Letter Tile does nothing.
-- [ ] Right click opens a themed popup with exactly Pin/Unpin, New Window, Close Window.
+- [ ] Right click opens a themed popup: Pin/Unpin, New Window and the app's own actions; for a window, Maximize, Full screen, Float (plus Center and Pin on top when floating) and Move to scratchpad; then Close Window. Each window-state row labels itself with its undo while active.
   - [ ] Pin shows for an unpinned App, Unpin for a pinned one.
   - [ ] Pin is disabled on a Letter Tile Item.
   - [ ] New Window launches another instance of the Item's App.

@@ -267,6 +267,30 @@ function menuFor(item) {
   };
 }
 
+// The Window-state rows of an Item's context menu (docs/SPEC.md "Input"):
+// each is { id, label }, in menu order. Labels flip to their undo while the
+// state is on (Maximize/Restore, Full screen/Exit full screen, Float/Tile,
+// Pin on top/Unpin from top). Center and Pin on top only make sense for a
+// floating window; Move to scratchpad is hidden once there. Service.qml
+// maps each id to its Hyprland dispatch.
+function windowActions(window) {
+  if (!window) return [];
+  var fullscreen = Number(window.fullscreen) || 0;
+  var actions = [
+    { id: "maximize", label: fullscreen === 1 ? "Restore" : "Maximize" },
+    { id: "fullscreen", label: fullscreen === 2 ? "Exit full screen" : "Full screen" },
+    { id: "float", label: window.floating ? "Tile" : "Float" },
+  ];
+  if (window.floating) {
+    actions.push({ id: "center", label: "Center" });
+    actions.push({ id: "pin", label: window.pinned ? "Unpin from top" : "Pin on top" });
+  }
+  if (String(window.workspace || "") !== "special:scratchpad") {
+    actions.push({ id: "scratchpad", label: "Move to scratchpad" });
+  }
+  return actions;
+}
+
 // The Dock's Pins list after Pin/Unpin (docs/SPEC.md "Input", the context
 // menu): appends `appId` when Pin is chosen and it isn't pinned yet, drops
 // it when Unpin is chosen, and otherwise leaves `pins` alone — a hand edit
@@ -305,9 +329,79 @@ function unplace(placements, key) {
   });
 }
 
+// The built-in Start menu's app list (docs/SPEC.md "Start menu"): `apps` are
+// plain { id, name, genericName, keywords, noDisplay } objects (Service.qml
+// flattens DesktopEntries into them); `query` is what the user typed.
+// Hidden entries never show. Ranking: name prefix, then name substring,
+// then generic name / keyword / id substring; ties alphabetical by name.
+// An empty query lists everything alphabetically.
+function filterApps(apps, query) {
+  var list = Array.isArray(apps) ? apps : [];
+  var needle = String(query || "").trim().toLowerCase();
+  var scored = [];
+  for (var i = 0; i < list.length; i++) {
+    var app = list[i];
+    if (!app || app.noDisplay) continue;
+    var name = String(app.name || "").toLowerCase();
+    var rank = 0;
+    if (needle) {
+      if (name.indexOf(needle) === 0) rank = 0;
+      else if (name.indexOf(needle) > 0) rank = 1;
+      else {
+        var haystack = [app.genericName, app.id].concat(app.keywords || []).join("\n").toLowerCase();
+        if (haystack.indexOf(needle) < 0) continue;
+        rank = 2;
+      }
+    }
+    scored.push({ app: app, rank: rank, name: name });
+  }
+  scored.sort(function (a, b) {
+    if (a.rank !== b.rank) return a.rank - b.rank;
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+  });
+  return scored.map(function (entry) { return entry.app; });
+}
+
+// The Start menu's "All apps" view: displayable apps grouped under their
+// first letter (non-letters under "#"), "#" first, apps alphabetical.
+function groupAlphabetically(apps) {
+  var list = Array.isArray(apps) ? apps : [];
+  var buckets = {};
+  for (var i = 0; i < list.length; i++) {
+    var app = list[i];
+    if (!app || app.noDisplay) continue;
+    var first = String(app.name || "").charAt(0).toUpperCase();
+    var letter = /[A-Z]/.test(first) ? first : "#";
+    if (!buckets[letter]) buckets[letter] = [];
+    buckets[letter].push(app);
+  }
+  return Object.keys(buckets).sort().map(function (letter) {
+    buckets[letter].sort(function (a, b) {
+      var x = String(a.name).toLowerCase();
+      var y = String(b.name).toLowerCase();
+      return x < y ? -1 : x > y ? 1 : 0;
+    });
+    return { letter: letter, apps: buckets[letter] };
+  });
+}
+
+// The Start menu's Recommended list after launching `appId`: most recent
+// first, no duplicates, at most `max` (default 6).
+function pushRecent(recent, appId, max) {
+  var list = Array.isArray(recent) ? recent.slice() : [];
+  if (typeof appId !== "string" || appId.length === 0) return list;
+  list = list.filter(function (id) { return id !== appId; });
+  list.unshift(appId);
+  return list.slice(0, max || 6);
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     buildDockItems: buildDockItems,
+    filterApps: filterApps,
+    windowActions: windowActions,
+    groupAlphabetically: groupAlphabetically,
+    pushRecent: pushRecent,
     menuFor: menuFor,
     nextPins: nextPins,
     placeAt: placeAt,
