@@ -2398,7 +2398,12 @@ Item {
         readonly property real fullHeight: Math.min(Style.space(640), Math.max(Style.space(240), panel.height - root.taskbar.barHeight - startMenu.menuMargin * 2))
         width: startMenu.visible ? startMenu.fullWidth : 0
         height: startMenu.visible ? startMenu.fullHeight : 0
-        x: Math.round(Math.max(startMenu.menuMargin, Math.min(startButton.x, panel.width - startMenu.fullWidth - startMenu.menuMargin)))
+        // Centred icons: the menu is centred on the screen. Left-aligned: its
+        // left edge lines up with the Start button. Either way it stays on screen.
+        readonly property real anchorX: root.taskbar.alignment === "left"
+          ? startButton.x
+          : (panel.width - startMenu.fullWidth) / 2
+        x: Math.round(Math.max(startMenu.menuMargin, Math.min(startMenu.anchorX, panel.width - startMenu.fullWidth - startMenu.menuMargin)))
         y: Math.round(Math.max(startMenu.menuMargin, panel.height - root.taskbar.barHeight - startMenu.fullHeight - startMenu.menuMargin))
 
         Timer {
