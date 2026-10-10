@@ -1,8 +1,19 @@
 # Omarchy Dock
 
-A macOS/Windows-style dock for [Omarchy](https://omarchy.org): every open window on every workspace and monitor, pinned apps, auto-hide.
+A macOS/Windows-style dock for [Omarchy](https://omarchy.org): every open window on every workspace and monitor, pinned apps, and two looks: a floating auto-hiding **dock** (the default) or a Windows 11-style **taskbar** with a Start menu.
 
 See [docs/SPEC.md](docs/SPEC.md) for the agreed behaviour and [CONTEXT.md](CONTEXT.md) for vocabulary (capitalised terms below — Dock, Item, Pin, Placed, and so on — refer to it). Work is tracked in the GitHub issues, grouped by milestone.
+
+## Features
+
+- **Every window, every workspace and monitor**, one Item per window, with the app's icon, an active highlight, an urgent tint for attention, a running indicator and a workspace badge.
+- **Pins**: keep apps in the Dock whether or not they are running; drag to reorder; drag out to unpin.
+- **Dock style** (default): a floating dock at the bottom edge that auto-hides and slides up when you rest the pointer on the screen edge.
+- **Taskbar style**: a full-width Windows 11-like bar with centred or left-aligned icons, a Start button, a clock, pill indicators, light/dark/theme colours, opacity or fully transparent, and optional auto-hide.
+- **Built-in Start menu**: rises from the Start button with search, a Pinned grid, an All apps A-Z list, Recommended (recently launched), a Places column (Home, Documents, Downloads...), right-click pin/unpin, and an account and power row.
+- **Hover previews** (taskbar): live thumbnails with the window's title and a close button; click to focus, optionally moving the pointer to the window.
+- **Right-click menus**: on an icon, the app's own actions (e.g. "New Private Window") plus Maximize, Full screen, Float, Center, Pin on top and Move to scratchpad; on the bar itself, a settings menu.
+- Colours and fonts follow the current Omarchy theme live.
 
 ## Install
 
@@ -18,9 +29,19 @@ omarchy plugin list        # bernard.dock should show as enabled, third-party, s
 
 Check `journalctl --user -t omarchy-shell` for load warnings or errors. To remove it: `omarchy plugin remove bernard.dock`.
 
+## Update
+
+```sh
+omarchy plugin update bernard.dock --yes && omarchy restart shell
+```
+
+`omarchy plugin update` pulls the latest release; the shell restart is needed because the Dock is a `keepLoaded` service, which a plugin rescan doesn't reload. Your settings, Pins and Start menu pins are kept, since they live in `~/.config/omarchy/shell.json`, not in the plugin folder. See the [releases page](https://github.com/bmaltais/omarchy-dock/releases) for what changed. Check the installed version with `omarchy plugin list`.
+
 ## Settings
 
-The Dock has three settings, stored (along with Pins and Placed Pin positions) in its own entry in Omarchy's shell config, `~/.config/omarchy/shell.json`, under `plugins[]`:
+All settings are stored (along with Pins and Placed Pin positions) in the Dock's own entry in Omarchy's shell config, `~/.config/omarchy/shell.json`, under `plugins[]`. Edit the entry by hand and the Dock picks it up live, no restart needed. Most taskbar settings can also be changed from the bar's right-click menu (below).
+
+### Dock
 
 | Setting | Key | Default |
 | --- | --- | --- |
@@ -28,42 +49,67 @@ The Dock has three settings, stored (along with Pins and Placed Pin positions) i
 | Reveal delay (pointer must rest on the Reveal Strip this long before the Dock shows) | `revealDelayMs` | 200ms |
 | Hide delay (after the pointer leaves the Dock) | `hideDelayMs` | 300ms |
 
-Edit the entry by hand and the Dock picks it up live, no restart needed:
+Any value that's missing or not a usable positive number falls back to its default.
+
+### Taskbar style
+
+Set `"style": "taskbar"` for the Windows 11-like bar. The default, `"dock"`, is the original floating auto-hiding dock.
 
 ```json
 {
   "plugins": [
     {
       "id": "bernard.dock",
-      "iconSize": 56,
-      "revealDelayMs": 150,
-      "hideDelayMs": 400
+      "style": "taskbar",
+      "alignment": "left",
+      "autoHide": true,
+      "startCommand": "builtin"
     }
   ]
 }
 ```
 
-Any value that's missing or not a usable positive number falls back to its default.
-
-### Taskbar style
-
-Set `"style": "taskbar"` for a Windows-11-like bar. The default, `"dock"`, is the original floating auto-hiding dock.
-
-| Key | Default | |
+| Key | Default | Description |
 | --- | --- | --- |
-| `alignment` | `center` | `center` or `left` |
-| `autoHide` | `false` | Reuses the Dock's reveal behaviour |
-| `barHeight` | `48` | px |
-| `opacity` / `transparent` | `0.9` / `false` | Background; `transparent` shows icons only |
-| `colorScheme` | `theme` | `theme`, `dark`, `light` |
-| `showStart` / `startCommand` / `startIcon` | `true` / `omarchy-menu toggle apps` / `grid` | Icon: `grid`, `omarchy`, `arch`, `linux`, icon name, or absolute path |
-| `showClock` | `true` | |
-
-Set `startCommand` to `"builtin"` for a Windows-11-style Start menu that rises from the Start button: search, a Pinned grid, an All apps A-Z list, Recommended (recently launched), right-click to pin/unpin, and an account and power row (lock, sleep, log out, restart, shut down). It is the one part of the Dock that takes keyboard focus, while open. A column on the left lists Home, Documents, Downloads and your other folders; one click opens them in your file manager. Its own pins live in `startPins`, recents in `recentApps`, and `startPlaces` (a list of paths) replaces the folder list.
-| `showPreviews` | `true` | Hover thumbnails with close button |
+| `style` | `dock` | `dock` or `taskbar` |
+| `alignment` | `center` | `center` or `left` for the Start button and icons |
+| `autoHide` | `false` | Hide the bar until the pointer rests on the bottom edge (the Dock's reveal behaviour) |
+| `barHeight` | `48` | Bar height in px |
+| `opacity` | `0.9` | Bar background opacity, 0 to 1 |
+| `transparent` | `false` | No bar background, icons only |
+| `colorScheme` | `theme` | `theme` (follow Omarchy), `dark` or `light` |
+| `showStart` | `true` | Show the Start button |
+| `startCommand` | `omarchy-menu toggle apps` | What the Start button runs; `builtin` opens the built-in Start menu |
+| `startIcon` | `grid` | `grid` (drawn in QML), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path |
+| `showClock` | `true` | Clock at the right end |
+| `showPreviews` | `true` | Hover thumbnails with a close button |
 | `previewWarpPointer` | `true` | Clicking a preview also moves the pointer to the middle of that window |
 
-Right-click an empty part of the bar to change most of these from a menu instead of editing the file. In dock style, right-click the gap between two icons, or the very bottom edge of the screen, to get "Switch to taskbar style".
+The icons are smaller than the dock's (up to `barHeight - 20`) and shrink further to fit when there are many windows.
+
+### Start menu
+
+Set `"startCommand": "builtin"` and the Start button opens a menu anchored right above it (the Omarchy menu always centres on screen and can't be anchored):
+
+- **Search** at the top: type to filter every installed app; Up/Down and Enter launch; Escape backs out one layer at a time.
+- **Pinned**: a six-column grid. Right-click any app to **Pin to Start** or **Unpin from Start** (or pin it to the Dock). Until you change it, it shows your Dock Pins.
+- **All apps ›**: an A-Z list with letter headings.
+- **Recommended**: the last six apps launched from the menu.
+- **Places** (left column): Home and your Documents, Downloads, Pictures, Music and Videos folders, from `~/.config/user-dirs.dirs`. One click opens a folder in your file manager.
+- **Account and power** (bottom): your name and a power button with Lock, Sleep, Log out, Restart and Shut down.
+
+It is the one part of the Dock that takes keyboard focus, and only while open.
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `startPins` | the Dock's Pins | App ids pinned in the menu |
+| `recentApps` | `[]` | Maintained automatically |
+| `startPlaces` | XDG folders | List of paths (`~` allowed) replacing the Places column; `[]` hides it |
+
+### Menus
+
+- **Right-click an icon**: Pin/Unpin, New Window and the app's own actions; for a window, Maximize/Restore, Full screen/Exit full screen, Float/Tile, and when floating Center and Pin on top; Move to scratchpad; then Close Window. The menu stays open until you pick a row, click outside it, or move the pointer off it.
+- **Right-click the bar** (an empty part): icon alignment, colour scheme, built-in or Omarchy Start menu, auto-hide, Start button, clock, previews, pointer-follows-preview and transparent background. In dock style, right-click the gap between two icons or the very bottom edge of the screen to get "Switch to taskbar style".
 
 ## Pinning
 
@@ -200,6 +246,22 @@ Walk through this after any change to the Quickshell side, on a two-monitor Omar
 - [ ] Switching the Omarchy theme updates the Dock live, with no restart. *(not checked — no theme switch was performed this run)*
 - [x] New Windows join Launch Order next to existing Windows of the same App, not at the end. *(confirmed structurally by the Pins slot ordering above and by `dockModel.test.js`'s same-App-clustering coverage; not independently re-checked by opening a new Window live)*
 - [ ] The Dock never takes keyboard focus. *(not checked — needs typing into another window while hovering/clicking the Dock)*
+
+### Taskbar style, Start menu and menus (added in 1.1.0)
+
+Not yet walked through with a real mouse; the pieces marked *checked* were confirmed with screenshots and `hyprctl` only.
+
+- [x] `"style": "taskbar"` shows a full-width bar with the Start grid, centred icons and a clock; `"alignment": "left"` moves the group to the left. *(checked)*
+- [x] With `"autoHide": true` the bar hides and slides up when the pointer reaches the bottom edge. *(checked)*
+- [ ] Resting the pointer on the Start button keeps the bar up, and clicking it opens the chosen menu.
+- [ ] Right-clicking an empty part of the bar opens the options menu; each row changes the setting live.
+- [ ] In dock style, right-clicking the gap between icons or the bottom edge offers "Switch to taskbar style".
+- [x] Hovering a window's icon shows a live thumbnail with its title and a close button. *(checked)*
+- [ ] Clicking a thumbnail focuses the window and, with `previewWarpPointer`, moves the pointer to its middle.
+- [ ] Sweeping across icons next to a busy browser shows no flicker.
+- [ ] Start menu (`"startCommand": "builtin"`): typing searches, Enter launches, Escape backs out a layer; All apps lists A-Z; right-click pins and unpins; Recommended fills after launching an app.
+- [ ] Places opens Home, Documents and Downloads in the file manager; the power menu's actions work (try Lock first).
+- [ ] Right-clicking an icon shows the window rows (Maximize, Full screen, Float...); their labels flip when active; the menu stays open until a row is chosen or the pointer leaves it.
 
 ### Install path
 
