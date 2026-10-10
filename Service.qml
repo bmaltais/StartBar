@@ -1511,13 +1511,13 @@ Item {
           visible: startButton.iconSpec.kind === "grid"
           anchors.centerIn: parent
           columns: 2
-          spacing: 2
+          spacing: 3
           Repeater {
             model: 4
             Rectangle {
-              width: Math.round(startButton.width * 0.2)
+              width: Math.round(startButton.width * 0.27)
               height: width
-              radius: 1
+              radius: 2
               color: root.colAccent
             }
           }
