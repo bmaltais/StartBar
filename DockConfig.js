@@ -136,6 +136,7 @@ function effectiveTaskbar(entry) {
     showClock: booleanOr(source.showClock, true),
     showPreviews: booleanOr(source.showPreviews, true),
     previewWarpPointer: booleanOr(source.previewWarpPointer, true),
+    showWorkspaceBadge: booleanOr(source.showWorkspaceBadge, false),
   };
 }
 
@@ -201,6 +202,7 @@ function barMenuRows(taskbar) {
     toggle("Clock", "showClock", 2),
     toggle("Window previews", "showPreviews", 2),
     toggle("Pointer follows preview click", "previewWarpPointer", 2),
+    toggle("Workspace badge", "showWorkspaceBadge", 2),
     toggle("Transparent background", "transparent", 2),
   ];
 }
@@ -229,11 +231,18 @@ function effectiveRecent(entry) {
   return uniqueStrings(isPlainObject(entry) ? entry.recentApps : null);
 }
 
-function startPowerActions() {
+// The menu behind the user's name in the Start menu (Windows 11 offers lock
+// and sign out there).
+function startUserActions() {
   return [
     { label: "Lock", command: "omarchy-system-lock" },
+    { label: "Sign out", command: "omarchy-system-logout" },
+  ];
+}
+
+function startPowerActions() {
+  return [
     { label: "Sleep", command: "systemctl suspend" },
-    { label: "Log out", command: "omarchy-system-logout" },
     { label: "Restart", command: "omarchy-system-reboot" },
     { label: "Shut down", command: "omarchy-system-shutdown" },
   ];
@@ -317,6 +326,7 @@ if (typeof module !== "undefined" && module.exports) {
     effectiveStartPins: effectiveStartPins,
     effectiveRecent: effectiveRecent,
     startPowerActions: startPowerActions,
+    startUserActions: startUserActions,
     effectivePlaces: effectivePlaces,
   };
 }

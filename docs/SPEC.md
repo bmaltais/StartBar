@@ -16,7 +16,7 @@ Agreed on 2026-09-11 after a design interview. Vocabulary is defined in [CONTEXT
 - A Window whose App cannot be resolved shows a Letter Tile and cannot be pinned.
 - Pins: an App kept in the Dock whether or not it has Windows. A Pin holds a slot; while its App has Windows their Window Items occupy that slot, otherwise the Pin is shown and launches the App on click. A Pin whose App is no longer installed shows a Letter Tile with a "missing" tooltip and stays until unpinned.
 - Ordering: Launch Order, with a new Window joining the Window Items of its own App. Any Item may be dragged to a Placed position; a Placed Pin keeps it permanently, a Placed Window Item until the Window closes. Dragging one Window of a pinned App moves only that Window.
-- Indicators: Active Window highlight, running dot on every Window Item, workspace badge on every Window Item, tooltip with title and workspace, urgent-colour tint for Attention. No magnification.
+- Indicators: Active Window highlight, running dot on every Window Item, workspace badge on every Window Item when `showWorkspaceBadge` is on (default off, amended 2026-10-09; both styles), tooltip with title and workspace, urgent-colour tint for Attention. No magnification.
 - Overflow: icons shrink until every Item fits the monitor width.
 - Colours and fonts come from the current Omarchy theme and follow theme switches live.
 
@@ -54,7 +54,7 @@ Stored in the Dock's entry in Omarchy's shell config (`~/.config/omarchy/shell.j
   - Recommended: the last six Apps launched from the menu (`recentApps`, `pushRecent`). Recent files are out of scope: there is no equivalent index.
   - Right-click an App: Pin to / Unpin from Start, Pin to / Unpin from Dock, Open.
   - Places column on the left: Home and the user's XDG folders (Documents, Downloads, Pictures, Music, Videos; any that is just Home is skipped, read from `~/.config/user-dirs.dirs`). One click opens the folder with `xdg-open`. A `startPlaces` list of paths (`~` allowed) replaces the defaults; an empty list hides the column.
-  - Footer: account name with an initial avatar, and a power button: Lock, Sleep, Log out, Restart, Shut down (Omarchy's system commands).
+  - Footer: account name with an initial avatar (click it for Lock and Sign out, as in Windows 11; "Change account settings" has no Omarchy equivalent), and a power button: Sleep, Restart, Shut down (Omarchy's system commands; Lock and Sign out are behind the name, as in Windows 11).
   - Escape backs out one layer (overlay, search, All apps, menu); an outside click closes it.
   - It takes keyboard focus while open, the one exception to "never takes keyboard focus".
   - Not implemented: drag to reorder pins, pin folders, Uninstall, web search results, recent files.

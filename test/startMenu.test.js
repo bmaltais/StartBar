@@ -73,9 +73,9 @@ test("effectiveRecent keeps only unique non-empty strings", () => {
 
 test("startPowerActions names each action and the command it runs", () => {
   const actions = startPowerActions();
-  assert.deepEqual(actions.map((a) => a.label), ["Lock", "Sleep", "Log out", "Restart", "Shut down"]);
+  assert.deepEqual(actions.map((a) => a.label), ["Sleep", "Restart", "Shut down"]);
   for (const a of actions) assert.equal(typeof a.command, "string");
-  assert.equal(actions[4].command, "omarchy-system-shutdown");
+  assert.equal(actions[2].command, "omarchy-system-shutdown");
 });
 
 const { effectivePlaces } = require("../DockConfig.js");
@@ -117,4 +117,12 @@ test("a startPlaces list replaces the defaults; ~ expands, labels come from the 
 
 test("an empty startPlaces list hides the Places column", () => {
   assert.deepEqual(effectivePlaces({ startPlaces: [] }, userDirs, "/home/u"), []);
+});
+
+const { startUserActions } = require("../DockConfig.js");
+
+test("startUserActions are the account actions behind the user's name: Lock and Sign out", () => {
+  const actions = startUserActions();
+  assert.deepEqual(actions.map((a) => a.label), ["Lock", "Sign out"]);
+  assert.deepEqual(actions.map((a) => a.command), ["omarchy-system-lock", "omarchy-system-logout"]);
 });

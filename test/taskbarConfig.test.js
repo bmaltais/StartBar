@@ -33,6 +33,7 @@ test("taskbar style defaults: always visible, centred, theme colours, Start and 
     showClock: true,
     showPreviews: true,
     previewWarpPointer: true,
+    showWorkspaceBadge: false,
   });
 });
 
@@ -62,6 +63,9 @@ test("taskbar style honours valid values and autoHide", () => {
   assert.equal(s.startIcon, "omarchy");
   assert.equal(s.showClock, false);
   assert.equal(s.showPreviews, false);
+  assert.equal(effectiveTaskbar({ style: "taskbar", showWorkspaceBadge: true }).showWorkspaceBadge, true);
+  assert.equal(effectiveTaskbar({ style: "dock", showWorkspaceBadge: true }).showWorkspaceBadge, true);
+  assert.equal(effectiveTaskbar({ style: "taskbar", showWorkspaceBadge: "yes" }).showWorkspaceBadge, false);
   assert.equal(effectiveTaskbar({ style: "taskbar", previewWarpPointer: false }).previewWarpPointer, false);
   assert.equal(effectiveTaskbar({ style: "taskbar", previewWarpPointer: "no" }).previewWarpPointer, true);
 });
@@ -132,6 +136,7 @@ test("each row's patch sets its own key; toggles flip the current value", () => 
   assert.deepEqual(patch("Clock"), { showClock: false });
   assert.deepEqual(patch("Window previews"), { showPreviews: false });
   assert.deepEqual(patch("Pointer follows preview click"), { previewWarpPointer: false });
+  assert.deepEqual(patch("Workspace badge"), { showWorkspaceBadge: true });
   assert.deepEqual(patch("Transparent background"), { transparent: true });
   assert.deepEqual(patch("Start button"), { showStart: false });
   assert.equal(rows.find((r) => r.label === "Switch to dock style"), undefined);

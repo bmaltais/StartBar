@@ -6,7 +6,7 @@ See [docs/SPEC.md](docs/SPEC.md) for the agreed behaviour and [CONTEXT.md](CONTE
 
 ## Features
 
-- **Every window, every workspace and monitor**, one Item per window, with the app's icon, an active highlight, an urgent tint for attention, a running indicator and a workspace badge.
+- **Every window, every workspace and monitor**, one Item per window, with the app's icon, an active highlight, an urgent tint for attention, a running indicator and an optional workspace badge (`showWorkspaceBadge`).
 - **Pins**: keep apps in the Dock whether or not they are running; drag to reorder; drag out to unpin.
 - **Dock style** (default): a floating dock at the bottom edge that auto-hides and slides up when you rest the pointer on the screen edge.
 - **Taskbar style**: a full-width Windows 11-like bar with centred or left-aligned icons, a Start button, a clock, pill indicators, light/dark/theme colours, opacity or fully transparent, and optional auto-hide.
@@ -48,6 +48,7 @@ All settings are stored (along with Pins and Placed Pin positions) in the Dock's
 | Icon size | `iconSize` | 48px |
 | Reveal delay (pointer must rest on the Reveal Strip this long before the Dock shows) | `revealDelayMs` | 200ms |
 | Hide delay (after the pointer leaves the Dock) | `hideDelayMs` | 300ms |
+| Workspace number/name badge over each window's icon (both styles) | `showWorkspaceBadge` | `false` |
 
 Any value that's missing or not a usable positive number falls back to its default.
 
@@ -96,7 +97,7 @@ Set `"startCommand": "builtin"` and the Start button opens a menu anchored right
 - **All apps ›**: an A-Z list with letter headings.
 - **Recommended**: the last six apps launched from the menu.
 - **Places** (left column): Home and your Documents, Downloads, Pictures, Music and Videos folders, from `~/.config/user-dirs.dirs`. One click opens a folder in your file manager.
-- **Account and power** (bottom): your name and a power button with Lock, Sleep, Log out, Restart and Shut down.
+- **Account and power** (bottom): click your name for Lock and Sign out; the power button has Sleep, Restart and Shut down.
 
 It is the one part of the Dock that takes keyboard focus, and only while open.
 
@@ -109,7 +110,7 @@ It is the one part of the Dock that takes keyboard focus, and only while open.
 ### Menus
 
 - **Right-click an icon**: Pin/Unpin, New Window and the app's own actions; for a window, Maximize/Restore, Full screen/Exit full screen, Float/Tile, and when floating Center and Pin on top; Move to scratchpad; then Close Window. The menu stays open until you pick a row, click outside it, or move the pointer off it.
-- **Right-click the bar** (an empty part): icon alignment, colour scheme, built-in or Omarchy Start menu, auto-hide, Start button, clock, previews, pointer-follows-preview and transparent background. In dock style, right-click the gap between two icons or the very bottom edge of the screen to get "Switch to taskbar style".
+- **Right-click the bar** (an empty part): icon alignment, colour scheme, built-in or Omarchy Start menu, auto-hide, Start button, clock, previews, pointer-follows-preview, workspace badge and transparent background. In dock style, right-click the gap between two icons or the very bottom edge of the screen to get "Switch to taskbar style".
 
 ## Pinning
 
@@ -199,7 +200,7 @@ Walk through this after any change to the Quickshell side, on a two-monitor Omar
 - [x] The Active Window's Item is highlighted. *(confirmed: the Chromium Item — matching `hyprctl activewindow`'s real active window — had a visibly lighter background square the other three Items lacked)*
 - [ ] ...and the highlight moves immediately when focus changes. *(not independently re-checked — this run only ever had one active window; the highlight already being wired to live active-window state makes a change of focus the same code path, but that wasn't exercised by switching focus)*
 - [x] Every Window Item shows a running dot; a bare Pin (no Windows) does not. *(confirmed: all four open Windows showed a dot; no bare Pin was present to check the negative case)*
-- [x] Every Window Item shows a workspace badge. *(confirmed: badges read 2/3/3/3, matching each Window's real workspace from `hyprctl clients`)*
+- [x] With `showWorkspaceBadge` on, every Window Item shows a workspace badge (off by default since 1.1.1). *(confirmed: badges read 2/3/3/3, matching each Window's real workspace from `hyprctl clients`)*
 - [ ] A special-workspace Window's badge shows its name. *(not checked — no special-workspace Window was open)*
 - [ ] Hovering an Item shows a tooltip with the Window's title and workspace. *(not confirmed — see Method above; a warped hover didn't trigger it)*
 - [ ] Hovering the tooltip never restarts or blocks the hide timer, and it disappears when the Dock hides. *(not checked, follows from the item above)*
@@ -260,7 +261,7 @@ Not yet walked through with a real mouse; the pieces marked *checked* were confi
 - [ ] Clicking a thumbnail focuses the window and, with `previewWarpPointer`, moves the pointer to its middle.
 - [ ] Sweeping across icons next to a busy browser shows no flicker.
 - [ ] Start menu (`"startCommand": "builtin"`): typing searches, Enter launches, Escape backs out a layer; All apps lists A-Z; right-click pins and unpins; Recommended fills after launching an app.
-- [ ] Places opens Home, Documents and Downloads in the file manager; the power menu's actions work (try Lock first).
+- [ ] Places opens Home, Documents and Downloads in the file manager; the power menu's Sleep, Restart and Shut down work, and the name menu's Lock and Sign out (try Lock first).
 - [ ] Right-clicking an icon shows the window rows (Maximize, Full screen, Float...); their labels flip when active; the menu stays open until a row is chosen or the pointer leaves it.
 
 ### Install path

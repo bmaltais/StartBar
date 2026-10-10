@@ -966,7 +966,7 @@ Item {
               // has already turned a special workspace's "special:" IPC
               // name into its own name.
               Rectangle {
-                visible: (dockItem.modelData.badge || "").length > 0
+                visible: root.taskbar.showWorkspaceBadge && (dockItem.modelData.badge || "").length > 0
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 radius: height / 2
@@ -1434,6 +1434,8 @@ Item {
 
         property bool showAll: false
         property bool powerOpen: false
+        // The menu behind the user's name (Lock, Sign out).
+        property bool userOpen: false
         // The right-clicked app (null when its menu is closed) and where.
         property var menuApp: null
         property real menuX: 0
@@ -1459,12 +1461,14 @@ Item {
           startMenu.menuX = Math.min(point.x, card.width - Style.space(200))
           startMenu.menuY = Math.min(point.y, card.height - Style.space(130))
           startMenu.powerOpen = false
+          startMenu.userOpen = false
           startMenu.menuApp = app
         }
 
         function closeOverlays() {
           startMenu.menuApp = null
           startMenu.powerOpen = false
+          startMenu.userOpen = false
         }
 
         readonly property var menuRows: {
@@ -1571,7 +1575,7 @@ Item {
                   event.accepted = true
                 } else if (event.key === Qt.Key_Escape) {
                   // Back out one layer at a time: overlay, search, All apps, menu.
-                  if (startMenu.menuApp || startMenu.powerOpen) startMenu.closeOverlays()
+                  if (startMenu.menuApp || startMenu.powerOpen || startMenu.userOpen) startMenu.closeOverlays()
                   else if (startMenu.searching) searchInput.text = ""
                   else if (startMenu.showAll) startMenu.showAll = false
                   else startMenu.visible = false
@@ -2046,6 +2050,30 @@ Item {
             radius: Style.cornerRadius
             color: Util.alpha(Color.popups.text, 0.05)
 
+            // Clicking the account (avatar or name) opens Lock / Sign out.
+            Rectangle {
+              id: userButton
+              anchors.left: parent.left
+              anchors.leftMargin: Style.spacing.xs
+              anchors.verticalCenter: parent.verticalCenter
+              width: userNameText.x + userNameText.width + Style.spacing.md
+              height: Style.space(44)
+              radius: Style.cornerRadius
+              color: userMouse.containsMouse || startMenu.userOpen ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+
+              MouseArea {
+                id: userMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  startMenu.menuApp = null
+                  startMenu.powerOpen = false
+                  startMenu.userOpen = !startMenu.userOpen
+                }
+              }
+            }
+
             Rectangle {
               id: avatar
               anchors.left: parent.left
@@ -2067,6 +2095,7 @@ Item {
             }
 
             Text {
+              id: userNameText
               anchors.left: avatar.right
               anchors.leftMargin: Style.spacing.md
               anchors.verticalCenter: parent.verticalCenter
@@ -2100,6 +2129,7 @@ Item {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
                   startMenu.menuApp = null
+                  startMenu.userOpen = false
                   startMenu.powerOpen = !startMenu.powerOpen
                 }
               }
@@ -2110,7 +2140,7 @@ Item {
           MouseArea {
             anchors.fill: parent
             z: 20
-            visible: startMenu.menuApp !== null || startMenu.powerOpen
+            visible: startMenu.menuApp !== null || startMenu.powerOpen || startMenu.userOpen
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             onClicked: startMenu.closeOverlays()
           }
@@ -2119,15 +2149,16 @@ Item {
           Rectangle {
             id: overlayMenu
             z: 30
-            visible: startMenu.menuApp !== null || startMenu.powerOpen
+            visible: startMenu.menuApp !== null || startMenu.powerOpen || startMenu.userOpen
             width: Style.space(190)
             height: overlayColumn.implicitHeight + Style.spacing.xxs * 2
             radius: Style.cornerRadius
             color: Color.popups.background
             border.width: Style.normalBorderWidth
             border.color: Color.popups.border
-            x: startMenu.powerOpen ? card.width - width - Style.spacing.md : startMenu.menuX
-            y: startMenu.powerOpen ? footer.y - height - Style.spacing.xs : startMenu.menuY
+            x: startMenu.powerOpen ? card.width - width - Style.spacing.md
+              : (startMenu.userOpen ? Style.spacing.md : startMenu.menuX)
+            y: (startMenu.powerOpen || startMenu.userOpen) ? footer.y - height - Style.spacing.xs : startMenu.menuY
 
             Column {
               id: overlayColumn
@@ -2137,7 +2168,8 @@ Item {
               anchors.margins: Style.spacing.xxs
 
               Repeater {
-                model: startMenu.powerOpen ? DockConfig.startPowerActions() : startMenu.menuRows
+                model: startMenu.powerOpen ? DockConfig.startPowerActions()
+                  : (startMenu.userOpen ? DockConfig.startUserActions() : startMenu.menuRows)
 
                 delegate: Rectangle {
                   id: overlayRow
@@ -2163,14 +2195,22 @@ Item {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                      var power = startMenu.powerOpen
+                      // Take local references and run the action before
+                      // touching any state: closing the overlay changes this
+                      // Repeater's model, which destroys this delegate, and
+                      // a handler that then reaches for `startMenu` by id
+                      // dies with "startMenu is not defined" — before the
+                      // action ever ran.
+                      var menu = startMenu
+                      var system = menu.powerOpen || menu.userOpen
                       var row = overlayRow.modelData
-                      startMenu.closeOverlays()
-                      if (power) {
-                        startMenu.visible = false
+                      if (system) {
                         Quickshell.execDetached(["bash", "-lc", row.command])
+                        menu.closeOverlays()
+                        menu.visible = false
                       } else {
                         row.run()
+                        menu.closeOverlays()
                       }
                     }
                   }
