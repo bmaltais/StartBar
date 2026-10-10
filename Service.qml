@@ -1269,13 +1269,13 @@ Item {
       // Hidden/Revealed and the reveal/hide timers (SPEC.md "How the Dock
       // behaves"). Kept per panel, so hovering one monitor's Reveal Strip
       // never reveals the other monitor's Dock. menuOpen holds the Dock
-      // Revealed for the whole of a context-menu visit (SPEC.md "The Dock
-      // stays Revealed while its context menu is open") independent of
+      // Revealed for the whole of a context-menu visit (SPEC.md "How the Dock
+      // behaves": it stays Revealed while a menu is open) independent of
       // hover, since the pointer moves onto the menu's own popup window
       // and away from both the strip and the Dock itself. dragging does
-      // the same for the whole of a drag (SPEC.md "The Dock stays
-      // Revealed ... for the whole of a drag; the hide timer starts after
-      // the drop"): once it drops back to false the hide timer starts
+      // the same for the whole of a drag (SPEC.md "How the Dock behaves":
+      // Revealed for the whole of a drag, the hide timer starts after the
+      // drop): once it drops back to false the hide timer starts
       // exactly like it does when hover ends, with no separate handling
       // needed here.
       QtObject {

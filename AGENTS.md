@@ -15,3 +15,12 @@ The five default triage labels, unchanged. See `docs/agents/triage-labels.md`.
 ### Domain docs
 
 Single-context: `CONTEXT.md` at the root, ADRs under `docs/adr/`. See `docs/agents/domain.md`.
+
+## Checks
+
+- Before committing: `npm run check` (tests, manifest, new QML warnings). The pre-commit hook runs it once `git config core.hooksPath .githooks` is set.
+- After changing `Service.qml` or `StartMenuView.qml`: `scripts/smoke.sh` restarts the shell with this checkout, fails on anything the plugin logs, and screenshots the Dock, Start menu and settings window in each colour scheme. Read the screenshots.
+
+## Releasing
+
+Merging to `main` ships to every user. Before merging to `main`, tagging or publishing a release, read `docs/agents/release.md`.
