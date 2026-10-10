@@ -1,11 +1,10 @@
-// Dock service entry point (see docs/SPEC.md, milestones 1-4; vocabulary in
-// CONTEXT.md). Owns one layer-shell panel per monitor, each rendering the
-// same Items built by DockModel.buildDockItems from live Hyprland state,
-// the Dock's own Pins, and this session's Placed positions — Hidden by
-// default and Revealed by hovering its Reveal Strip, with the
-// Active/Attention/running/workspace indicators from milestone 3, a
-// context menu for Pin/Unpin/New Window/Close Window, and drag to reorder
-// or drag out to unpin/snap back (CONTEXT.md "Placed").
+// Dock service entry point (see docs/SPEC.md; vocabulary in CONTEXT.md).
+// Owns one layer-shell panel per monitor, each drawing the same Items built
+// by DockModel.buildDockItems from live Hyprland state, the Pins and this
+// session's Placed positions, between the Start button and the clock. It
+// also owns what rises from the Dock (Previews, the Item menu, the Bar
+// menu, and the Start menu in StartMenuView.qml) and the settings window.
+// The rules themselves live in the JS modules imported below.
 import QtQuick
 import QtQml.Models
 import Quickshell
