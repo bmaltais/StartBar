@@ -41,6 +41,12 @@ The Dock model (`DockModel.js`), Start menu logic (`StartMenu.js`) and settings 
 npm test
 ```
 
+`npm run smoke` covers the QML side as far as a script can: it restarts the live shell and fails if StartBar logs any warning or error while loading (a `ReferenceError`, `TypeError` or binding loop, say). Run it after editing `Service.qml` or `StartMenuView.qml`. To run `npm test` before every commit, enable the checked-in hook once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
 Everything else — panels, hover, timers, animation, tooltips, the context menu, drag — is verified by the manual checklist below, since it depends on Quickshell/Hyprland and has no scripted coverage .
 
 ## Manual verification checklist
