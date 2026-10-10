@@ -31,6 +31,7 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor. A lef
 | `hideDelayMs` | `300` | With auto-hide: how long after the pointer leaves the bar before it hides, in ms |
 | `iconSize` | `48` | Largest icon size in px; icons are also limited to `barHeight - 20` and shrink further to fit when there are many windows |
 | `showWorkspaceBadge` | `false` | Workspace number or name over each window's icon |
+| `groupWindows` | `false` | One stacked icon per app with two or more windows; hover it to pick a window from the previews |
 | `barHeight` | `48` | Bar height in px |
 | `opacity` | `0.9` | Bar background opacity, 0 to 1 |
 | `transparent` | `false` | No bar background, icons only |
@@ -41,6 +42,7 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor. A lef
 | `startIcon` | `grid` | `grid` (drawn in QML), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path |
 | `showClock` | `true` | Clock at the right end |
 | `showPreviews` | `true` | Hover thumbnails with a close button |
+| `previewPeek` | `true` | Hovering a preview thumbnail focuses that window to show it (switching workspace if needed); a maximized or full-screen window covering it is un-maximized for the peek; moving away restores the focus, workspaces and maximized state; clicking keeps it |
 | `previewWarpPointer` | `true` | Clicking a preview also moves the pointer to the middle of that window |
 
 Any numeric value that's missing or not a usable positive number falls back to its default.

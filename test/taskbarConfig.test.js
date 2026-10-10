@@ -38,7 +38,9 @@ test("bar defaults: always visible, centred, theme colours, Start and clock show
     showClock: true,
     showPreviews: true,
     previewWarpPointer: true,
+    previewPeek: true,
     showWorkspaceBadge: false,
+    groupWindows: false,
     startHoverOpen: true,
   });
 });
@@ -142,7 +144,9 @@ test("each row's patch sets its own key; toggles flip the current value", () => 
   assert.deepEqual(patch("Clock"), { showClock: false });
   assert.deepEqual(patch("Window previews"), { showPreviews: false });
   assert.deepEqual(patch("Pointer follows preview click"), { previewWarpPointer: false });
+  assert.deepEqual(patch("Show window on preview hover"), { previewPeek: false });
   assert.deepEqual(patch("Workspace badge"), { showWorkspaceBadge: true });
+  assert.deepEqual(patch("Group windows of one app"), { groupWindows: true });
   assert.deepEqual(patch("Start menu opens on hover"), { startHoverOpen: false });
   assert.deepEqual(patch("Transparent background"), { transparent: true });
   assert.deepEqual(patch("Start button"), { showStart: false });

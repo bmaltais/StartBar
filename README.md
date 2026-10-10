@@ -33,7 +33,8 @@ It shows a taskbar at the bottom of every monitor. Everything it needs comes wit
 | **Every window** | One icon per open window, across all workspaces and monitors. Click to jump to it. |
 | **Pins** | Keep apps in the bar whether or not they are running. Drag to reorder, drag out to unpin. |
 | **Start menu** | Search every installed app, a Pinned grid, an A-Z list, recently launched apps, your folders, and lock, sign out and power. |
-| **Hover previews** | Live window thumbnails with a close button. |
+| **Hover previews** | Live window thumbnails with a close button. Hovering one shows that window, even from behind a maximized one, and moving away puts things back. |
+| **Grouped windows** | Optionally stack an app's windows into one icon and pick the window from the previews, as on Windows. |
 | **Right-click menus** | The app's own actions, plus Maximize, Full screen, Float, Move to scratchpad and Close. |
 | **Follows your theme** | Colours and fonts track the current Omarchy theme live, or pick a fixed light or dark bar. |
 
