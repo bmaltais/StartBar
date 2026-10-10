@@ -59,11 +59,10 @@ With `startCommand: "builtin"`, the default, the Start button opens StartBar's o
 - From the keyboard: `omarchy-shell io.github.bmaltais.startbar startMenu` toggles it on the focused monitor and `closeStartMenu` closes it, for a Super-key binding. It never opens in hover mode this way. With a `startCommand` other than `builtin`, both the button and this command run that command instead.
 - Search box at the top: type to filter all Apps; Up/Down move the highlight and Enter launches it.
 - Pinned: a six-column grid of Start Pins. Until the list is first changed it shows the Dock's Pins. A tile can be dragged to another slot to reorder; the slot under it is outlined and the order is saved on release.
-- "All apps ›" switches to an A-Z list with letter headings and a Back link. Clicking a letter heading opens an A-Z jump grid; letters with no Apps are dimmed.
-- Recommended: the last six Apps launched from the menu.
+- "All apps ›" switches to an A-Z list titled "All", with letter headings, an outlined "‹ Back" button opposite the title, and each App's generic name under its name when it has one. Clicking a letter heading opens an A-Z jump grid; letters with no Apps are dimmed.
+- Recommended: the last six Apps launched from the menu, each with its generic name (such as "Web Browser") under it when the desktop entry has one.
 - Right-click an App: Pin to / Unpin from Start, Pin to / Unpin from Dock, Open.
 - Places: a column on the left with Home and the user's XDG folders (Documents, Downloads, Pictures, Music, Videos, read from `~/.config/user-dirs.dirs`; any that is just Home is skipped). One click opens the folder with `xdg-open`. A `startPlaces` list of paths (`~` allowed) replaces the defaults; an empty list hides the column.
-- A Settings button at the bottom of the Places column opens Omarchy's setup menu (`omarchy-menu summon setup`).
 - Footer: the account's real name (from the system account, else the login) with the `~/.face` picture cropped to a circle, or an initial when there is none. Clicking it offers Lock and Sign out. A power button offers Sleep, Restart and Shut down. These run Omarchy's system commands and `systemctl suspend`.
 - Keys with nothing typed: the arrow keys walk the Pinned grid and then Recommended, and Enter launches the selection. In All apps, Up/Down walk the list.
 - Escape backs out one layer at a time: an open overlay menu, the jump grid, the search text, All apps, then the menu itself. Outside hover mode, a click anywhere outside the menu closes it.

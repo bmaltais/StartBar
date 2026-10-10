@@ -254,10 +254,11 @@ Item {
   Rectangle {
     id: card
     anchors.fill: parent
-    radius: Style.cornerRadius
+    radius: Math.max(Style.cornerRadius, Style.space(8))
     color: startMenu.colBackground
     border.width: Style.normalBorderWidth
     border.color: startMenu.colBorder
+    clip: true
 
     HoverHandler {
       id: startMenuHover
@@ -269,13 +270,15 @@ Item {
       anchors.top: parent.top
       anchors.left: placesPane.right
       anchors.right: parent.right
-      anchors.margins: Style.spacing.md
-      height: Style.space(36)
-      // A slight rounding of its own: Style.cornerRadius follows
-      // Hyprland's window rounding, which many setups (this one
-      // included) set to 0, and a sharp search box looks out of place.
-      radius: Math.max(Style.cornerRadius, Style.space(6))
-      color: Util.alpha(startMenu.colText, 0.08)
+      anchors.margins: Style.spacing.xxl
+      height: Style.space(40)
+      // A pill, as in Windows 11. Style.cornerRadius follows Hyprland's
+      // window rounding, which many setups (this one included) set to 0,
+      // and a sharp search box looks out of place.
+      radius: height / 2
+      color: Util.alpha(startMenu.colText, 0.05)
+      border.width: 1
+      border.color: Util.alpha(startMenu.colText, 0.12)
 
       // In a hover-opened menu, clicking the search box is how you say
       // "I want to type": it takes the focus grab (and the keyboard).
@@ -309,7 +312,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: searchGlyph.right
         anchors.leftMargin: Style.spacing.md
-        text: "Search..."
+        text: "Search for apps"
         color: Util.alpha(startMenu.colText, 0.5)
         font.family: Style.font.family
         font.pixelSize: Style.font.body
@@ -403,63 +406,15 @@ Item {
       }
     }
 
-    // Settings: the way on to Omarchy's setup menu, like the gear on
-    // Windows 10's left rail. Sits at the bottom of the Places column.
-    Rectangle {
-      visible: startMenu.placesWidth > 0
-      anchors.left: placesPane.left
-      anchors.bottom: placesPane.bottom
-      anchors.margins: Style.spacing.md
-      width: startMenu.placesWidth - Style.spacing.md * 2
-      height: Style.space(38)
-      radius: Style.cornerRadius
-      color: settingsRailMouse.containsMouse ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
-
-      Image {
-        id: settingsRailIcon
-        anchors.left: parent.left
-        anchors.leftMargin: Style.spacing.sm
-        anchors.verticalCenter: parent.verticalCenter
-        width: Style.space(22)
-        height: width
-        fillMode: Image.PreserveAspectFit
-        asynchronous: true
-        sourceSize.width: width * Screen.devicePixelRatio
-        sourceSize.height: height * Screen.devicePixelRatio
-        source: Quickshell.iconPath("preferences-system", true)
-      }
-
-      Text {
-        anchors.left: settingsRailIcon.right
-        anchors.leftMargin: Style.spacing.md
-        anchors.right: parent.right
-        anchors.rightMargin: Style.spacing.sm
-        anchors.verticalCenter: parent.verticalCenter
-        elide: Text.ElideRight
-        text: "Settings"
-        color: startMenu.colText
-        font.family: Style.font.family
-        font.pixelSize: Style.font.body
-      }
-
-      MouseArea {
-        id: settingsRailMouse
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: startMenu.send({ type: "openSettings" })
-      }
-    }
-
     Item {
       id: body
       anchors.top: searchBox.bottom
-      anchors.topMargin: Style.spacing.sm
+      anchors.topMargin: Style.space(22)
       anchors.bottom: footer.top
       anchors.left: placesPane.right
       anchors.right: parent.right
-      anchors.leftMargin: Style.spacing.md
-      anchors.rightMargin: Style.spacing.md
+      anchors.leftMargin: Style.spacing.xl
+      anchors.rightMargin: Style.spacing.xl
 
       // Search results.
       ListView {
@@ -537,17 +492,16 @@ Item {
         section.delegate: Item {
           required property string section
           width: allList.width
-          height: Style.space(30)
+          height: Style.space(36)
 
           Text {
             anchors.left: parent.left
-            anchors.leftMargin: Style.spacing.sm
+            anchors.leftMargin: Style.spacing.lg
             anchors.verticalCenter: parent.verticalCenter
             text: parent.section
-            color: startMenu.colAccent
+            color: startMenu.colText
             font.family: Style.font.family
             font.pixelSize: Style.font.body
-            font.bold: true
           }
 
           // Click a letter heading for the A-Z jump grid.
@@ -560,20 +514,43 @@ Item {
 
         header: Item {
           width: allList.width
-          height: Style.space(34)
+          height: Style.space(28) + Style.spacing.md
 
           Text {
             anchors.left: parent.left
             anchors.leftMargin: Style.spacing.sm
-            anchors.verticalCenter: parent.verticalCenter
-            text: "‹  Back"
+            anchors.verticalCenter: allBackButton.verticalCenter
+            text: "All"
             color: startMenu.colText
             font.family: Style.font.family
-            font.pixelSize: Style.font.body
+            font.pixelSize: Style.font.body + 1
+            font.bold: true
+          }
+
+          Rectangle {
+            id: allBackButton
+            anchors.top: parent.top
+            anchors.right: parent.right
+            width: backLabel.implicitWidth + Style.spacing.md * 2
+            height: Style.space(28)
+            radius: Math.max(Style.cornerRadius, Style.space(4))
+            color: backMouse.containsMouse ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : Util.alpha(startMenu.colText, 0.04)
+            border.width: 1
+            border.color: Util.alpha(startMenu.colText, 0.15)
+
+            Text {
+              id: backLabel
+              anchors.centerIn: parent
+              text: "‹  Back"
+              color: startMenu.colText
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+            }
 
             MouseArea {
+              id: backMouse
               anchors.fill: parent
-              anchors.margins: -Style.spacing.sm
+              hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onClicked: startMenu.send({ type: "showView", view: "home" })
             }
@@ -585,17 +562,17 @@ Item {
           required property var modelData
           required property int index
           width: allList.width
-          height: Style.space(40)
-          radius: Style.cornerRadius
+          height: Style.space(48)
+          radius: Math.max(Style.cornerRadius, Style.space(6))
           color: (allMouse.containsMouse || allList.currentIndex === allRow.index)
             ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
 
           Image {
             id: allIcon
             anchors.left: parent.left
-            anchors.leftMargin: Style.spacing.sm
+            anchors.leftMargin: Style.spacing.lg
             anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(26)
+            width: Style.space(30)
             height: width
             fillMode: Image.PreserveAspectFit
             asynchronous: true
@@ -604,17 +581,31 @@ Item {
             source: allRow.modelData.icon ? Quickshell.iconPath(allRow.modelData.icon, true) : ""
           }
 
-          Text {
+          Column {
             anchors.left: allIcon.right
-            anchors.leftMargin: Style.spacing.md
+            anchors.leftMargin: Style.spacing.xxl + Style.spacing.md
             anchors.right: parent.right
             anchors.rightMargin: Style.spacing.sm
             anchors.verticalCenter: parent.verticalCenter
-            elide: Text.ElideRight
-            text: allRow.modelData.name
-            color: startMenu.colText
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
+
+            Text {
+              width: parent.width
+              elide: Text.ElideRight
+              text: allRow.modelData.name
+              color: startMenu.colText
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+            }
+
+            Text {
+              visible: text.length > 0
+              width: parent.width
+              elide: Text.ElideRight
+              text: allRow.modelData.genericName || ""
+              color: Util.alpha(startMenu.colText, 0.6)
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+            }
           }
 
           MouseArea {
@@ -699,26 +690,37 @@ Item {
         visible: !startMenu.searching && !startMenu.showAll
         anchors.fill: parent
 
+        // The same row the All apps header uses, so the two line up.
+        Item {
+          id: homeHeader
+          anchors.top: parent.top
+          anchors.left: parent.left
+          anchors.right: parent.right
+          height: Style.space(28)
+        }
+
         Text {
           id: pinnedTitle
-          anchors.top: parent.top
+          anchors.verticalCenter: homeHeader.verticalCenter
           anchors.left: parent.left
           anchors.leftMargin: Style.spacing.sm
           text: "Pinned"
           color: startMenu.colText
           font.family: Style.font.family
-          font.pixelSize: Style.font.body
+          font.pixelSize: Style.font.body + 1
           font.bold: true
         }
 
         Rectangle {
           id: allAppsButton
-          anchors.verticalCenter: pinnedTitle.verticalCenter
+          anchors.verticalCenter: homeHeader.verticalCenter
           anchors.right: parent.right
           width: allAppsLabel.implicitWidth + Style.spacing.md * 2
-          height: Style.space(26)
-          radius: Style.cornerRadius
-          color: allAppsMouse.containsMouse ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
+          height: Style.space(28)
+          radius: Math.max(Style.cornerRadius, Style.space(4))
+          color: allAppsMouse.containsMouse ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : Util.alpha(startMenu.colText, 0.04)
+          border.width: 1
+          border.color: Util.alpha(startMenu.colText, 0.15)
 
           Text {
             id: allAppsLabel
@@ -740,15 +742,15 @@ Item {
 
         GridView {
           id: pinnedGrid
-          anchors.top: pinnedTitle.bottom
-          anchors.topMargin: Style.spacing.sm
+          anchors.top: homeHeader.bottom
+          anchors.topMargin: Style.spacing.md
           anchors.bottom: recommendedTitle.top
-          anchors.bottomMargin: Style.spacing.sm
+          anchors.bottomMargin: Style.spacing.md
           anchors.left: parent.left
           anchors.right: parent.right
           clip: true
           cellWidth: Math.floor(width / StartMenu.PINNED_COLUMNS)
-          cellHeight: Style.space(88)
+          cellHeight: Style.space(92)
           model: startMenu.pinnedApps
           boundsBehavior: Flickable.StopAtBounds
 
@@ -763,7 +765,7 @@ Item {
             Rectangle {
               anchors.fill: parent
               anchors.margins: 2
-              radius: Style.cornerRadius
+              radius: Math.max(Style.cornerRadius, Style.space(6))
               color: (pinnedMouse.containsMouse || (startMenu.navSection === "pinned" && startMenu.navIndex === pinnedTile.index))
                 ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
             }
@@ -900,13 +902,13 @@ Item {
         Text {
           id: recommendedTitle
           anchors.bottom: recommendedGrid.top
-          anchors.bottomMargin: Style.spacing.sm
+          anchors.bottomMargin: Style.spacing.md
           anchors.left: parent.left
           anchors.leftMargin: Style.spacing.sm
           text: "Recommended"
           color: startMenu.colText
           font.family: Style.font.family
-          font.pixelSize: Style.font.body
+          font.pixelSize: Style.font.body + 1
           font.bold: true
         }
 
@@ -932,7 +934,7 @@ Item {
             Rectangle {
               anchors.fill: parent
               anchors.margins: 2
-              radius: Style.cornerRadius
+              radius: Math.max(Style.cornerRadius, Style.space(6))
               color: (recentMouse.containsMouse || (startMenu.navSection === "recent" && startMenu.navIndex === recentTile.index))
                 ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
             }
@@ -951,17 +953,33 @@ Item {
               source: recentTile.modelData.icon ? Quickshell.iconPath(recentTile.modelData.icon, true) : ""
             }
 
-            Text {
+            Column {
               anchors.left: recentIcon.right
               anchors.leftMargin: Style.spacing.md
               anchors.right: parent.right
               anchors.rightMargin: Style.spacing.sm
               anchors.verticalCenter: parent.verticalCenter
-              elide: Text.ElideRight
-              text: recentTile.modelData.name
-              color: startMenu.colText
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body
+
+              Text {
+                width: parent.width
+                elide: Text.ElideRight
+                text: recentTile.modelData.name
+                color: startMenu.colText
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+              }
+
+              // The desktop entry's generic name ("Web Browser"), the
+              // counterpart of Windows' "Welcome to Windows" line.
+              Text {
+                visible: text.length > 0
+                width: parent.width
+                elide: Text.ElideRight
+                text: recentTile.modelData.genericName || ""
+                color: Util.alpha(startMenu.colText, 0.6)
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+              }
             }
 
             MouseArea {
@@ -997,9 +1015,16 @@ Item {
       anchors.bottom: parent.bottom
       anchors.left: parent.left
       anchors.right: parent.right
-      height: Style.space(56)
-      radius: Style.cornerRadius
+      height: Style.space(60)
       color: Util.alpha(startMenu.colText, 0.05)
+
+      Rectangle {
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 1
+        color: Util.alpha(startMenu.colText, 0.1)
+      }
 
       // Clicking the account (avatar or name) opens Lock / Sign out.
       Rectangle {
@@ -1024,7 +1049,7 @@ Item {
       Rectangle {
         id: avatar
         anchors.left: parent.left
-        anchors.leftMargin: Style.spacing.md
+        anchors.leftMargin: Style.spacing.xl
         anchors.verticalCenter: parent.verticalCenter
         width: Style.space(32)
         height: width
@@ -1088,7 +1113,7 @@ Item {
       Rectangle {
         id: powerButton
         anchors.right: parent.right
-        anchors.rightMargin: Style.spacing.md
+        anchors.rightMargin: Style.spacing.xl
         anchors.verticalCenter: parent.verticalCenter
         width: Style.space(36)
         height: width

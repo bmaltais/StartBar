@@ -38,7 +38,7 @@
 //   queryChanged {text}, key {key}       key: left|right|up|down|enter|escape|other
 //   showView {view}, letters {open}, jumpTo {letter}
 //   appMenu {app, x, y}, toggleOverlay {kind}, closeOverlay, choose {row}
-//   launch {app}, openPlace {path}, openSettings
+//   launch {app}, openPlace {path}
 //   pinDragStart {id}, pinDragMove {point, grid}, pinDragEnd
 //
 // CTX (what the view knows that the state does not): { command, hoverOpen,
@@ -564,9 +564,6 @@ function transition(state, event, ctx) {
 
     case "openPlace":
       return closeMenu(state, [{ type: "open", path: event.path }]);
-
-    case "openSettings":
-      return closeMenu(state, [{ type: "run", command: "omarchy-menu summon setup" }]);
 
     case "pinDragStart":
       return out(patch(state, { drag: { id: event.id, slot: -1 } }));
