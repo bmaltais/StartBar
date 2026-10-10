@@ -24,9 +24,9 @@ test("a leftover style: dock does not force auto-hide on", () => {
   assert.equal(effectiveTaskbar({ style: "dock", autoHide: true }).autoHide, true);
 });
 
-test("bar defaults: always visible, centred, theme colours, Start and clock shown", () => {
+test("bar defaults: always visible, left-aligned, theme colours, Start and clock shown, grouped windows, no hover-open", () => {
   assert.deepEqual(effectiveTaskbar({}), {
-    alignment: "center",
+    alignment: "left",
     colorScheme: "theme",
     autoHide: false,
     barHeight: 48,
@@ -40,8 +40,8 @@ test("bar defaults: always visible, centred, theme colours, Start and clock show
     previewWarpPointer: true,
     previewPeek: true,
     showWorkspaceBadge: false,
-    groupWindows: false,
-    startHoverOpen: true,
+    groupWindows: true,
+    startHoverOpen: false,
   });
 });
 
@@ -70,8 +70,11 @@ test("the bar honours valid values and autoHide", () => {
   assert.equal(s.startIcon, "omarchy");
   assert.equal(s.showClock, false);
   assert.equal(s.showPreviews, false);
-  assert.equal(effectiveTaskbar({ startHoverOpen: false }).startHoverOpen, false);
-  assert.equal(effectiveTaskbar({ startHoverOpen: 1 }).startHoverOpen, true);
+  assert.equal(effectiveTaskbar({ startHoverOpen: true }).startHoverOpen, true);
+  assert.equal(effectiveTaskbar({ startHoverOpen: 1 }).startHoverOpen, false);
+  assert.equal(effectiveTaskbar({ groupWindows: false }).groupWindows, false);
+  assert.equal(effectiveTaskbar({ groupWindows: "no" }).groupWindows, true);
+  assert.equal(effectiveTaskbar({ alignment: "center" }).alignment, "center");
   assert.equal(effectiveTaskbar({ showWorkspaceBadge: true }).showWorkspaceBadge, true);
   assert.equal(effectiveTaskbar({ showWorkspaceBadge: true }).showWorkspaceBadge, true);
   assert.equal(effectiveTaskbar({ showWorkspaceBadge: "yes" }).showWorkspaceBadge, false);
@@ -89,7 +92,7 @@ test("unusable taskbar values fall back to defaults; opacity is clamped to 0..1"
     startIcon: 5,
     showStart: "yes",
   });
-  assert.equal(s.alignment, "center");
+  assert.equal(s.alignment, "left");
   assert.equal(s.colorScheme, "theme");
   assert.equal(s.barHeight, 48);
   assert.equal(s.opacity, 1);
@@ -146,8 +149,8 @@ test("each row's patch sets its own key; toggles flip the current value", () => 
   assert.deepEqual(patch("Pointer follows preview click"), { previewWarpPointer: false });
   assert.deepEqual(patch("Show window on preview hover"), { previewPeek: false });
   assert.deepEqual(patch("Workspace badge"), { showWorkspaceBadge: true });
-  assert.deepEqual(patch("Group windows of one app"), { groupWindows: true });
-  assert.deepEqual(patch("Start menu opens on hover"), { startHoverOpen: false });
+  assert.deepEqual(patch("Group windows of one app"), { groupWindows: false });
+  assert.deepEqual(patch("Start menu opens on hover"), { startHoverOpen: true });
   assert.deepEqual(patch("Transparent background"), { transparent: true });
   assert.deepEqual(patch("Start button"), { showStart: false });
   assert.equal(rows.some((r) => /style/i.test(r.label)), false);

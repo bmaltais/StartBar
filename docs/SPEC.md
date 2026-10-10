@@ -14,7 +14,7 @@ Agreed on 2026-09-11 after a design interview. Vocabulary is defined in [CONTEXT
 - One Dock per monitor, a full-width bar along the bottom edge. Every Dock shows the same Items.
 - One Window Item per Window, across all workspaces and all monitors, including special workspaces.
 - A Window whose App cannot be resolved shows a Letter Tile and cannot be pinned.
-- Grouping (`groupWindows`, false; added 2026-10-10): with it on, an App's Windows collapse into one Group Item when it has two or more; a lone Window is a plain Window Item as ever. See "Grouping" below.
+- Grouping (`groupWindows`, true; added 2026-10-10): with it on, an App's Windows collapse into one Group Item when it has two or more; a lone Window is a plain Window Item as ever. See "Grouping" below.
 - Pins: an App kept in the Dock whether or not it has Windows. A Pin holds a slot; while its App has Windows their Window Items occupy that slot, otherwise the Pin is shown and launches the App on click. A Pin whose App is no longer installed shows a Letter Tile with a "missing" tooltip and stays until unpinned.
 - Ordering: Launch Order, with a new Window joining the Window Items of its own App. Any Item may be dragged to a Placed position; a Placed Pin keeps it permanently, a Placed Window Item until the Window closes. Dragging one Window of a pinned App moves only that Window.
 - Indicators: Active Window highlight, running indicator on every Window Item, workspace badge on every Window Item when `showWorkspaceBadge` is on (default off, amended 2026-10-09), tooltip with title and workspace, urgent-colour tint for Attention. No magnification. The running dot is a small pill under the Window Item, a wide accent pill for the Active Window (see "The bar").
@@ -47,10 +47,10 @@ Stored in the Dock's entry in Omarchy's shell config (`~/.config/omarchy/shell.j
 The Dock is a full-width bar: Start button, Items, clock. It began as a second style beside a floating dock; the dock style was removed (docs/adr/0002), so this is the only frame.
 
 - Bar: full-width along the bottom, `barHeight` (48), `opacity` (0.9) or `transparent` (icons only). Floats on the Top layer, reserves no space. Icons are `iconSize` (48) at most and also fit inside the bar (`barHeight - 20`), so with the defaults they are 28px.
-- `alignment`: `center` or `left` for the group of Start button + Items.
+- `alignment`: `left` (default) or `center` for the group of Start button + Items (default changed from `center` 2026-10-10).
 - Start button (`showStart`, true): runs `startCommand` (`omarchy-menu toggle apps`); `startIcon` is `grid` (drawn in QML, default), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path.
 - Start menu: with `startCommand: "builtin"` the Start button opens a popup anchored above it, modelled on Windows 11's (the Omarchy menu itself always centres on screen and can't be anchored):
-  - Opens on a click, or, with `startHoverOpen` (true), after the pointer rests on the Start button for 400ms. A menu opened by hover is in hover mode: it already has the keyboard, so typing searches at once, but it closes 500ms after the pointer is on neither the button nor the menu. Clicking the Start button does not make it permanent, and moving the pointer on to another icon closes it at once so that icon's preview takes over. Typing a key, or clicking the search box, ends hover mode: the menu then stays until dismissed, like a clicked-open one.
+  - Opens on a click, or, with `startHoverOpen` (false by default, changed from true 2026-10-10), after the pointer rests on the Start button for 400ms. A menu opened by hover is in hover mode: it already has the keyboard, so typing searches at once, but it closes 500ms after the pointer is on neither the button nor the menu. Clicking the Start button does not make it permanent, and moving the pointer on to another icon closes it at once so that icon's preview takes over. Typing a key, or clicking the search box, ends hover mode: the menu then stays until dismissed, like a clicked-open one.
   - Search box on top (`StartMenu.filterApps`): type to filter all Apps, Up/Down, Enter launches.
   - Pinned: a six-column grid of the Start menu's own pins (`startPins`; until it is first changed it shows the Dock's Pins). "All apps ›" switches to an A-Z list with letter headings (`groupAlphabetically`) and a Back link.
   - Recommended: the last six Apps launched from the menu (`recentApps`, the `pushRecentApp` intent). Recent files are out of scope: there is no equivalent index.
@@ -75,7 +75,7 @@ The Dock is a full-width bar: Start button, Items, clock. It began as a second s
 
 ## Grouping (added 2026-10-10)
 
-Optional, off by default (`groupWindows`; also a row in the bar's right-click menu and in the settings window). Modelled on the Windows taskbar. The "one Window Item per Window" rule above holds while it is off.
+Optional, on by default (`groupWindows`, which can be turned off; also a row in the bar's right-click menu and in the settings window). Modelled on the Windows taskbar. The "one Window Item per Window" rule above holds while it is off.
 
 - Windows of one App (Windows with no App group by window class) become a single Group Item, in the slot Launch Order or the App's Pin gives them. The icon has the edges of the other Windows stacked behind it, and the running indicator shows one dot per Window (at most three). The Group Item is highlighted when any of its Windows is the Active Window, and tinted when any is in Attention. Its workspace badge shows only when all its Windows are on one workspace.
 - Hover: the preview popup shows one thumbnail per Window in a row, each with title and close button; the Active Window's is outlined. Thumbnails shrink to fit the screen. Clicking a thumbnail focuses that Window; closing one leaves the popup up for the rest, and the last one closing takes it away. With `showPreviews` off the tooltip gives the App name and Window count.

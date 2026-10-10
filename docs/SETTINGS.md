@@ -25,20 +25,20 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor. A lef
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `alignment` | `center` | `center` or `left` for the Start button and icons |
+| `alignment` | `left` | `left` or `center` for the Start button and icons |
 | `autoHide` | `false` | Hide the bar until the pointer rests on the bottom edge |
 | `revealDelayMs` | `200` | With auto-hide: how long the pointer must rest on the Reveal Strip before the bar shows, in ms |
 | `hideDelayMs` | `300` | With auto-hide: how long after the pointer leaves the bar before it hides, in ms |
 | `iconSize` | `48` | Largest icon size in px; icons are also limited to `barHeight - 20` and shrink further to fit when there are many windows |
 | `showWorkspaceBadge` | `false` | Workspace number or name over each window's icon |
-| `groupWindows` | `false` | One stacked icon per app with two or more windows; hover it to pick a window from the previews |
+| `groupWindows` | `true` | One stacked icon per app with two or more windows; hover it to pick a window from the previews |
 | `barHeight` | `48` | Bar height in px |
 | `opacity` | `0.9` | Bar background opacity, 0 to 1 |
 | `transparent` | `false` | No bar background, icons only |
 | `colorScheme` | `theme` | `theme` (follow Omarchy), `dark` or `light`; applies to the bar, the Start menu, the menus and the previews |
 | `showStart` | `true` | Show the Start button |
 | `startCommand` | `omarchy-menu toggle apps` | What the Start button runs; `builtin` opens the built-in Start menu |
-| `startHoverOpen` | `true` | With the built-in menu, resting the pointer on the Start button opens it after a moment; it closes when you leave; typing (or clicking its search box) keeps it open; moving to another icon closes it |
+| `startHoverOpen` | `false` | With the built-in menu, resting the pointer on the Start button opens it after a moment; it closes when you leave; typing (or clicking its search box) keeps it open; moving to another icon closes it |
 | `startIcon` | `grid` | `grid` (drawn in QML), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path |
 | `showClock` | `true` | Clock at the right end |
 | `showPreviews` | `true` | Hover thumbnails with a close button |
