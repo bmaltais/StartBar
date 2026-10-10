@@ -24,7 +24,7 @@
 omarchy plugin add https://github.com/bmaltais/StartBar --enable
 ```
 
-It shows a taskbar at the bottom of every monitor. Everything it needs comes with Omarchy; there is nothing else to install. The Start button opens the Omarchy menu by default; to use StartBar's own Start menu, shown below, right-click the bar and choose **Built-in Start menu**.
+It shows a taskbar at the bottom of every monitor. Everything it needs comes with Omarchy; there is nothing else to install. The Start button opens StartBar's own Start menu, shown below; to open the Omarchy menu instead, right-click the bar and choose **Omarchy menu on Start**. The same menu turns on a clock.
 
 ## Features
 

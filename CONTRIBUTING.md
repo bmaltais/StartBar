@@ -82,7 +82,7 @@ Releasing is described in [docs/agents/release.md](docs/agents/release.md).
 
 ## Manual verification checklist
 
-Walk through this after any change to the QML, on a two-monitor Omarchy machine. Have at least one Pin, one unpinned App with a Window, and one Window with no matching desktop entry so the Letter Tile is reachable. Set `"startCommand": "builtin"` for the Start menu items.
+Walk through this after any change to the QML, on a two-monitor Omarchy machine. Have at least one Pin, one unpinned App with a Window, and one Window with no matching desktop entry so the Letter Tile is reachable. Leave `startCommand` at its default, `builtin`, for the Start menu items.
 
 ### Last run
 
