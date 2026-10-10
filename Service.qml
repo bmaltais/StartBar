@@ -17,6 +17,8 @@ import qs.Commons
 import qs.Ui
 import "DockModel.js" as DockModel
 import "DockConfig.js" as DockConfig
+import "StartMenu.js" as StartMenu
+import "DockInteraction.js" as DockInteraction
 
 Item {
   id: root
@@ -1065,7 +1067,7 @@ Item {
         readonly property var items: listBox.isDefault ? [] : listBox.value
 
         function seedFromDefaults() {
-          var places = DockConfig.effectivePlaces(dockSettings.rawEntry, userDirsForSettings.text(), Quickshell.env("HOME") || "")
+          var places = StartMenu.effectivePlaces(dockSettings.rawEntry, userDirsForSettings.text(), Quickshell.env("HOME") || "")
           var paths = []
           for (var i = 0; i < places.length; i++) paths.push(places[i].path)
           listBox.commit(paths)
@@ -1250,7 +1252,7 @@ Item {
         height: root.autoHide ? root.revealStripHeight : 0
 
         HoverHandler {
-          onHoveredChanged: revealState.hoveringStrip = hovered
+          onHoveredChanged: revealState.set("strip", hovered)
         }
 
         // Dock style has no bar to right-click, so the options menu (which
@@ -1279,37 +1281,35 @@ Item {
       QtObject {
         id: revealState
 
-        property bool hoveringStrip: false
-        property bool hoveringDock: false
-        property bool hoveringBar: false
-        property bool hoveringStart: false
-        property bool hoveringPreview: false
-        property bool menuOpen: false
-        property bool dragging: false
-        property bool revealed: false
-        readonly property bool hovering: hoveringStrip || hoveringDock || hoveringBar || hoveringStart || hoveringPreview || menuOpen || dragging
+        // The rules live in DockInteraction.js; this holds its state and arms
+        // the timers a transition asks for.
+        property var model: DockInteraction.initialReveal()
+        readonly property bool revealed: revealState.model.revealed
 
-        onHoveringChanged: {
-          if (hovering) {
-            hideTimer.stop()
-            if (!revealed) revealTimer.restart()
-          } else {
-            revealTimer.stop()
-            hideTimer.restart()
-          }
+        // `name` is one of strip, dock, bar, start, preview, menu, drag.
+        function set(name, value) {
+          revealState.apply(DockInteraction.setRevealFlag(revealState.model, name, value))
+        }
+
+        function apply(result) {
+          revealState.model = result.state
+          if (result.timers.hide === "stop") hideTimer.stop()
+          else if (result.timers.hide === "start") hideTimer.restart()
+          if (result.timers.reveal === "stop") revealTimer.stop()
+          else if (result.timers.reveal === "start") revealTimer.restart()
         }
       }
 
       Timer {
         id: revealTimer
         interval: root.revealDelayMs
-        onTriggered: revealState.revealed = true
+        onTriggered: revealState.apply(DockInteraction.revealTimerFired(revealState.model))
       }
 
       Timer {
         id: hideTimer
         interval: root.hideDelayMs
-        onTriggered: revealState.revealed = false
+        onTriggered: revealState.apply(DockInteraction.hideTimerFired(revealState.model))
       }
 
       // The taskbar's full-width bar (taskbar style only; zero-height, so
@@ -1329,7 +1329,7 @@ Item {
         }
 
         HoverHandler {
-          onHoveredChanged: revealState.hoveringBar = hovered
+          onHoveredChanged: revealState.set("bar", hovered)
         }
 
         // Right click on the bar itself (Item MouseAreas above it take their
@@ -1407,7 +1407,7 @@ Item {
         // (this button is the bar's sibling, not its child), so it keeps the
         // bar Revealed itself.
         HoverHandler {
-          onHoveredChanged: revealState.hoveringStart = hovered
+          onHoveredChanged: revealState.set("start", hovered)
         }
 
         // Resting the pointer here opens the built-in menu after a moment, like
@@ -1541,7 +1541,7 @@ Item {
         }
 
         HoverHandler {
-          onHoveredChanged: revealState.hoveringDock = hovered
+          onHoveredChanged: revealState.set("dock", hovered)
         }
 
         TapHandler {
@@ -1579,15 +1579,16 @@ Item {
         // matches dragKey; dragGhost (declared below, a sibling of this
         // Row) shows in its place and follows the pointer, and dropLine
         // (also below) is the live insertion preview: a bar at whichever
-        // gap dragPreviewIndex currently names. dragKey empty and
-        // dragPreviewIndex -1 both mean "no drag in progress".
-        property string dragKey: ""
-        property int dragPreviewIndex: -1
-        // Recomputed alongside dragPreviewIndex (see updateDragPreview):
+        // gap dragPreviewGap currently names. dragKey empty and
+        // dragPreviewGap -1 both mean "no drag in progress".
+        property var drag: DockInteraction.initialDrag()
+        readonly property string dragKey: dockRow.drag.key
+        readonly property int dragPreviewGap: dockRow.drag.gap
+        // Recomputed alongside dragPreviewGap (see updateDragPreview):
         // hides dropLine once the drag has left the Dock, since a drag-out
-        // has nothing to do with dragPreviewIndex any more (docs/SPEC.md
+        // has nothing to do with dragPreviewGap any more (docs/SPEC.md
         // "Input": drag-out is unpin-or-snap-back, never a reorder).
-        property bool draggingOutside: false
+        readonly property bool draggingOutside: dockRow.drag.outside
 
         function indexOfKey(items, key) {
           for (var i = 0; i < items.length; i++) {
@@ -1602,51 +1603,38 @@ Item {
         // children of it (see dragGhost below).
         function updateDragPreview() {
           if (!dockRow.dragKey) return
-          var step = dockRow.itemWidth + dockRow.spacing
-          var localX = (dragGhost.x + dragGhost.width / 2) - dockRow.x
-          var index = step > 0 ? Math.round(localX / step) : 0
-          dockRow.dragPreviewIndex = Math.max(0, Math.min(index, dockState.items.length - 1))
-          dockRow.draggingOutside = dockRow.isGhostOutsideRow()
+          dockRow.drag = DockInteraction.dragMove(dockRow.drag, dockRow.ghostCenter(), dockRow.rect(),
+            dockRow.itemWidth + dockRow.spacing, dockRow.iconSize, dockState.items.length)
         }
 
-        // Drag out of the Dock (docs/SPEC.md "Input"): dragGhost's centre
-        // clear of this Row's own rectangle, widened by half an icon so a
-        // drop right at the row's own edge still counts as a reorder.
-        function isGhostOutsideRow() {
-          var margin = dockRow.iconSize / 2
-          var left = dockRow.x - margin
-          var right = dockRow.x + dockRow.width + margin
-          var top = dockRow.y - margin
-          var bottom = dockRow.y + dockRow.height + margin
-          var centerX = dragGhost.x + dragGhost.width / 2
-          var centerY = dragGhost.y + dragGhost.height / 2
-          return centerX < left || centerX > right || centerY < top || centerY > bottom
+        function ghostCenter() {
+          return { x: dragGhost.x + dragGhost.width / 2, y: dragGhost.y + dragGhost.height / 2 }
         }
 
-        // The drop (docs/SPEC.md "Input"): reorder within the Dock, unpin
-        // for an Item whose App is pinned dragged out, or (an unpinned
-        // Window Item dragged out) a snap-back with nothing to persist —
-        // dragGhost simply stops following the pointer and every Item,
-        // this one included, falls back to dockState.items' own order.
-        // Drag state (root.dragInProgress included) clears first, so the
-        // refresh placeItem/unpinFromDrag triggers isn't the one
-        // dockState.refresh's own drag guard skips.
+        function rect() {
+          return { x: dockRow.x, y: dockRow.y, width: dockRow.width, height: dockRow.height }
+        }
+
+        // The drop (docs/SPEC.md "Input"; the decision is
+        // DockInteraction.dragDrop): reorder within the Dock, unpin for an
+        // Item whose App is pinned dragged out, or (an unpinned Window Item
+        // dragged out) a snap-back with nothing to persist — dragGhost
+        // simply stops following the pointer and every Item, this one
+        // included, falls back to dockState.items' own order. Drag state
+        // (root.dragInProgress included) clears first, so the refresh
+        // placeItem/unpinFromDrag triggers isn't the one dockState.refresh's
+        // own drag guard skips.
         function finishDrag(item) {
-          var draggedOut = dockRow.isGhostOutsideRow()
-          var targetIndex = dockRow.dragPreviewIndex
+          var decision = DockInteraction.dragDrop(dockRow.drag, dockRow.ghostCenter(), dockRow.rect(),
+            dockRow.iconSize, { pinned: item.kind === "pin" || !!item.pinned })
 
-          dockRow.dragKey = ""
-          dockRow.dragPreviewIndex = -1
-          dockRow.draggingOutside = false
+          dockRow.drag = DockInteraction.initialDrag()
           dragGhost.visible = false
-          revealState.dragging = false
+          revealState.set("drag", false)
           root.dragInProgress = false
 
-          if (draggedOut) {
-            if (item.kind === "pin" || item.pinned) root.unpinFromDrag(root.menuAppId(item))
-          } else if (targetIndex >= 0) {
-            root.placeItem(item, targetIndex)
-          }
+          if (decision.action === "unpin") root.unpinFromDrag(root.menuAppId(item))
+          else if (decision.action === "reorder") root.placeItem(item, decision.index)
         }
 
         Repeater {
@@ -1783,9 +1771,8 @@ Item {
                   if (mouseArea.drag.active) {
                     dockItem.wasDragged = true
                     root.dragInProgress = true
-                    revealState.dragging = true
-                    dockRow.dragKey = dockItem.modelData.key
-                    dockRow.dragPreviewIndex = dockRow.indexOfKey(dockState.items, dockItem.modelData.key)
+                    revealState.set("drag", true)
+                    dockRow.drag = DockInteraction.dragStart(dockItem.modelData.key, dockRow.indexOfKey(dockState.items, dockItem.modelData.key))
                     dragGhost.visible = true
                   } else if (dockRow.dragKey === dockItem.modelData.key) {
                     dockRow.finishDrag(dockItem.modelData)
@@ -1905,14 +1892,14 @@ Item {
 
       // The live insertion preview itself (issue #16's acceptance
       // criteria, on top of docs/SPEC.md "Input"'s own "Drag within the
-      // Dock: reorder"): a bar at the gap dragPreviewIndex names, hidden
+      // Dock: reorder"): a bar at the gap dragPreviewGap names, hidden
       // once the drag has left the Dock (see draggingOutside) since
       // drag-out is never a reorder.
       Rectangle {
         id: dropLine
 
         visible: dockRow.dragKey !== "" && !dockRow.draggingOutside
-        x: dockRow.x + dockRow.dragPreviewIndex * (dockRow.itemWidth + dockRow.spacing) - dockRow.spacing / 2 - width / 2
+        x: dockRow.x + DockInteraction.dropGap(dockRow.drag) * (dockRow.itemWidth + dockRow.spacing) - dockRow.spacing / 2 - width / 2
         y: dockRow.y
         width: 2
         height: dockRow.height
@@ -1923,7 +1910,7 @@ Item {
       // Hover previews (taskbar style, showPreviews): a live thumbnail of the
       // hovered Window with its title and a close button. previewState holds
       // which Item is shown and the open/leave timers; hovering the popup
-      // itself keeps it (and the bar, via revealState.hoveringPreview) up.
+      // itself keeps it (and the bar, via revealState "preview") up.
       QtObject {
         id: previewState
 
@@ -1931,12 +1918,21 @@ Item {
         // time so the popup never depends on the delegate staying alive.
         property real anchorX: 0
         property real anchorY: 0
-        property var hoveredItem: null
-        property var shownItem: null
+        property var model: DockInteraction.initialPreview()
+        readonly property var hoveredItem: previewState.model.hovered
+        readonly property var shownItem: previewState.model.shown
         readonly property bool showing: shownItem !== null
 
         function enabledFor(item) {
           return root.isTaskbar && root.taskbar.showPreviews && item.kind === "window"
+        }
+
+        function apply(result) {
+          previewState.model = result.state
+          if (result.timers.open === "stop") previewOpenTimer.stop()
+          else if (result.timers.open === "start") previewOpenTimer.restart()
+          if (result.timers.leave === "stop") previewLeaveTimer.stop()
+          else if (result.timers.leave === "start") previewLeaveTimer.restart()
         }
 
         function hoverStart(delegate) {
@@ -1944,37 +1940,35 @@ Item {
           // once, instead of both showing until the menu's leave timer fires.
           if (startMenu.visible && startMenu.hoverMode) startMenu.visible = false
           if (root.dragInProgress || !enabledFor(delegate.modelData)) return
-          previewLeaveTimer.stop()
           var point = delegate.mapToItem(panel.contentItem, delegate.width / 2, 0)
           previewState.anchorX = point.x
           previewState.anchorY = point.y
-          previewState.hoveredItem = delegate.modelData
-          if (previewState.showing) previewState.shownItem = delegate.modelData
-          else previewOpenTimer.restart()
+          previewState.apply(DockInteraction.previewHoverStart(previewState.model, delegate.modelData, true, false))
         }
 
         function hoverEnd() {
-          previewOpenTimer.stop()
-          previewLeaveTimer.restart()
+          previewState.apply(DockInteraction.previewHoverEnd(previewState.model))
+        }
+
+        function popupHover(hovered) {
+          previewState.apply(DockInteraction.previewPopupHover(previewState.model, hovered))
         }
 
         function dismiss() {
-          previewOpenTimer.stop()
-          previewLeaveTimer.stop()
-          previewState.shownItem = null
+          previewState.apply(DockInteraction.previewDismiss(previewState.model))
         }
       }
 
       Timer {
         id: previewOpenTimer
         interval: 350
-        onTriggered: if (previewState.hoveredItem) previewState.shownItem = previewState.hoveredItem
+        onTriggered: previewState.apply(DockInteraction.previewOpenFired(previewState.model))
       }
 
       Timer {
         id: previewLeaveTimer
         interval: 250
-        onTriggered: previewState.shownItem = null
+        onTriggered: previewState.apply(DockInteraction.previewLeaveFired(previewState.model))
       }
 
       // Moving from one Item to its neighbour while a preview is up swaps
@@ -2000,7 +1994,7 @@ Item {
         implicitWidth: thumbWidth + Style.spacing.sm * 2
         implicitHeight: previewColumn.implicitHeight + Style.spacing.sm * 2
 
-        onVisibleChanged: revealState.hoveringPreview = previewPopup.visible
+        onVisibleChanged: revealState.set("preview", previewPopup.visible)
 
         anchor {
           id: previewAnchor
@@ -2027,10 +2021,7 @@ Item {
           border.color: Color.popups.border
 
           HoverHandler {
-            onHoveredChanged: {
-              if (hovered) previewLeaveTimer.stop()
-              else previewLeaveTimer.restart()
-            }
+            onHoveredChanged: previewState.popupHover(hovered)
           }
 
           Column {
@@ -2184,16 +2175,16 @@ Item {
           for (var i = 0; i < startMenu.allApps.length; i++) map[startMenu.allApps[i].id] = startMenu.allApps[i]
           return map
         }
-        readonly property var startPinIds: DockConfig.effectiveStartPins(dockSettings.rawEntry, dockSettings.pins)
-        readonly property var recentIds: DockConfig.effectiveRecent(dockSettings.rawEntry)
+        readonly property var startPinIds: StartMenu.effectiveStartPins(dockSettings.rawEntry, dockSettings.pins)
+        readonly property var recentIds: StartMenu.effectiveRecent(dockSettings.rawEntry)
         readonly property var pinnedApps: startMenu.resolve(startMenu.startPinIds)
         readonly property var recentApps: startMenu.resolve(startMenu.recentIds)
         readonly property bool searching: searchInput.text.trim().length > 0
-        readonly property var results: DockModel.filterApps(startMenu.allApps, searchInput.text)
+        readonly property var results: StartMenu.filterApps(startMenu.allApps, searchInput.text)
         // "All apps" flattened for a sectioned ListView: each app carries
         // its section letter.
         readonly property var allAppsFlat: {
-          var groups = DockModel.groupAlphabetically(startMenu.allApps)
+          var groups = StartMenu.groupAlphabetically(startMenu.allApps)
           var flat = []
           for (var g = 0; g < groups.length; g++) {
             for (var a = 0; a < groups[g].apps.length; a++) {
@@ -2204,9 +2195,9 @@ Item {
           return flat
         }
         // Places column on the left (Home, Documents, Downloads...): from the
-        // user's XDG folders or a `startPlaces` list (DockConfig.effectivePlaces).
+        // user's XDG folders or a `startPlaces` list (StartMenu.effectivePlaces).
         property string userDirsText: ""
-        readonly property var places: DockConfig.effectivePlaces(dockSettings.rawEntry, startMenu.userDirsText, Quickshell.env("HOME") || "")
+        readonly property var places: StartMenu.effectivePlaces(dockSettings.rawEntry, startMenu.userDirsText, Quickshell.env("HOME") || "")
         readonly property real placesWidth: startMenu.places.length > 0 ? Style.space(150) : 0
 
         FileView {
@@ -2228,7 +2219,7 @@ Item {
           running: true
           command: ["getent", "passwd", Quickshell.env("USER") || ""]
           stdout: StdioCollector {
-            onStreamFinished: startMenu.fullName = DockModel.parseFullName(text, "")
+            onStreamFinished: startMenu.fullName = StartMenu.parseFullName(text, "")
           }
         }
 
@@ -2254,7 +2245,7 @@ Item {
         }
 
         function moveHomeSelection(direction) {
-          var next = DockModel.moveSelection(
+          var next = StartMenu.moveSelection(
             { section: startMenu.navSection, index: startMenu.navIndex },
             direction,
             { pinned: startMenu.pinnedApps.length, recent: startMenu.recentApps.length })
@@ -2277,30 +2268,23 @@ Item {
         function updatePinDrag() {
           if (startMenu.dragPinId === "") return
           var p = pinnedGrid.mapFromItem(pinGhost.parent, pinGhost.x + pinGhost.width / 2, pinGhost.y + pinGhost.height / 2)
-          var count = startMenu.pinnedApps.length
-          var inside = p.x >= 0 && p.x < pinnedGrid.width && p.y >= 0 && p.y < pinnedGrid.height && count > 0
-          if (!inside) {
-            startMenu.dragPinSlot = -1
-            return
-          }
-          var column = Math.floor(p.x / pinnedGrid.cellWidth)
-          var row = Math.floor((p.y + pinnedGrid.contentY) / pinnedGrid.cellHeight)
-          startMenu.dragPinSlot = Math.max(0, Math.min(count - 1, row * 6 + column))
+          startMenu.dragPinSlot = StartMenu.pinSlotAt(
+            p,
+            { width: pinnedGrid.width, height: pinnedGrid.height, cellWidth: pinnedGrid.cellWidth, cellHeight: pinnedGrid.cellHeight, contentY: pinnedGrid.contentY },
+            startMenu.pinnedApps.length, StartMenu.PINNED_COLUMNS)
         }
 
         // On release: write the new order. The grid skips pins whose app is
-        // gone, so positions are mapped back to the saved list by app id.
+        // gone, so the slot is mapped back to the saved list by app id.
         function finishPinDrag() {
           var id = startMenu.dragPinId
           var slot = startMenu.dragPinSlot
           startMenu.dragPinId = ""
           startMenu.dragPinSlot = -1
           pinGhost.visible = false
-          if (slot < 0 || slot >= startMenu.pinnedApps.length) return
-          var from = startMenu.startPinIds.indexOf(id)
-          var to = startMenu.startPinIds.indexOf(startMenu.pinnedApps[slot].id)
-          if (from < 0 || to < 0 || from === to) return
-          dockSettings.write({ startPins: DockModel.moveItem(startMenu.startPinIds, from, to) })
+          var shown = startMenu.pinnedApps.map(function (app) { return app.id })
+          var next = StartMenu.reorderedPins(startMenu.startPinIds, shown, id, slot)
+          if (next) dockSettings.write({ startPins: next })
         }
 
         function resetNavigation() {
@@ -2319,13 +2303,13 @@ Item {
           Qt.callLater(function () { searchInput.forceActiveFocus() })
         }
 
-        // Arrow-key selection on the home screen (DockModel.moveSelection):
+        // Arrow-key selection on the home screen (StartMenu.moveSelection):
         // which of Pinned / Recommended and the index in it; "" is none.
         property string navSection: ""
         property int navIndex: -1
         // The A-Z jump grid in All apps, and the letter -> first-row map.
         property bool showLetters: false
-        readonly property var letterRows: DockModel.letterIndex(startMenu.allAppsFlat)
+        readonly property var letterRows: StartMenu.letterIndex(startMenu.allAppsFlat)
         // Drag-to-reorder of a pinned app: the id being dragged, and the slot
         // in Pinned it would land on (-1 none).
         property string dragPinId: ""
@@ -2355,7 +2339,7 @@ Item {
           if (!app) return
           startMenu.visible = false
           root.launchApp(app.entry)
-          dockSettings.write({ recentApps: DockModel.pushRecent(startMenu.recentIds, app.id) })
+          dockSettings.write({ recentApps: StartMenu.pushRecent(startMenu.recentIds, app.id) })
         }
 
         function openAppMenu(app, item, mouse) {
@@ -2415,7 +2399,7 @@ Item {
         }
 
         onVisibleChanged: {
-          revealState.menuOpen = startMenu.visible
+          revealState.set("menu", startMenu.visible)
           if (!startMenu.visible) {
             startMenu.hoverMode = false
             startLeaveTimer.stop()
@@ -3374,8 +3358,8 @@ Item {
               anchors.margins: Style.spacing.xxs
 
               Repeater {
-                model: startMenu.powerOpen ? DockConfig.startPowerActions()
-                  : (startMenu.userOpen ? DockConfig.startUserActions() : startMenu.menuRows)
+                model: startMenu.powerOpen ? StartMenu.startPowerActions()
+                  : (startMenu.userOpen ? StartMenu.startUserActions() : startMenu.menuRows)
 
                 delegate: Rectangle {
                   id: overlayRow
@@ -3477,7 +3461,7 @@ Item {
         implicitWidth: rowWidth
         implicitHeight: barMenuColumn.implicitHeight + Style.spacing.xxs * 2
 
-        onVisibleChanged: revealState.menuOpen = barMenu.visible
+        onVisibleChanged: revealState.set("menu", barMenu.visible)
         onClosed: barMenu.close()
 
         Rectangle {
@@ -3671,7 +3655,7 @@ Item {
         implicitHeight: menuColumn.implicitHeight
 
         onVisibleChanged: {
-          revealState.menuOpen = contextMenu.visible
+          revealState.set("menu", contextMenu.visible)
           contextMenu.enteredMenu = false
           menuLeaveTimer.stop()
         }

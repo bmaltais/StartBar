@@ -191,86 +191,6 @@ function uniqueStrings(value) {
   return out;
 }
 
-// The Start menu's own pinned list (separate from the Dock's Pins); an entry
-// with no `startPins` key starts out showing the Dock's Pins.
-function effectiveStartPins(entry, dockPins) {
-  var source = isPlainObject(entry) ? entry : {};
-  return Array.isArray(source.startPins) ? uniqueStrings(source.startPins) : uniqueStrings(dockPins);
-}
-
-function effectiveRecent(entry) {
-  return uniqueStrings(isPlainObject(entry) ? entry.recentApps : null);
-}
-
-// The menu behind the user's name in the Start menu (Windows 11 offers lock
-// and sign out there).
-function startUserActions() {
-  return [
-    { label: "Lock", command: "omarchy-system-lock" },
-    { label: "Sign out", command: "omarchy-system-logout" },
-  ];
-}
-
-function startPowerActions() {
-  return [
-    { label: "Sleep", command: "systemctl suspend" },
-    { label: "Restart", command: "omarchy-system-reboot" },
-    { label: "Shut down", command: "omarchy-system-shutdown" },
-  ];
-}
-
-var PLACE_DEFAULTS = [
-  { key: "XDG_DOCUMENTS_DIR", label: "Documents", folder: "Documents", icon: "folder-documents" },
-  { key: "XDG_DOWNLOAD_DIR", label: "Downloads", folder: "Downloads", icon: "folder-download" },
-  { key: "XDG_PICTURES_DIR", label: "Pictures", folder: "Pictures", icon: "folder-pictures" },
-  { key: "XDG_MUSIC_DIR", label: "Music", folder: "Music", icon: "folder-music" },
-  { key: "XDG_VIDEOS_DIR", label: "Videos", folder: "Videos", icon: "folder-videos" },
-];
-
-function trimSlashes(path) {
-  return path.length > 1 ? path.replace(/\/+$/, "") : path;
-}
-
-function parseUserDirs(text, home) {
-  var dirs = {};
-  var lines = String(text || "").split("\n");
-  for (var i = 0; i < lines.length; i++) {
-    var match = /^\s*(XDG_[A-Z]+_DIR)="(.*)"\s*$/.exec(lines[i]);
-    if (match) dirs[match[1]] = trimSlashes(match[2].replace(/\$HOME/g, home));
-  }
-  return dirs;
-}
-
-// The Start menu's Places column (docs/SPEC.md "Start menu"): Home plus the
-// user's XDG folders, each { label, path, icon }. A `startPlaces` list of
-// paths (~ allowed) replaces the defaults; an empty one hides the column.
-// XDG folders that are just Home itself (an unset Desktop, say) are skipped.
-function effectivePlaces(entry, userDirsText, home) {
-  var source = isPlainObject(entry) ? entry : {};
-  if (Array.isArray(source.startPlaces)) {
-    var seen = {};
-    var custom = [];
-    for (var i = 0; i < source.startPlaces.length; i++) {
-      var raw = source.startPlaces[i];
-      if (typeof raw !== "string" || raw.trim().length === 0) continue;
-      var path = trimSlashes(raw.trim().replace(/^~(?=\/|$)/, home));
-      if (seen[path]) continue;
-      seen[path] = true;
-      custom.push({ label: path.split("/").pop() || path, path: path, icon: "folder" });
-    }
-    return custom;
-  }
-  var dirs = parseUserDirs(userDirsText, home);
-  var places = [{ label: "Home", path: home, icon: "user-home" }];
-  for (var j = 0; j < PLACE_DEFAULTS.length; j++) {
-    var d = PLACE_DEFAULTS[j];
-    var dir = dirs[d.key] || home + "/" + d.folder;
-    if (dir === home) continue;
-    places.push({ label: d.label, path: dir, icon: d.icon });
-  }
-  return places;
-}
-
 // The rows of the bar's right-click menu (docs/SPEC.md "Taskbar style"): each
 // is { label, checked, patch, group }, where patch is what to hand to
 // mergeSettings/write when it's chosen and group lets the menu draw a
@@ -324,99 +244,6 @@ function barMenuRows(taskbar) {
     toggle("Transparent background", "transparent", 3),
     SETTINGS_ROW,
   ];
-}
-
-function uniqueStrings(value) {
-  var raw = Array.isArray(value) ? value : [];
-  var seen = {};
-  var out = [];
-  for (var i = 0; i < raw.length; i++) {
-    if (typeof raw[i] === "string" && raw[i].length > 0 && !seen[raw[i]]) {
-      seen[raw[i]] = true;
-      out.push(raw[i]);
-    }
-  }
-  return out;
-}
-
-// The Start menu's own pinned list (separate from the Dock's Pins); an entry
-// with no `startPins` key starts out showing the Dock's Pins.
-function effectiveStartPins(entry, dockPins) {
-  var source = isPlainObject(entry) ? entry : {};
-  return Array.isArray(source.startPins) ? uniqueStrings(source.startPins) : uniqueStrings(dockPins);
-}
-
-function effectiveRecent(entry) {
-  return uniqueStrings(isPlainObject(entry) ? entry.recentApps : null);
-}
-
-// The menu behind the user's name in the Start menu (Windows 11 offers lock
-// and sign out there).
-function startUserActions() {
-  return [
-    { label: "Lock", command: "omarchy-system-lock" },
-    { label: "Sign out", command: "omarchy-system-logout" },
-  ];
-}
-
-function startPowerActions() {
-  return [
-    { label: "Sleep", command: "systemctl suspend" },
-    { label: "Restart", command: "omarchy-system-reboot" },
-    { label: "Shut down", command: "omarchy-system-shutdown" },
-  ];
-}
-
-var PLACE_DEFAULTS = [
-  { key: "XDG_DOCUMENTS_DIR", label: "Documents", folder: "Documents", icon: "folder-documents" },
-  { key: "XDG_DOWNLOAD_DIR", label: "Downloads", folder: "Downloads", icon: "folder-download" },
-  { key: "XDG_PICTURES_DIR", label: "Pictures", folder: "Pictures", icon: "folder-pictures" },
-  { key: "XDG_MUSIC_DIR", label: "Music", folder: "Music", icon: "folder-music" },
-  { key: "XDG_VIDEOS_DIR", label: "Videos", folder: "Videos", icon: "folder-videos" },
-];
-
-function trimSlashes(path) {
-  return path.length > 1 ? path.replace(/\/+$/, "") : path;
-}
-
-function parseUserDirs(text, home) {
-  var dirs = {};
-  var lines = String(text || "").split("\n");
-  for (var i = 0; i < lines.length; i++) {
-    var match = /^\s*(XDG_[A-Z]+_DIR)="(.*)"\s*$/.exec(lines[i]);
-    if (match) dirs[match[1]] = trimSlashes(match[2].replace(/\$HOME/g, home));
-  }
-  return dirs;
-}
-
-// The Start menu's Places column (docs/SPEC.md "Start menu"): Home plus the
-// user's XDG folders, each { label, path, icon }. A `startPlaces` list of
-// paths (~ allowed) replaces the defaults; an empty one hides the column.
-// XDG folders that are just Home itself (an unset Desktop, say) are skipped.
-function effectivePlaces(entry, userDirsText, home) {
-  var source = isPlainObject(entry) ? entry : {};
-  if (Array.isArray(source.startPlaces)) {
-    var seen = {};
-    var custom = [];
-    for (var i = 0; i < source.startPlaces.length; i++) {
-      var raw = source.startPlaces[i];
-      if (typeof raw !== "string" || raw.trim().length === 0) continue;
-      var path = trimSlashes(raw.trim().replace(/^~(?=\/|$)/, home));
-      if (seen[path]) continue;
-      seen[path] = true;
-      custom.push({ label: path.split("/").pop() || path, path: path, icon: "folder" });
-    }
-    return custom;
-  }
-  var dirs = parseUserDirs(userDirsText, home);
-  var places = [{ label: "Home", path: home, icon: "user-home" }];
-  for (var j = 0; j < PLACE_DEFAULTS.length; j++) {
-    var d = PLACE_DEFAULTS[j];
-    var dir = dirs[d.key] || home + "/" + d.folder;
-    if (dir === home) continue;
-    places.push({ label: d.label, path: dir, icon: d.icon });
-  }
-  return places;
 }
 
 function mergeSettings(entry, patch) {
@@ -521,10 +348,5 @@ if (typeof module !== "undefined" && module.exports) {
     longestLabel: longestLabel,
     settingsSchema: settingsSchema,
     settingsValues: settingsValues,
-    effectiveStartPins: effectiveStartPins,
-    effectiveRecent: effectiveRecent,
-    startPowerActions: startPowerActions,
-    startUserActions: startUserActions,
-    effectivePlaces: effectivePlaces,
   };
 }

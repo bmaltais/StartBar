@@ -167,7 +167,7 @@ Changes to `Service.qml` itself (a `keepLoaded` service) need `omarchy restart s
 
 ### Tests
 
-The Dock model (`DockModel.js`) and settings module (`DockConfig.js`) are pure JavaScript with no Quickshell imports, so they run under Node:
+The Dock model (`DockModel.js`), Start menu logic (`StartMenu.js`) and settings module (`DockConfig.js`) are pure JavaScript with no Quickshell imports, so they run under Node:
 
 ```sh
 npm test

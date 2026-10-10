@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { moveItem, moveSelection, letterIndex, parseFullName } = require("../DockModel.js");
+const { moveItem, moveSelection, letterIndex, parseFullName } = require("../StartMenu.js");
 
 test("moveItem moves one entry to a new index, leaving the rest in order", () => {
   assert.deepEqual(moveItem(["a", "b", "c", "d"], 0, 2), ["b", "c", "a", "d"]);
