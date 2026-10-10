@@ -75,15 +75,22 @@ omarchy-shell io.github.bmaltais.startbar startMenu
 
 ## Configure
 
-Right-click an empty part of the bar and choose **Settings…**, or run:
+Right-click an empty part of the bar for the common options. Its last row, **Settings…**, opens a window with a control for every option. You can also open that window with:
 
 ```sh
 omarchy-shell io.github.bmaltais.startbar settings
 ```
 
-<p align="center">
-  <img src="screenshots/settings.png" alt="The settings window, with a control for every option" width="520" />
-</p>
+<table>
+  <tr>
+    <th>Right-click the bar</th>
+    <th>Settings window</th>
+  </tr>
+  <tr valign="top">
+    <td><img src="screenshots/right-click.png" alt="The bar's right-click menu: alignment, colours, Start menu, auto-hide, clock, previews and Settings" width="279"></td>
+    <td><img src="screenshots/settings.png" alt="The settings window, with a control for every option" width="520"></td>
+  </tr>
+</table>
 
 Changes apply as you make them. Everything is saved in StartBar's own entry in `~/.config/omarchy/shell.json`, which you can also edit by hand:
 
