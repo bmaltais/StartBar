@@ -48,7 +48,37 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 npm test
 ```
 
-`Service.qml` (the Dock, the menus, the settings window) and `StartMenuView.qml` (the Start menu's view) draw what those modules decide. They depend on Quickshell and Hyprland and have no scripted coverage, so they are checked by hand with the list below.
+### Checks
+
+```sh
+npm run check
+```
+
+runs everything that can be checked without the shell:
+
+- the tests above, which also keep the docs in step with the code: every setting has a row in `docs/SETTINGS.md`, every `SPEC.md "…"` section a comment cites exists, `manifest.json` and `package.json` agree on the version, and the Dock and what rises from it take their colours from the colour scheme instead of the theme directly;
+- `omarchy plugin validate .`;
+- `npm run lint:qml`, which fails on any `qmllint` warning not already listed in `scripts/qmllint-baseline.txt`. `qmllint` can't see Quickshell's types, so the QML carries standing warnings; a new one is usually a misspelt or removed id. Accept a legitimate new one with `npm run lint:qml -- --update`.
+
+Run it on every commit with the pre-commit hook:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+Pull requests run `npm test` on GitHub; the manifest and QML checks need Omarchy and Qt, so they only run locally.
+
+### Live smoke test
+
+`Service.qml` (the Dock, the menus, the settings window) and `StartMenuView.qml` (the Start menu's view) draw what the modules decide. They depend on Quickshell and Hyprland, so after changing them run:
+
+```sh
+scripts/smoke.sh            # --monitor NAME, --type, --out DIR, --no-restart
+```
+
+It restarts the shell with this checkout, fails if the plugin logs anything, and screenshots the Dock, the Start menu and the settings window in each colour scheme. It edits the plugin's entry in `shell.json` for the run and restores it on exit. Look at the screenshots: the script only knows the plugin loaded quietly. It cannot click, drag or hover, so Previews, the Item menu, the Bar menu and drag still need the checklist below.
+
+Releasing is described in [docs/agents/release.md](docs/agents/release.md).
 
 ## Manual verification checklist
 
