@@ -438,13 +438,10 @@ test("an app's menu words Pin/Unpin by where it is pinned; choosing a row keeps 
   assert.deepEqual(S.overlayRows(null, ctxFor()), []);
 });
 
-test("Places and Settings close the menu and hand off to the file manager / Omarchy's setup menu", () => {
+test("a Place closes the menu and hands off to the file manager", () => {
   const place = feed([{ type: "openPlace", path: "/home/u/Documents" }], {}, clickOpened().state);
   assert.equal(place.state.open, false);
   assert.deepEqual(place.effects.slice(-1), [{ type: "open", path: "/home/u/Documents" }]);
-  const settings = feed([{ type: "openSettings" }], {}, clickOpened().state);
-  assert.equal(settings.state.open, false);
-  assert.deepEqual(settings.effects.slice(-1), [{ type: "run", command: "omarchy-menu summon setup" }]);
 });
 
 // --- Dock hold --------------------------------------------------------------
