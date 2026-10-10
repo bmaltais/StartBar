@@ -4,23 +4,26 @@
 // DockModel.js.
 //
 // Settings live in the Dock's own entry in the shell config's `plugins[]`
-// array: `{ id: "bernard.dock", iconSize, revealDelayMs, hideDelayMs, pins }`.
-// findPluginEntry locates that entry (or null if the Dock has never been
-// enabled or the config can't be read); effectiveSettings turns it into the
-// three settings the Dock actually uses, defaulting anything missing or not
-// a usable positive number. effectivePins reads the same entry's `pins`
-// (the ordered array of App ids DockModel.js's buildDockItems takes),
-// cleaned of anything a hand edit could leave unusable — not a string, or
-// a duplicate that would give two slots to the same App. effectivePlacements
-// reads the entry's `placements` (a Placed Pin's `{ key, index }`,
-// CONTEXT.md "Placed"; DockModel.js's placeAt/unplace compute the next
-// value for a write-back) — only entries keyed "pin:...", since a Placed
-// Window Item's position (docs/SPEC.md "Ordering") lives only in memory
-// for as long as its Window stays open and is never written here.
-// mergeSettings folds a settings change onto the raw entry rather than
-// replacing it outright, so keys a change doesn't mention (pins and
-// placements included, when the change is only to icon size or a delay)
-// survive a write-back.
+// array: `{ id: "io.github.bmaltais.startbar", iconSize, revealDelayMs, hideDelayMs, pins,
+// placements, startPins, recentApps, startPlaces, ...taskbar settings }`.
+// This file is the one place that knows those keys and their defaults, and
+// its interface is two functions:
+//
+//   effectiveView(entry)       the raw entry -> everything any reader needs
+//                              (settings, taskbar, Pins, Placed positions,
+//                              Start pins, recent apps, Start places),
+//                              defaulting anything missing or hand-edited
+//                              into something unusable.
+//   applyIntent(entry, intent) a named intent -> the next entry. Callers
+//                              say what happened ("pinApp", "placeItem",
+//                              "setSettings"...), never which keys change.
+//
+// findPluginEntry locates the entry (or null if the Dock has never been
+// enabled or the config can't be read). An intent folds onto the whole
+// entry rather than replacing it, so keys it doesn't mention survive a
+// write-back. A Placed Pin's `{ key, index }` (CONTEXT.md "Placed") is the
+// only placement persisted: a Placed Window Item's position (docs/SPEC.md
+// "Ordering") lives in memory for as long as its Window stays open.
 
 var DEFAULT_ICON_SIZE = 48;
 var DEFAULT_REVEAL_DELAY_MS = 200;
@@ -28,6 +31,19 @@ var DEFAULT_HIDE_DELAY_MS = 300;
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function uniqueStrings(value) {
+  var raw = Array.isArray(value) ? value : [];
+  var seen = {};
+  var out = [];
+  for (var i = 0; i < raw.length; i++) {
+    if (typeof raw[i] === "string" && raw[i].length > 0 && !seen[raw[i]]) {
+      seen[raw[i]] = true;
+      out.push(raw[i]);
+    }
+  }
+  return out;
 }
 
 function positiveNumberOr(value, fallback) {
@@ -58,21 +74,6 @@ function effectiveSettings(entry) {
     ),
     hideDelayMs: positiveNumberOr(source.hideDelayMs, DEFAULT_HIDE_DELAY_MS),
   };
-}
-
-function effectivePins(entry) {
-  var source = isPlainObject(entry) ? entry : {};
-  var rawPins = Array.isArray(source.pins) ? source.pins : [];
-  var seen = {};
-  var pins = [];
-  for (var i = 0; i < rawPins.length; i++) {
-    var id = rawPins[i];
-    if (typeof id === "string" && id.length > 0 && !seen[id]) {
-      seen[id] = true;
-      pins.push(id);
-    }
-  }
-  return pins;
 }
 
 function effectivePlacements(entry) {
@@ -178,22 +179,9 @@ function longestLabel(items) {
   return best;
 }
 
-function uniqueStrings(value) {
-  var raw = Array.isArray(value) ? value : [];
-  var seen = {};
-  var out = [];
-  for (var i = 0; i < raw.length; i++) {
-    if (typeof raw[i] === "string" && raw[i].length > 0 && !seen[raw[i]]) {
-      seen[raw[i]] = true;
-      out.push(raw[i]);
-    }
-  }
-  return out;
-}
-
 // The rows of the bar's right-click menu (docs/SPEC.md "Taskbar style"): each
-// is { label, checked, patch, group }, where patch is what to hand to
-// mergeSettings/write when it's chosen and group lets the menu draw a
+// is { label, checked, patch, group }, where patch is the `setSettings` patch
+// to apply when it's chosen and group lets the menu draw a
 // divider between runs of related rows.
 // Opens the full settings window (docs/SPEC.md "Settings window"): an
 // `action` rather than a `patch`, since there is no single setting to write.
@@ -266,7 +254,7 @@ function mergeSettings(entry, patch) {
 // (options: [{ value, label }]), int and slider (min, max, step), text and
 // list. Pins, Placed positions, startPins and recentApps are not here: the
 // Dock and Start menu manage those themselves. A test checks this covers
-// exactly the keys effectiveSettings/effectiveTaskbar understand.
+// exactly the keys effectiveView understands.
 function settingsSchema() {
   return [
     {
@@ -318,35 +306,126 @@ function settingsSchema() {
   ];
 }
 
-// Every schema field's current effective value for a config entry. Unset
-// startPlaces stays null: the Start menu then uses the XDG folders.
-function settingsValues(entry) {
-  var values = {};
-  var base = effectiveSettings(entry);
-  var bar = effectiveTaskbar(entry);
-  for (var k in base) values[k] = base[k];
-  for (var t in bar) values[t] = bar[t];
+// The complete effective view of a config entry (see the header). `settings`
+// and `taskbar` are the Dock's own values; `values` is every settings-window
+// field's current value in one object, with an unset startPlaces left null
+// (the Start menu then uses the XDG folders, as `startPlaces` does here).
+// A Start menu with no `startPins` of its own starts out showing the Pins.
+function effectiveView(entry) {
   var source = isPlainObject(entry) ? entry : {};
-  values.startPlaces = Array.isArray(source.startPlaces) ? uniqueStrings(source.startPlaces) : null;
-  return values;
+  var settings = effectiveSettings(source);
+  var taskbar = effectiveTaskbar(source);
+  var pins = uniqueStrings(source.pins);
+  var startPlaces = Array.isArray(source.startPlaces) ? uniqueStrings(source.startPlaces) : null;
+  var values = {};
+  for (var k in settings) values[k] = settings[k];
+  for (var t in taskbar) values[t] = taskbar[t];
+  values.startPlaces = startPlaces;
+  return {
+    settings: settings,
+    taskbar: taskbar,
+    pins: pins,
+    placements: effectivePlacements(source),
+    startPins: Array.isArray(source.startPins) ? uniqueStrings(source.startPins) : pins.slice(),
+    recentApps: uniqueStrings(source.recentApps),
+    startPlaces: startPlaces,
+    values: values,
+  };
 }
 
+var MAX_RECENT_APPS = 6;
+
+// `list` with `id` added at the end, unless it is already there.
+function withId(list, id) {
+  return list.indexOf(id) === -1 ? list.concat([id]) : list.slice();
+}
+
+// `list` without `id`; a no-op when it isn't there.
+function withoutId(list, id) {
+  return list.filter(function (other) { return other !== id; });
+}
+
+// `placements` with `key` recorded at `index`: a re-drag of an already-Placed
+// Item moves it rather than stacking a second entry.
+function placedAt(placements, key, index) {
+  var list = unplaced(placements, key);
+  list.push({ key: key, index: index });
+  return list;
+}
+
+// `placements` without `key`'s Placed position; a no-op when never Placed.
+function unplaced(placements, key) {
+  return placements.filter(function (placement) { return placement.key !== key; });
+}
+
+// The Start menu's Recommended list after launching `appId`: most recent
+// first, no duplicates, at most MAX_RECENT_APPS.
+function pushedRecent(recent, appId) {
+  return [appId].concat(withoutId(recent, appId)).slice(0, MAX_RECENT_APPS);
+}
+
+// The next entry after a named intent (see the header). Intents:
+//   { type: "pinApp", appId } / { type: "unpinApp", appId }
+//       add to / remove from the Dock's Pins; a no-op when already so.
+//   { type: "unpinAppFromDrag", appId }
+//       unpin, and drop that Pin's Placed position in the same entry
+//       (docs/SPEC.md "Input": drag out of the Dock).
+//   { type: "placeItem", key, index }
+//       a Pin Item's drop within the Dock (key is "pin:<appId>").
+//   { type: "pinStartApp", appId } / { type: "unpinStartApp", appId }
+//       the same for the Start menu's own pinned list.
+//   { type: "reorderStartPins", order }
+//       the Start menu's pinned list, in a new order.
+//   { type: "pushRecentApp", appId }
+//       an App was launched from the Start menu.
+//   { type: "setSettings", patch }
+//       settings changed; a patched value of undefined or null puts that
+//       setting back to its default. { type: "setSetting", key, value } is
+//       the one-setting form.
+//   { type: "resetSettings" }
+//       every settings-window field back to its default; Pins, their Placed
+//       positions, Start pins and recent apps are left alone.
+// An intent folds onto `entry` and returns a new object; to apply several in
+// a row, fold each onto the previous result. An unknown intent or one with
+// no usable App id changes nothing.
+function applyIntent(entry, intent) {
+  var view = effectiveView(entry);
+  var kind = isPlainObject(intent) ? intent.type : null;
+  var appId = isPlainObject(intent) && typeof intent.appId === "string" && intent.appId.length > 0 ? intent.appId : null;
+  var patch = {};
+  if (kind === "pinApp" && appId) patch.pins = withId(view.pins, appId);
+  else if (kind === "unpinApp" && appId) patch.pins = withoutId(view.pins, appId);
+  else if (kind === "unpinAppFromDrag" && appId) {
+    patch.pins = withoutId(view.pins, appId);
+    patch.placements = unplaced(view.placements, "pin:" + appId);
+  } else if (kind === "placeItem" && typeof intent.key === "string" && intent.key.indexOf("pin:") === 0) {
+    patch.placements = placedAt(view.placements, intent.key, intent.index);
+  } else if (kind === "pinStartApp" && appId) patch.startPins = withId(view.startPins, appId);
+  else if (kind === "unpinStartApp" && appId) patch.startPins = withoutId(view.startPins, appId);
+  else if (kind === "reorderStartPins") patch.startPins = uniqueStrings(intent.order);
+  else if (kind === "pushRecentApp" && appId) patch.recentApps = pushedRecent(view.recentApps, appId);
+  else if (kind === "setSettings") patch = intent.patch;
+  else if (kind === "setSetting" && typeof intent.key === "string") patch[intent.key] = intent.value;
+  else if (kind === "resetSettings") {
+    var groups = settingsSchema();
+    for (var g = 0; g < groups.length; g++) {
+      for (var f = 0; f < groups[g].fields.length; f++) patch[groups[g].fields[f].key] = undefined;
+    }
+  }
+  return mergeSettings(entry, patch);
+}
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     DEFAULT_ICON_SIZE: DEFAULT_ICON_SIZE,
     DEFAULT_REVEAL_DELAY_MS: DEFAULT_REVEAL_DELAY_MS,
     DEFAULT_HIDE_DELAY_MS: DEFAULT_HIDE_DELAY_MS,
     findPluginEntry: findPluginEntry,
-    effectiveSettings: effectiveSettings,
-    effectivePins: effectivePins,
-    effectivePlacements: effectivePlacements,
-    mergeSettings: mergeSettings,
-    effectiveTaskbar: effectiveTaskbar,
+    effectiveView: effectiveView,
+    applyIntent: applyIntent,
     schemeColors: schemeColors,
     resolveStartIcon: resolveStartIcon,
     barMenuRows: barMenuRows,
     longestLabel: longestLabel,
     settingsSchema: settingsSchema,
-    settingsValues: settingsValues,
   };
 }

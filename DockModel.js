@@ -16,8 +16,8 @@
 // currently on the Dock (a closed Window, a Pin not currently shown
 // because its App has Windows) is simply ignored, which is exactly what
 // lets a Placed Pin's slot reassert itself the moment its bare Pin Item
-// reappears. `placeAt`/`unplace` compute the next `placements` array for
-// the drag gesture (which lives in Service.qml) to persist or hold.
+// reappears. DockConfig.js's "placeItem" intent computes the next persisted
+// `placements` for the drag gesture (which lives in Service.qml).
 //
 // A Window is `{ id, class, workspace, openedAt, title, active, attention }`.
 // `openedAt` is a monotonically increasing value (timestamp or counter)
@@ -291,51 +291,10 @@ function windowActions(window) {
   return actions;
 }
 
-// The Dock's Pins list after Pin/Unpin (docs/SPEC.md "Input", the context
-// menu): appends `appId` when Pin is chosen and it isn't pinned yet, drops
-// it when Unpin is chosen, and otherwise leaves `pins` alone — a hand edit
-// that already added or removed it, or a stale menu click, is a no-op
-// rather than a duplicate slot or a second removal.
-function nextPins(pins, appId, pinned) {
-  var index = pins.indexOf(appId);
-  if (pinned) {
-    if (index === -1) return pins.slice();
-    var withoutId = pins.slice();
-    withoutId.splice(index, 1);
-    return withoutId;
-  }
-  if (index !== -1) return pins.slice();
-  return pins.concat([appId]);
-}
-
-// The Dock's `placements` after a within-Dock drop (docs/SPEC.md "Input":
-// "Drag within the Dock: reorder"; CONTEXT.md "Placed"): drops `key`'s
-// previous placement, if any, then records it at `index` — a re-drag of
-// an already-Placed Item moves it rather than stacking a second entry.
-function placeAt(placements, key, index) {
-  var list = unplace(placements, key);
-  list.push({ key: key, index: index });
-  return list;
-}
-
-// The Dock's `placements` after Unplacing `key` (docs/SPEC.md "Input":
-// unpinning an App drops its own Pin's Placed position along with it —
-// see Service.qml's drag-out handling). A no-op when `key` was never
-// Placed.
-function unplace(placements, key) {
-  var list = Array.isArray(placements) ? placements : [];
-  return list.filter(function (entry) {
-    return !entry || entry.key !== key;
-  });
-}
-
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     buildDockItems: buildDockItems,
     windowActions: windowActions,
     menuFor: menuFor,
-    nextPins: nextPins,
-    placeAt: placeAt,
-    unplace: unplace,
   };
 }

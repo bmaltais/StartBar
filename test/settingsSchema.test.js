@@ -2,12 +2,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   settingsSchema,
-  settingsValues,
-  effectiveSettings,
-  effectiveTaskbar,
-  mergeSettings,
+  effectiveView,
+  applyIntent,
   barMenuRows,
 } = require("../DockConfig.js");
+
+const settingsValues = (entry) => effectiveView(entry).values;
+const effectiveTaskbar = (entry) => effectiveView(entry).taskbar;
 
 const fields = () => settingsSchema().flatMap((g) => g.fields);
 const TYPES = ["bool", "choice", "int", "slider", "text", "list"];
@@ -27,8 +28,8 @@ test("every field has a unique key, a label and a known widget type", () => {
 
 test("the schema covers every setting the config module understands, and nothing else", () => {
   const known = new Set([
-    ...Object.keys(effectiveSettings(null)),
-    ...Object.keys(effectiveTaskbar(null)),
+    ...Object.keys(effectiveView(null).settings),
+    ...Object.keys(effectiveView(null).taskbar),
     "startPlaces",
   ]);
   const schemaKeys = new Set(fields().map((f) => f.key));
@@ -70,10 +71,10 @@ test("int and slider ranges sit inside what the config accepts as usable", () =>
   }
 });
 
-test("mergeSettings removes a key when its patched value is undefined or null", () => {
-  assert.deepEqual(mergeSettings({ a: 1, b: 2 }, { a: undefined }), { b: 2 });
-  assert.deepEqual(mergeSettings({ a: 1, b: 2 }, { b: null }), { a: 1 });
-  assert.deepEqual(mergeSettings({ a: 1 }, { a: 0 }), { a: 0 });
+test("setSettings removes a key when its patched value is undefined or null", () => {
+  assert.deepEqual(applyIntent({ a: 1, b: 2 }, { type: "setSettings", patch: { a: undefined } }), { b: 2 });
+  assert.deepEqual(applyIntent({ a: 1, b: 2 }, { type: "setSettings", patch: { b: null } }), { a: 1 });
+  assert.deepEqual(applyIntent({ a: 1 }, { type: "setSettings", patch: { a: 0 } }), { a: 0 });
 });
 
 test("both quick menus end with a Settings... row that opens the settings window", () => {

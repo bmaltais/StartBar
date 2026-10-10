@@ -1,12 +1,14 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
-  effectiveTaskbar,
+  effectiveView,
   schemeColors,
   resolveStartIcon,
 } = require("../DockConfig.js");
 
-test("effectiveTaskbar defaults to the original floating, auto-hiding dock", () => {
+const effectiveTaskbar = (entry) => effectiveView(entry).taskbar;
+
+test("the taskbar view defaults to the original floating, auto-hiding dock", () => {
   for (const entry of [null, {}, { style: "nonsense" }]) {
     const s = effectiveTaskbar(entry);
     assert.equal(s.style, "dock");

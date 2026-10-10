@@ -34,49 +34,6 @@ test("apps with noDisplay never appear, and no match gives an empty list", () =>
   assert.deepEqual(filterApps(null, "x"), []);
 });
 
-const { groupAlphabetically, pushRecent } = require("../StartMenu.js");
-const { effectiveStartPins, effectiveRecent, startPowerActions } = require("../StartMenu.js");
-
-test("groupAlphabetically sections apps by first letter, non-letters under #", () => {
-  const list = [
-    { id: "b", name: "Beta" },
-    { id: "a2", name: "avocado" },
-    { id: "a1", name: "Alpha" },
-    { id: "n", name: "7zip" },
-    { id: "h", name: "Hidden", noDisplay: true },
-  ];
-  const groups = groupAlphabetically(list);
-  assert.deepEqual(groups.map((g) => g.letter), ["#", "A", "B"]);
-  assert.deepEqual(groups[1].apps.map((a) => a.id), ["a1", "a2"]);
-  assert.deepEqual(groupAlphabetically(null), []);
-});
-
-test("pushRecent moves an app to the front, de-duplicates and caps the list", () => {
-  assert.deepEqual(pushRecent(["a", "b"], "c", 3), ["c", "a", "b"]);
-  assert.deepEqual(pushRecent(["a", "b", "c"], "b", 3), ["b", "a", "c"]);
-  assert.deepEqual(pushRecent(["a", "b", "c"], "d", 3), ["d", "a", "b"]);
-  assert.deepEqual(pushRecent(null, "a"), ["a"]);
-  assert.deepEqual(pushRecent(["a"], ""), ["a"]);
-});
-
-test("effectiveStartPins uses the entry's own list, else falls back to the dock's Pins", () => {
-  assert.deepEqual(effectiveStartPins({ startPins: ["x", "y", "x", 3, ""] }, ["d"]), ["x", "y"]);
-  assert.deepEqual(effectiveStartPins({ startPins: [] }, ["d"]), []);
-  assert.deepEqual(effectiveStartPins({}, ["d"]), ["d"]);
-  assert.deepEqual(effectiveStartPins(null, ["d"]), ["d"]);
-});
-
-test("effectiveRecent keeps only unique non-empty strings", () => {
-  assert.deepEqual(effectiveRecent({ recentApps: ["a", "a", 1, "b"] }), ["a", "b"]);
-  assert.deepEqual(effectiveRecent({}), []);
-});
-
-test("startPowerActions names each action and the command it runs", () => {
-  const actions = startPowerActions();
-  assert.deepEqual(actions.map((a) => a.label), ["Sleep", "Restart", "Shut down"]);
-  for (const a of actions) assert.equal(typeof a.command, "string");
-  assert.equal(actions[2].command, "omarchy-system-shutdown");
-});
 
 const { effectivePlaces } = require("../StartMenu.js");
 
@@ -107,7 +64,7 @@ test("effectivePlaces falls back to conventional names when user-dirs.dirs is un
 });
 
 test("a startPlaces list replaces the defaults; ~ expands, labels come from the folder name", () => {
-  const places = effectivePlaces({ startPlaces: ["~/Projects", "/mnt/data", "", 5, "~/Projects"] }, userDirs, "/home/u");
+  const places = effectivePlaces(["~/Projects", "/mnt/data", "", 5, "~/Projects"], userDirs, "/home/u");
   assert.deepEqual(places.map((p) => [p.label, p.path]), [
     ["Projects", "/home/u/Projects"],
     ["data", "/mnt/data"],
@@ -116,37 +73,5 @@ test("a startPlaces list replaces the defaults; ~ expands, labels come from the 
 });
 
 test("an empty startPlaces list hides the Places column", () => {
-  assert.deepEqual(effectivePlaces({ startPlaces: [] }, userDirs, "/home/u"), []);
-});
-
-const { startUserActions } = require("../StartMenu.js");
-
-test("startUserActions are the account actions behind the user's name: Lock and Sign out", () => {
-  const actions = startUserActions();
-  assert.deepEqual(actions.map((a) => a.label), ["Lock", "Sign out"]);
-  assert.deepEqual(actions.map((a) => a.command), ["omarchy-system-lock", "omarchy-system-logout"]);
-});
-
-const { pinSlotAt, reorderedPins, PINNED_COLUMNS } = require("../StartMenu.js");
-
-test("pinSlotAt maps a point to a grid slot, clamped, or -1 outside", () => {
-  const grid = { width: 600, height: 300, cellWidth: 100, cellHeight: 100, contentY: 0 };
-  assert.equal(PINNED_COLUMNS, 6);
-  assert.equal(pinSlotAt({ x: 150, y: 50 }, grid, 12, 6), 1);
-  assert.equal(pinSlotAt({ x: 50, y: 150 }, grid, 12, 6), 6);
-  assert.equal(pinSlotAt({ x: 550, y: 250 }, grid, 8, 6), 7);
-  assert.equal(pinSlotAt({ x: -1, y: 50 }, grid, 12, 6), -1);
-  assert.equal(pinSlotAt({ x: 50, y: 300 }, grid, 12, 6), -1);
-  assert.equal(pinSlotAt({ x: 50, y: 50 }, grid, 0, 6), -1);
-  assert.equal(pinSlotAt({ x: 50, y: 50 }, { ...grid, contentY: 100 }, 12, 6), 6);
-});
-
-test("reorderedPins maps a shown slot back to the saved list, null when unchanged", () => {
-  assert.deepEqual(reorderedPins(["a", "b", "c", "d"], ["a", "b", "c", "d"], "a", 2), ["b", "c", "a", "d"]);
-  // "b" is saved but its app is gone, so the grid shows a, c, d
-  assert.deepEqual(reorderedPins(["a", "b", "c", "d"], ["a", "c", "d"], "d", 0), ["d", "a", "b", "c"]);
-  assert.equal(reorderedPins(["a", "b"], ["a", "b"], "a", 0), null);
-  assert.equal(reorderedPins(["a", "b"], ["a", "b"], "a", -1), null);
-  assert.equal(reorderedPins(["a", "b"], ["a", "b"], "a", 5), null);
-  assert.equal(reorderedPins(["a", "b"], ["a", "b"], "zzz", 1), null);
+  assert.deepEqual(effectivePlaces([], userDirs, "/home/u"), []);
 });

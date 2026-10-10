@@ -1,12 +1,12 @@
-# Omarchy Dock
+# StartBar
 
-A macOS/Windows-style dock plugin for the Omarchy shell (Quickshell/QML). The agreed behaviour is in `docs/SPEC.md`; the vocabulary is in `CONTEXT.md`.
+A taskbar, Start menu and dock plugin for the Omarchy shell (Quickshell/QML). The agreed behaviour is in `docs/SPEC.md`; the vocabulary is in `CONTEXT.md`.
 
 ## Agent skills
 
 ### Issue tracker
 
-Issues are GitHub Issues on bmaltais/omarchy-dock, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues are GitHub Issues on bmaltais/StartBar, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
