@@ -1,6 +1,6 @@
 # Contributing to StartBar
 
-The agreed behaviour is in [docs/SPEC.md](docs/SPEC.md) and the vocabulary in [CONTEXT.md](CONTEXT.md). Work is tracked in the GitHub issues.
+The agreed behaviour is in [docs/SPEC.md](docs/SPEC.md) and the vocabulary in [CONTEXT.md](CONTEXT.md). Candidates that are not issues yet are in [docs/IDEAS.md](docs/IDEAS.md). Accepted work is tracked in the GitHub issues.
 
 ## Development install
 
