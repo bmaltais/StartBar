@@ -1,4 +1,4 @@
-// Pure Dock model (see docs/SPEC.md, milestones M2-M4; vocabulary in
+// Pure Dock model (see docs/SPEC.md; vocabulary in
 // CONTEXT.md). No Quickshell or QML imports, so the exact same file loads
 // as a JS import inside the shell and via `require` under Node for the
 // test suite.

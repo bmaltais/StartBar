@@ -8,7 +8,7 @@ All settings are stored (along with Pins and Placed Pin positions) in the Dock's
 
 ### The bar
 
-The Dock is a Windows 11-style bar along the bottom edge of every monitor. A leftover `"style"` key from older versions (which also had a floating dock style) is ignored.
+The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 
 ```json
 {
@@ -43,7 +43,7 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor. A lef
 | `showPreviews` | `true` | Hover thumbnails with a close button |
 | `previewWarpPointer` | `true` | Clicking a preview also moves the pointer to the middle of that window |
 
-Any numeric value that's missing or not a usable positive number falls back to its default.
+Any numeric value that's missing or not a usable positive number falls back to its default. A `"style"` key left over from versions before 1.1.0 is ignored.
 
 ### Start menu
 
@@ -75,7 +75,7 @@ Right-click an empty part of the bar and choose **Settings…** (or run `omarchy
 ### Menus
 
 - **Right-click an icon**: Pin/Unpin, New Window and the app's own actions; for a window, Maximize/Restore, Full screen/Exit full screen, Float/Tile, and when floating Center and Pin on top; Move to scratchpad; then Close Window. The menu stays open until you pick a row, click outside it, or move the pointer off it.
-- **Right-click the bar** (an empty part) opens a quick menu of the common options (alignment, colours, Start menu, auto-hide, clock, previews...). Its last row, **Settings…**, opens the full settings window.
+- **Right-click the bar** (an empty part) opens a menu of the common options (alignment, colours, Start menu, auto-hide, clock, previews...). Its last row, **Settings…**, opens the full settings window.
 
 ## Pinning
 
