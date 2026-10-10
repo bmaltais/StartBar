@@ -1203,7 +1203,10 @@ Item {
 
       WlrLayershell.namespace: "omarchy-dock"
       WlrLayershell.layer: WlrLayer.Top
-      WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+      // Exclusive while the built-in Start menu is open, hover-shown or not,
+      // so typing searches it wherever the pointer is. (A popup's grab would
+      // have pulled pointer focus off the Start button; this does not.)
+      WlrLayershell.keyboardFocus: startMenu.visible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
       // exclusiveZone 0 with Normal mode reserves no space of our own but
       // still keeps us out of any space another layer surface (the bar)
@@ -1228,6 +1231,8 @@ Item {
         Region { item: dockRow }
         Region { item: startButton }
         Region { item: clock }
+        Region { item: startMenu }
+        Region { item: startDismiss }
       }
 
       // Whether the Dock/bar is on screen: always, unless it auto-hides, in
@@ -2121,6 +2126,21 @@ Item {
         }
       }
 
+      // Catches a click anywhere outside an open (non-hover) Start menu to
+      // close it. Zero-sized otherwise, so it never gets in the way.
+      Item {
+        id: startDismiss
+        z: 40
+        width: (startMenu.visible && !startMenu.hoverMode) ? panel.width : 0
+        height: (startMenu.visible && !startMenu.hoverMode) ? panel.height : 0
+
+        MouseArea {
+          anchors.fill: parent
+          acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+          onPressed: startMenu.visible = false
+        }
+      }
+
       // The built-in Start menu (startCommand "builtin"), modelled on the
       // Windows 11 one (docs/SPEC.md "Start menu"): a popup rising from the
       // Start button with search, a Pinned grid, an "All apps" A-Z list, a
@@ -2129,8 +2149,17 @@ Item {
       // keyboard focus while open, so typing searches. DockModel's
       // filterApps/groupAlphabetically/pushRecent and DockConfig's
       // effectiveStartPins/effectiveRecent/startPowerActions hold the logic.
-      PopupWindow {
+      //
+      // It is an Item of the panel (a full-screen layer surface) rather than a
+      // popup window. A popup's keyboard grab needs a recent click inside our
+      // own window, which a menu opened by hover or by the keyboard command
+      // doesn't have, so the compositor refused it and typing went to
+      // whatever window was focused. The panel instead claims the keyboard
+      // itself while the menu is open (see keyboardFocus on the panel), the
+      // way Omarchy's own menu does.
+      Item {
         id: startMenu
+        z: 50
 
         readonly property int menuMargin: Style.spacing.xs
         readonly property var allApps: {
@@ -2209,14 +2238,11 @@ Item {
         }
 
         // Opened by resting on the Start button rather than a click, and not
-        // yet used: no focus grab (so the button keeps seeing the pointer),
-        // no keyboard, and it closes once the pointer is on neither the
-        // button nor the menu. takeFocus() ends that, and the menu then acts
-        // like a clicked-open one: grab, keyboard, stays until dismissed.
+        // yet used: it closes once the pointer is on neither the button nor
+        // the menu. It already has the keyboard; takeFocus() (a keystroke or a
+        // click on the search box) ends hover mode, and the menu then stays
+        // until dismissed, like a clicked-open one.
         property bool hoverMode: false
-        // True for the instant takeFocus() hides and re-shows the popup to
-        // apply the grab, so the menu's state (search text, All apps) survives.
-        property bool reopening: false
         readonly property bool pointerAround: startMouse.containsMouse || startMenuHover.hovered
 
         function arrowName(key) {
@@ -2286,12 +2312,11 @@ Item {
 
         onShowAllChanged: startMenu.resetNavigation()
 
+        // Ends hover mode: the menu stays until dismissed.
         function takeFocus() {
           if (!startMenu.hoverMode) return
-          startMenu.reopening = true
           startMenu.hoverMode = false
-          startMenu.visible = false
-          reopenTimer.restart()
+          Qt.callLater(function () { searchInput.forceActiveFocus() })
         }
 
         // Arrow-key selection on the home screen (DockModel.moveSelection):
@@ -2366,22 +2391,15 @@ Item {
           ]
         }
 
-        grabFocus: !startMenu.hoverMode
         visible: false
-        color: "transparent"
-        anchor.window: panel
-        anchor.adjustment: PopupAdjustment.Slide
-        anchor.edges: Edges.Top | Edges.Left
-        anchor.gravity: Edges.Bottom | Edges.Right
-        anchor.rect.width: 1
-        anchor.rect.height: 1
-        anchor.onAnchoring: {
-          anchor.rect.x = Math.round(Math.max(startMenu.menuMargin, Math.min(startButton.x, panel.width - startMenu.implicitWidth - startMenu.menuMargin)))
-          anchor.rect.y = Math.round(Math.max(startMenu.menuMargin, panel.height - root.taskbar.barHeight - startMenu.implicitHeight - startMenu.menuMargin))
-        }
-
-        implicitWidth: Style.space(600) + startMenu.placesWidth
-        implicitHeight: Math.min(Style.space(640), Math.max(Style.space(240), panel.height - root.taskbar.barHeight - startMenu.menuMargin * 2))
+        // Zero-sized while closed, so the panel's input mask (which goes by
+        // item geometry) takes nothing from the windows beneath.
+        readonly property real fullWidth: Style.space(600) + startMenu.placesWidth
+        readonly property real fullHeight: Math.min(Style.space(640), Math.max(Style.space(240), panel.height - root.taskbar.barHeight - startMenu.menuMargin * 2))
+        width: startMenu.visible ? startMenu.fullWidth : 0
+        height: startMenu.visible ? startMenu.fullHeight : 0
+        x: Math.round(Math.max(startMenu.menuMargin, Math.min(startButton.x, panel.width - startMenu.fullWidth - startMenu.menuMargin)))
+        y: Math.round(Math.max(startMenu.menuMargin, panel.height - root.taskbar.barHeight - startMenu.fullHeight - startMenu.menuMargin))
 
         Timer {
           id: startLeaveTimer
@@ -2391,33 +2409,21 @@ Item {
           }
         }
 
-        Timer {
-          id: reopenTimer
-          interval: 40
-          onTriggered: {
-            startMenu.visible = true
-            startMenu.reopening = false
-          }
-        }
-
         onVisibleChanged: {
           revealState.menuOpen = startMenu.visible
-          if (!startMenu.visible && !startMenu.reopening) {
+          if (!startMenu.visible) {
             startMenu.hoverMode = false
             startLeaveTimer.stop()
           }
           if (startMenu.visible) {
-            if (!startMenu.reopening) {
-              searchInput.text = ""
-              startMenu.showAll = false
-              startMenu.closeOverlays()
-              startMenu.resetNavigation()
-              resultList.currentIndex = 0
-            }
+            searchInput.text = ""
+            startMenu.showAll = false
+            startMenu.closeOverlays()
+            startMenu.resetNavigation()
+            resultList.currentIndex = 0
             searchInput.forceActiveFocus()
           }
         }
-        onClosed: startMenu.visible = false
 
         Rectangle {
           id: card
@@ -2444,8 +2450,15 @@ Item {
 
             // In a hover-opened menu, clicking the search box is how you say
             // "I want to type": it takes the focus grab (and the keyboard).
-            TapHandler {
-              onTapped: startMenu.takeFocus()
+            MouseArea {
+              anchors.fill: parent
+              z: 2
+              enabled: startMenu.hoverMode
+              propagateComposedEvents: true
+              onPressed: function (mouse) {
+                startMenu.takeFocus()
+                mouse.accepted = false
+              }
             }
 
             Text {
@@ -2477,6 +2490,9 @@ Item {
               }
 
               Keys.onPressed: function (event) {
+                // Using the keyboard means you want the menu: a hover-shown
+                // one stays open from here on.
+                startMenu.takeFocus()
                 if (event.key === Qt.Key_Down && startMenu.searching) {
                   resultList.currentIndex = Math.min(resultList.count - 1, resultList.currentIndex + 1)
                   event.accepted = true

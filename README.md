@@ -81,7 +81,7 @@ Set `"style": "taskbar"` for the Windows 11-like bar. The default, `"dock"`, is 
 | `colorScheme` | `theme` | `theme` (follow Omarchy), `dark` or `light` |
 | `showStart` | `true` | Show the Start button |
 | `startCommand` | `omarchy-menu toggle apps` | What the Start button runs; `builtin` opens the built-in Start menu |
-| `startHoverOpen` | `true` | With the built-in menu, resting the pointer on the Start button opens it after a moment; it closes when you leave; click its search box to keep it open and type; moving to another icon closes it |
+| `startHoverOpen` | `true` | With the built-in menu, resting the pointer on the Start button opens it after a moment; it closes when you leave; typing (or clicking its search box) keeps it open; moving to another icon closes it |
 | `startIcon` | `grid` | `grid` (drawn in QML), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path |
 | `showClock` | `true` | Clock at the right end |
 | `showPreviews` | `true` | Hover thumbnails with a close button |
@@ -93,7 +93,7 @@ The icons are smaller than the dock's (up to `barHeight - 20`) and shrink furthe
 
 Set `"startCommand": "builtin"` and the Start button opens a menu anchored right above it (the Omarchy menu always centres on screen and can't be anchored):
 
-- Opens on a click, or by resting the pointer on the Start button (`startHoverOpen`); a hover-opened menu goes away when you move off it, until you click its search box to start typing, which keeps it open. Clicking the grid icon doesn't keep it, and moving on to another icon closes it so that icon's preview shows.
+- Opens on a click, or by resting the pointer on the Start button (`startHoverOpen`); a hover-opened menu goes away when you move off it, until you start typing or click its search box, which keeps it open. Clicking the grid icon doesn't keep it, and moving on to another icon closes it so that icon's preview shows.
 - **Search** at the top: type to filter every installed app; Up/Down and Enter launch; Escape backs out one layer at a time.
 - **Pinned**: a six-column grid. Right-click any app to **Pin to Start** or **Unpin from Start** (or pin it to the Dock). Until you change it, it shows your Dock Pins.
 - **All apps ›**: an A-Z list with letter headings.
@@ -263,7 +263,7 @@ Not yet walked through with a real mouse; the pieces marked *checked* were confi
 
 - [x] `"style": "taskbar"` shows a full-width bar with the Start grid, centred icons and a clock; `"alignment": "left"` moves the group to the left. *(checked)*
 - [x] With `"autoHide": true` the bar hides and slides up when the pointer reaches the bottom edge. *(checked)*
-- [ ] Resting the pointer on the Start button keeps the bar up, and clicking it opens the chosen menu. With the built-in menu and `startHoverOpen`, resting opens it after a moment, it stays up while the pointer is on the button or the menu (no flicker), closes shortly after you leave (or at once on reaching another icon), and clicking the search box keeps it open so you can type.
+- [ ] Resting the pointer on the Start button keeps the bar up, and clicking it opens the chosen menu. With the built-in menu and `startHoverOpen`, resting opens it after a moment, it stays up while the pointer is on the button or the menu (no flicker), closes shortly after you leave (or at once on reaching another icon), and typing, or clicking the search box, keeps it open.
 - [ ] Right-clicking an empty part of the bar opens the quick menu; each row changes its setting live; "Settings…" opens the settings window on that monitor, where each switch, choice, stepper, slider, text field and list change takes effect live and survives a shell restart; Escape closes it; "Reset to defaults" asks twice.
 - [ ] In dock style, right-clicking the gap between icons or the bottom edge opens a menu with "Switch to taskbar style" and "Settings…".
 - [x] Hovering a window's icon shows a live thumbnail with its title and a close button. *(checked)*
