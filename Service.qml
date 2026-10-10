@@ -1392,14 +1392,49 @@ Item {
           onHoveredChanged: revealState.hoveringStart = hovered
         }
 
+        // Resting the pointer here opens the built-in menu after a moment, like
+        // a hover preview (startHoverOpen). Such a menu is in hoverMode: it
+        // takes no focus grab (a grab would pull pointer focus off this
+        // button, which would then read as "pointer left" and close the
+        // menu, over and over) and closes when the pointer is on neither the
+        // button nor the menu. Clicking the search box, or this button again,
+        // takes the grab and keeps it open; see startMenu.takeFocus.
+        Timer {
+          id: startHoverTimer
+          interval: 400
+          onTriggered: {
+            if (root.taskbar.startCommand === "builtin" && root.taskbar.startHoverOpen && !startMenu.visible) {
+              startMenu.hoverMode = true
+              startMenu.visible = true
+            }
+          }
+        }
+
         MouseArea {
           id: startMouse
           anchors.fill: parent
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
+          onContainsMouseChanged: {
+            if (startMouse.containsMouse) {
+              startHoverTimer.restart()
+            } else {
+              startHoverTimer.stop()
+              startLeaveTimer.restart()
+            }
+          }
           onClicked: {
-            if (root.taskbar.startCommand === "builtin") startMenu.visible = !startMenu.visible
-            else Quickshell.execDetached(["bash", "-lc", root.taskbar.startCommand])
+            if (root.taskbar.startCommand !== "builtin") {
+              Quickshell.execDetached(["bash", "-lc", root.taskbar.startCommand])
+            } else if (startMenu.visible && startMenu.hoverMode) {
+              // Clicking a menu that hover just opened means "keep it".
+              startMenu.takeFocus()
+            } else if (startMenu.visible) {
+              startMenu.visible = false
+            } else {
+              startMenu.hoverMode = false
+              startMenu.visible = true
+            }
           }
         }
       }
@@ -2119,6 +2154,25 @@ Item {
           return name.length > 0 ? name.charAt(0).toUpperCase() + name.slice(1) : "User"
         }
 
+        // Opened by resting on the Start button rather than a click, and not
+        // yet used: no focus grab (so the button keeps seeing the pointer),
+        // no keyboard, and it closes once the pointer is on neither the
+        // button nor the menu. takeFocus() ends that, and the menu then acts
+        // like a clicked-open one: grab, keyboard, stays until dismissed.
+        property bool hoverMode: false
+        // True for the instant takeFocus() hides and re-shows the popup to
+        // apply the grab, so the menu's state (search text, All apps) survives.
+        property bool reopening: false
+        readonly property bool pointerAround: startMouse.containsMouse || startMenuHover.hovered
+
+        function takeFocus() {
+          if (!startMenu.hoverMode) return
+          startMenu.reopening = true
+          startMenu.hoverMode = false
+          startMenu.visible = false
+          reopenTimer.restart()
+        }
+
         property bool showAll: false
         property bool powerOpen: false
         // The menu behind the user's name (Lock, Sign out).
@@ -2176,7 +2230,7 @@ Item {
           ]
         }
 
-        grabFocus: true
+        grabFocus: !startMenu.hoverMode
         visible: false
         color: "transparent"
         anchor.window: panel
@@ -2193,13 +2247,36 @@ Item {
         implicitWidth: Style.space(600) + startMenu.placesWidth
         implicitHeight: Math.min(Style.space(640), Math.max(Style.space(240), panel.height - root.taskbar.barHeight - startMenu.menuMargin * 2))
 
+        Timer {
+          id: startLeaveTimer
+          interval: 500
+          onTriggered: {
+            if (startMenu.visible && startMenu.hoverMode && !startMenu.pointerAround) startMenu.visible = false
+          }
+        }
+
+        Timer {
+          id: reopenTimer
+          interval: 40
+          onTriggered: {
+            startMenu.visible = true
+            startMenu.reopening = false
+          }
+        }
+
         onVisibleChanged: {
           revealState.menuOpen = startMenu.visible
+          if (!startMenu.visible && !startMenu.reopening) {
+            startMenu.hoverMode = false
+            startLeaveTimer.stop()
+          }
           if (startMenu.visible) {
-            searchInput.text = ""
-            startMenu.showAll = false
-            startMenu.closeOverlays()
-            resultList.currentIndex = 0
+            if (!startMenu.reopening) {
+              searchInput.text = ""
+              startMenu.showAll = false
+              startMenu.closeOverlays()
+              resultList.currentIndex = 0
+            }
             searchInput.forceActiveFocus()
           }
         }
@@ -2213,6 +2290,11 @@ Item {
           border.width: Style.normalBorderWidth
           border.color: Color.popups.border
 
+          HoverHandler {
+            id: startMenuHover
+            onHoveredChanged: if (!hovered) startLeaveTimer.restart()
+          }
+
           Rectangle {
             id: searchBox
             anchors.top: parent.top
@@ -2222,6 +2304,12 @@ Item {
             height: Style.space(36)
             radius: height / 2
             color: Util.alpha(Color.popups.text, 0.08)
+
+            // In a hover-opened menu, clicking the search box is how you say
+            // "I want to type": it takes the focus grab (and the keyboard).
+            TapHandler {
+              onTapped: startMenu.takeFocus()
+            }
 
             Text {
               visible: searchInput.text.length === 0

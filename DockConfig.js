@@ -137,6 +137,7 @@ function effectiveTaskbar(entry) {
     showPreviews: booleanOr(source.showPreviews, true),
     previewWarpPointer: booleanOr(source.previewWarpPointer, true),
     showWorkspaceBadge: booleanOr(source.showWorkspaceBadge, false),
+    startHoverOpen: booleanOr(source.startHoverOpen, true),
   };
 }
 
@@ -304,6 +305,7 @@ function barMenuRows(taskbar) {
     toggle("Window previews", "showPreviews", 2),
     toggle("Pointer follows preview click", "previewWarpPointer", 2),
     toggle("Workspace badge", "showWorkspaceBadge", 2),
+    toggle("Start menu opens on hover", "startHoverOpen", 2),
     toggle("Transparent background", "transparent", 2),
     SETTINGS_ROW,
   ];
@@ -465,6 +467,7 @@ function settingsSchema() {
       title: "Start menu",
       fields: [
         { key: "showStart", label: "Start button", type: "bool", hint: "Taskbar only" },
+        { key: "startHoverOpen", label: "Open built-in menu on hover", type: "bool", hint: "Rest the pointer on the Start button to open it (built-in menu only)" },
         { key: "startCommand", label: "Start button action", type: "text", hint: "\"builtin\" for the built-in menu, or a shell command" },
         { key: "startIcon", label: "Start icon", type: "text", hint: "grid, omarchy, arch, linux, an icon name, or an image path" },
         { key: "startPlaces", label: "Places", type: "list", hint: "Folders in the Start menu's left column" },
