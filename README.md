@@ -81,7 +81,7 @@ Set `"style": "taskbar"` for the Windows 11-like bar. The default, `"dock"`, is 
 | `colorScheme` | `theme` | `theme` (follow Omarchy), `dark` or `light` |
 | `showStart` | `true` | Show the Start button |
 | `startCommand` | `omarchy-menu toggle apps` | What the Start button runs; `builtin` opens the built-in Start menu |
-| `startHoverOpen` | `true` | With the built-in menu, resting the pointer on the Start button opens it after a moment; it closes when you leave; click its search box to keep it open and type |
+| `startHoverOpen` | `true` | With the built-in menu, resting the pointer on the Start button opens it after a moment; it closes when you leave; click its search box to keep it open and type; moving to another icon closes it |
 | `startIcon` | `grid` | `grid` (drawn in QML), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path |
 | `showClock` | `true` | Clock at the right end |
 | `showPreviews` | `true` | Hover thumbnails with a close button |
@@ -93,13 +93,16 @@ The icons are smaller than the dock's (up to `barHeight - 20`) and shrink furthe
 
 Set `"startCommand": "builtin"` and the Start button opens a menu anchored right above it (the Omarchy menu always centres on screen and can't be anchored):
 
-- Opens on a click, or by resting the pointer on the Start button (`startHoverOpen`); a hover-opened menu goes away when you move off it, until you click the search box (or the Start button) to start using it, which keeps it open and lets you type.
+- Opens on a click, or by resting the pointer on the Start button (`startHoverOpen`); a hover-opened menu goes away when you move off it, until you click its search box to start typing, which keeps it open. Clicking the grid icon doesn't keep it, and moving on to another icon closes it so that icon's preview shows.
 - **Search** at the top: type to filter every installed app; Up/Down and Enter launch; Escape backs out one layer at a time.
 - **Pinned**: a six-column grid. Right-click any app to **Pin to Start** or **Unpin from Start** (or pin it to the Dock). Until you change it, it shows your Dock Pins.
 - **All apps ›**: an A-Z list with letter headings.
 - **Recommended**: the last six apps launched from the menu.
 - **Places** (left column): Home and your Documents, Downloads, Pictures, Music and Videos folders, from `~/.config/user-dirs.dirs`. One click opens a folder in your file manager.
-- **Account and power** (bottom): click your name for Lock and Sign out; the power button has Sleep, Restart and Shut down.
+- **Keyboard**: bind a key (say Super) to `omarchy-shell bernard.dock startMenu` to toggle the menu. With nothing typed, the arrow keys walk Pinned then Recommended and Enter launches; in All apps, Up/Down walk the list. Click a letter heading in All apps for an A-Z jump grid.
+- **Reorder pins**: drag a pinned app to a new slot.
+- **Settings** (bottom of the Places column): opens Omarchy's setup menu.
+- **Account and power** (bottom): your name and `~/.face` picture; click them for Lock and Sign out; the power button has Sleep, Restart and Shut down.
 
 It is the one part of the Dock that takes keyboard focus, and only while open.
 
@@ -260,12 +263,13 @@ Not yet walked through with a real mouse; the pieces marked *checked* were confi
 
 - [x] `"style": "taskbar"` shows a full-width bar with the Start grid, centred icons and a clock; `"alignment": "left"` moves the group to the left. *(checked)*
 - [x] With `"autoHide": true` the bar hides and slides up when the pointer reaches the bottom edge. *(checked)*
-- [ ] Resting the pointer on the Start button keeps the bar up, and clicking it opens the chosen menu. With the built-in menu and `startHoverOpen`, resting opens it after a moment, it stays up while the pointer is on the button or the menu (no flicker), closes shortly after you leave, and clicking the search box keeps it open so you can type.
+- [ ] Resting the pointer on the Start button keeps the bar up, and clicking it opens the chosen menu. With the built-in menu and `startHoverOpen`, resting opens it after a moment, it stays up while the pointer is on the button or the menu (no flicker), closes shortly after you leave (or at once on reaching another icon), and clicking the search box keeps it open so you can type.
 - [ ] Right-clicking an empty part of the bar opens the quick menu; each row changes its setting live; "Settings…" opens the settings window on that monitor, where each switch, choice, stepper, slider, text field and list change takes effect live and survives a shell restart; Escape closes it; "Reset to defaults" asks twice.
 - [ ] In dock style, right-clicking the gap between icons or the bottom edge opens a menu with "Switch to taskbar style" and "Settings…".
 - [x] Hovering a window's icon shows a live thumbnail with its title and a close button. *(checked)*
 - [ ] Clicking a thumbnail focuses the window and, with `previewWarpPointer`, moves the pointer to its middle.
 - [ ] Sweeping across icons next to a busy browser shows no flicker.
+- [ ] `omarchy-shell bernard.dock startMenu` opens and closes the menu on the focused monitor; with nothing typed the arrow keys select pinned then recommended apps and Enter launches; in All apps Up/Down move; clicking a letter heading opens the A-Z grid; dragging a pinned app to another slot reorders it and survives a restart; the Settings button opens the Omarchy setup menu; a `~/.face` picture shows in a circle.
 - [ ] Start menu (`"startCommand": "builtin"`): typing searches, Enter launches, Escape backs out a layer; All apps lists A-Z; right-click pins and unpins; Recommended fills after launching an app.
 - [ ] Places opens Home, Documents and Downloads in the file manager; the power menu's Sleep, Restart and Shut down work, and the name menu's Lock and Sign out (try Lock first).
 - [ ] Right-clicking an icon shows the window rows (Maximize, Full screen, Float...); their labels flip when active; the menu stays open until a row is chosen or the pointer leaves it.

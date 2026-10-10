@@ -7,6 +7,7 @@
 // context menu for Pin/Unpin/New Window/Close Window, and drag to reorder
 // or drag out to unpin/snap back (CONTEXT.md "Placed").
 import QtQuick
+import QtQuick.Effects
 import QtQml.Models
 import Quickshell
 import Quickshell.Io
@@ -509,6 +510,15 @@ Item {
     return null
   }
 
+  // Asked (by IPC) to toggle or close the Start menu on one monitor; each
+  // monitor's panel owns a menu and answers only for its own screen.
+  signal startMenuRequested(string screenName, string action)
+
+  function focusedScreenName() {
+    var screen = root.focusedScreen()
+    return screen ? screen.name : ""
+  }
+
   function openSettings(screen) {
     var target = screen || root.focusedScreen()
     if (target) root.settingsScreen = target
@@ -519,6 +529,9 @@ Item {
     target: "bernard.dock"
     function settings(): void { root.openSettings(null) }
     function closeSettings(): void { settingsWindow.visible = false }
+    // For a Super-key binding: `omarchy-shell bernard.dock startMenu`.
+    function startMenu(): void { root.startMenuRequested(root.focusedScreenName(), "toggle") }
+    function closeStartMenu(): void { root.startMenuRequested(root.focusedScreenName(), "close") }
   }
 
   FileView {
@@ -1397,8 +1410,28 @@ Item {
         // takes no focus grab (a grab would pull pointer focus off this
         // button, which would then read as "pointer left" and close the
         // menu, over and over) and closes when the pointer is on neither the
-        // button nor the menu. Clicking the search box, or this button again,
-        // takes the grab and keeps it open; see startMenu.takeFocus.
+        // button nor the menu, or at once when the pointer reaches another
+        // icon. Only clicking its search box takes the grab and keeps it
+        // open (startMenu.takeFocus); clicking this button does not.
+        Connections {
+          target: root
+          function onStartMenuRequested(screenName, action) {
+            if (!root.isTaskbar || panel.screen.name !== screenName) return
+            if (root.taskbar.startCommand !== "builtin") {
+              // Not the built-in menu: the key does what the Start button does.
+              if (action === "toggle") Quickshell.execDetached(["bash", "-lc", root.taskbar.startCommand])
+              return
+            }
+            if (action === "close" || startMenu.visible) {
+              startMenu.visible = false
+            } else {
+              // Opened for the keyboard: a real grab, never hover mode.
+              startMenu.hoverMode = false
+              startMenu.visible = true
+            }
+          }
+        }
+
         Timer {
           id: startHoverTimer
           interval: 400
@@ -1427,8 +1460,9 @@ Item {
             if (root.taskbar.startCommand !== "builtin") {
               Quickshell.execDetached(["bash", "-lc", root.taskbar.startCommand])
             } else if (startMenu.visible && startMenu.hoverMode) {
-              // Clicking a menu that hover just opened means "keep it".
-              startMenu.takeFocus()
+              // A menu that hover opened stays a hover menu: a click here
+              // doesn't make it permanent. Move off and it goes; click its
+              // search box to keep it and type.
             } else if (startMenu.visible) {
               startMenu.visible = false
             } else {
@@ -1901,6 +1935,9 @@ Item {
         }
 
         function hoverStart(delegate) {
+          // Moving on to an icon takes over from a hover-opened Start menu at
+          // once, instead of both showing until the menu's leave timer fires.
+          if (startMenu.visible && startMenu.hoverMode) startMenu.visible = false
           if (root.dragInProgress || !enabledFor(delegate.modelData)) return
           previewLeaveTimer.stop()
           var point = delegate.mapToItem(panel.contentItem, delegate.width / 2, 0)
@@ -2149,6 +2186,23 @@ Item {
           onLoaded: startMenu.userDirsText = text()
         }
 
+        // Whether ~/.face exists, so the avatar never tries to load a missing file.
+        property bool hasFace: false
+
+        Process {
+          running: true
+          command: ["test", "-f", Quickshell.env("HOME") + "/.face"]
+          onExited: function (exitCode) { startMenu.hasFace = exitCode === 0 }
+        }
+
+        Process {
+          running: true
+          command: ["getent", "passwd", Quickshell.env("USER") || ""]
+          stdout: StdioCollector {
+            onStreamFinished: startMenu.fullName = DockModel.parseFullName(text, "")
+          }
+        }
+
         readonly property string userName: {
           var name = Quickshell.env("USER") || ""
           return name.length > 0 ? name.charAt(0).toUpperCase() + name.slice(1) : "User"
@@ -2165,6 +2219,73 @@ Item {
         property bool reopening: false
         readonly property bool pointerAround: startMouse.containsMouse || startMenuHover.hovered
 
+        function arrowName(key) {
+          if (key === Qt.Key_Left) return "left"
+          if (key === Qt.Key_Right) return "right"
+          if (key === Qt.Key_Up) return "up"
+          if (key === Qt.Key_Down) return "down"
+          return ""
+        }
+
+        function moveHomeSelection(direction) {
+          var next = DockModel.moveSelection(
+            { section: startMenu.navSection, index: startMenu.navIndex },
+            direction,
+            { pinned: startMenu.pinnedApps.length, recent: startMenu.recentApps.length })
+          startMenu.navSection = next.section
+          startMenu.navIndex = next.index
+          if (next.section === "pinned") pinnedGrid.positionViewAtIndex(next.index, GridView.Contain)
+        }
+
+        // The app Enter launches: the arrow-selected one on the home screen,
+        // the highlighted row in All apps.
+        function selectedApp() {
+          if (startMenu.showAll) return startMenu.allAppsFlat[allList.currentIndex] || null
+          if (startMenu.navSection === "pinned") return startMenu.pinnedApps[startMenu.navIndex] || null
+          if (startMenu.navSection === "recent") return startMenu.recentApps[startMenu.navIndex] || null
+          return null
+        }
+
+        // Drag to reorder a pinned app. The slot under the ghost's centre,
+        // from the grid's own geometry (-1 outside the grid).
+        function updatePinDrag() {
+          if (startMenu.dragPinId === "") return
+          var p = pinnedGrid.mapFromItem(pinGhost.parent, pinGhost.x + pinGhost.width / 2, pinGhost.y + pinGhost.height / 2)
+          var count = startMenu.pinnedApps.length
+          var inside = p.x >= 0 && p.x < pinnedGrid.width && p.y >= 0 && p.y < pinnedGrid.height && count > 0
+          if (!inside) {
+            startMenu.dragPinSlot = -1
+            return
+          }
+          var column = Math.floor(p.x / pinnedGrid.cellWidth)
+          var row = Math.floor((p.y + pinnedGrid.contentY) / pinnedGrid.cellHeight)
+          startMenu.dragPinSlot = Math.max(0, Math.min(count - 1, row * 6 + column))
+        }
+
+        // On release: write the new order. The grid skips pins whose app is
+        // gone, so positions are mapped back to the saved list by app id.
+        function finishPinDrag() {
+          var id = startMenu.dragPinId
+          var slot = startMenu.dragPinSlot
+          startMenu.dragPinId = ""
+          startMenu.dragPinSlot = -1
+          pinGhost.visible = false
+          if (slot < 0 || slot >= startMenu.pinnedApps.length) return
+          var from = startMenu.startPinIds.indexOf(id)
+          var to = startMenu.startPinIds.indexOf(startMenu.pinnedApps[slot].id)
+          if (from < 0 || to < 0 || from === to) return
+          dockSettings.write({ startPins: DockModel.moveItem(startMenu.startPinIds, from, to) })
+        }
+
+        function resetNavigation() {
+          startMenu.navSection = ""
+          startMenu.navIndex = -1
+          allList.currentIndex = -1
+          startMenu.showLetters = false
+        }
+
+        onShowAllChanged: startMenu.resetNavigation()
+
         function takeFocus() {
           if (!startMenu.hoverMode) return
           startMenu.reopening = true
@@ -2172,6 +2293,21 @@ Item {
           startMenu.visible = false
           reopenTimer.restart()
         }
+
+        // Arrow-key selection on the home screen (DockModel.moveSelection):
+        // which of Pinned / Recommended and the index in it; "" is none.
+        property string navSection: ""
+        property int navIndex: -1
+        // The A-Z jump grid in All apps, and the letter -> first-row map.
+        property bool showLetters: false
+        readonly property var letterRows: DockModel.letterIndex(startMenu.allAppsFlat)
+        // Drag-to-reorder of a pinned app: the id being dragged, and the slot
+        // in Pinned it would land on (-1 none).
+        property string dragPinId: ""
+        property int dragPinSlot: -1
+        // Account: real name from the system account (falls back to the login).
+        property string fullName: ""
+        readonly property string accountName: startMenu.fullName.length > 0 ? startMenu.fullName : startMenu.userName
 
         property bool showAll: false
         property bool powerOpen: false
@@ -2275,6 +2411,7 @@ Item {
               searchInput.text = ""
               startMenu.showAll = false
               startMenu.closeOverlays()
+              startMenu.resetNavigation()
               resultList.currentIndex = 0
             }
             searchInput.forceActiveFocus()
@@ -2336,6 +2473,7 @@ Item {
               onTextChanged: {
                 resultList.currentIndex = 0
                 startMenu.closeOverlays()
+                startMenu.resetNavigation()
               }
 
               Keys.onPressed: function (event) {
@@ -2348,9 +2486,24 @@ Item {
                 } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && startMenu.searching) {
                   startMenu.launch(startMenu.results[resultList.currentIndex])
                   event.accepted = true
+                } else if (!startMenu.searching && !startMenu.showAll && startMenu.arrowName(event.key) !== "") {
+                  // Home screen: arrow keys walk Pinned, then Recommended.
+                  startMenu.moveHomeSelection(startMenu.arrowName(event.key))
+                  event.accepted = true
+                } else if (!startMenu.searching && startMenu.showAll && !startMenu.showLetters
+                           && (event.key === Qt.Key_Down || event.key === Qt.Key_Up)) {
+                  // All apps: Up/Down walk the A-Z list.
+                  var next = allList.currentIndex + (event.key === Qt.Key_Down ? 1 : -1)
+                  allList.currentIndex = Math.max(0, Math.min(allList.count - 1, next))
+                  allList.positionViewAtIndex(allList.currentIndex, ListView.Contain)
+                  event.accepted = true
+                } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !startMenu.searching) {
+                  startMenu.launch(startMenu.selectedApp())
+                  event.accepted = true
                 } else if (event.key === Qt.Key_Escape) {
-                  // Back out one layer at a time: overlay, search, All apps, menu.
+                  // Back out one layer at a time: overlay, jump grid, search, All apps, menu.
                   if (startMenu.menuApp || startMenu.powerOpen || startMenu.userOpen) startMenu.closeOverlays()
+                  else if (startMenu.showLetters) startMenu.showLetters = false
                   else if (startMenu.searching) searchInput.text = ""
                   else if (startMenu.showAll) startMenu.showAll = false
                   else startMenu.visible = false
@@ -2425,6 +2578,57 @@ Item {
                     }
                   }
                 }
+              }
+            }
+          }
+
+          // Settings: the way on to Omarchy's setup menu, like the gear on
+          // Windows 10's left rail. Sits at the bottom of the Places column.
+          Rectangle {
+            visible: startMenu.placesWidth > 0
+            anchors.left: placesPane.left
+            anchors.bottom: placesPane.bottom
+            anchors.margins: Style.spacing.md
+            width: startMenu.placesWidth - Style.spacing.md * 2
+            height: Style.space(38)
+            radius: Style.cornerRadius
+            color: settingsRailMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+
+            Image {
+              id: settingsRailIcon
+              anchors.left: parent.left
+              anchors.leftMargin: Style.spacing.sm
+              anchors.verticalCenter: parent.verticalCenter
+              width: Style.space(22)
+              height: width
+              fillMode: Image.PreserveAspectFit
+              asynchronous: true
+              sourceSize.width: width * Screen.devicePixelRatio
+              sourceSize.height: height * Screen.devicePixelRatio
+              source: Quickshell.iconPath("preferences-system", true)
+            }
+
+            Text {
+              anchors.left: settingsRailIcon.right
+              anchors.leftMargin: Style.spacing.md
+              anchors.right: parent.right
+              anchors.rightMargin: Style.spacing.sm
+              anchors.verticalCenter: parent.verticalCenter
+              elide: Text.ElideRight
+              text: "Settings"
+              color: Color.popups.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+            }
+
+            MouseArea {
+              id: settingsRailMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                startMenu.visible = false
+                Quickshell.execDetached(["bash", "-lc", "omarchy-menu summon setup"])
               }
             }
           }
@@ -2507,6 +2711,7 @@ Item {
               anchors.fill: parent
               clip: true
               model: startMenu.allAppsFlat
+              currentIndex: -1
               boundsBehavior: Flickable.StopAtBounds
 
               section.property: "letter"
@@ -2525,6 +2730,13 @@ Item {
                   font.family: Style.font.family
                   font.pixelSize: Style.font.body
                   font.bold: true
+                }
+
+                // Click a letter heading for the A-Z jump grid.
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: startMenu.showLetters = true
                 }
               }
 
@@ -2553,10 +2765,12 @@ Item {
               delegate: Rectangle {
                 id: allRow
                 required property var modelData
+                required property int index
                 width: allList.width
                 height: Style.space(40)
                 radius: Style.cornerRadius
-                color: allMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+                color: (allMouse.containsMouse || allList.currentIndex === allRow.index)
+                  ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
 
                 Image {
                   id: allIcon
@@ -2594,6 +2808,71 @@ Item {
                   onClicked: function (mouse) {
                     if (mouse.button === Qt.RightButton) startMenu.openAppMenu(allRow.modelData, allMouse, mouse)
                     else startMenu.launch(allRow.modelData)
+                  }
+                }
+              }
+            }
+
+            // The A-Z jump grid: letters that have apps are lit, the rest dim.
+            Rectangle {
+              id: lettersOverlay
+              visible: startMenu.showLetters && startMenu.showAll && !startMenu.searching
+              anchors.fill: parent
+              z: 5
+              color: Color.popups.background
+
+              MouseArea { anchors.fill: parent; onClicked: startMenu.showLetters = false }
+
+              Text {
+                anchors.top: parent.top
+                anchors.topMargin: Style.spacing.md
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Jump to"
+                color: Util.alpha(Color.popups.text, 0.6)
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+              }
+
+              Grid {
+                anchors.centerIn: parent
+                columns: 6
+                spacing: Style.spacing.md
+
+                Repeater {
+                  model: ["#", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+                          "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
+
+                  delegate: Rectangle {
+                    id: letterCell
+                    required property string modelData
+                    readonly property bool present: startMenu.letterRows[letterCell.modelData] !== undefined
+                    width: Style.space(52)
+                    height: width
+                    radius: Style.cornerRadius
+                    color: letterCell.present && letterMouse.containsMouse
+                      ? Style.hoverFillFor(Color.foreground, Color.accent)
+                      : (letterCell.present ? Util.alpha(Color.popups.text, 0.08) : "transparent")
+
+                    Text {
+                      anchors.centerIn: parent
+                      text: letterCell.modelData
+                      color: letterCell.present ? Color.accent : Util.alpha(Color.popups.text, 0.25)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.body + 2
+                      font.bold: letterCell.present
+                    }
+
+                    MouseArea {
+                      id: letterMouse
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      enabled: letterCell.present
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: {
+                        startMenu.showLetters = false
+                        allList.positionViewAtIndex(startMenu.letterRows[letterCell.modelData], ListView.Beginning)
+                      }
+                    }
                   }
                 }
               }
@@ -2661,14 +2940,17 @@ Item {
                 delegate: Item {
                   id: pinnedTile
                   required property var modelData
+                  required property int index
                   width: pinnedGrid.cellWidth
                   height: pinnedGrid.cellHeight
+                  opacity: startMenu.dragPinId === pinnedTile.modelData.id ? 0.25 : 1
 
                   Rectangle {
                     anchors.fill: parent
                     anchors.margins: 2
                     radius: Style.cornerRadius
-                    color: pinnedMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+                    color: (pinnedMouse.containsMouse || (startMenu.navSection === "pinned" && startMenu.navIndex === pinnedTile.index))
+                      ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
                   }
 
                   Image {
@@ -2706,7 +2988,44 @@ Item {
                     hoverEnabled: true
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     cursorShape: Qt.PointingHandCursor
+                    // Left-drag a pin to reorder it: the ghost (a sibling of
+                    // the grid) follows the pointer, the slot under it is
+                    // outlined, and releasing writes the new order.
+                    preventStealing: true
+                    drag.target: pinGhost
+                    drag.threshold: 8
+                    // A drag still ends in a click event; this stops the drop
+                    // from also launching the app.
+                    property bool wasDragged: false
+
+                    onPressed: function (mouse) {
+                      pinnedMouse.wasDragged = false
+                      if (mouse.button !== Qt.LeftButton) {
+                        pinnedMouse.drag.target = null
+                        return
+                      }
+                      pinnedMouse.drag.target = pinGhost
+                      var origin = pinnedTile.mapToItem(home, 0, 0)
+                      pinGhost.x = origin.x
+                      pinGhost.y = origin.y
+                      pinGhost.width = pinnedTile.width
+                      pinGhost.height = pinnedTile.height
+                      pinGhost.app = pinnedTile.modelData
+                    }
+
+                    drag.onActiveChanged: {
+                      if (pinnedMouse.drag.active) {
+                        pinnedMouse.wasDragged = true
+                        startMenu.dragPinId = pinnedTile.modelData.id
+                        pinGhost.visible = true
+                        startMenu.updatePinDrag()
+                      } else if (startMenu.dragPinId === pinnedTile.modelData.id) {
+                        startMenu.finishPinDrag()
+                      }
+                    }
+
                     onClicked: function (mouse) {
+                      if (pinnedMouse.wasDragged) return
                       if (mouse.button === Qt.RightButton) startMenu.openAppMenu(pinnedTile.modelData, pinnedMouse, mouse)
                       else startMenu.launch(pinnedTile.modelData)
                     }
@@ -2721,6 +3040,45 @@ Item {
                   font.family: Style.font.family
                   font.pixelSize: Style.font.caption
                 }
+              }
+
+              // The icon that follows the pointer while a pin is dragged, and
+              // an outline on the slot it would land in.
+              Item {
+                id: pinGhost
+                property var app: null
+                visible: false
+                z: 100
+                opacity: 0.85
+                onXChanged: if (startMenu.dragPinId !== "") startMenu.updatePinDrag()
+                onYChanged: if (startMenu.dragPinId !== "") startMenu.updatePinDrag()
+
+                Image {
+                  anchors.top: parent.top
+                  anchors.topMargin: Style.spacing.md
+                  anchors.horizontalCenter: parent.horizontalCenter
+                  width: Style.space(36)
+                  height: width
+                  fillMode: Image.PreserveAspectFit
+                  asynchronous: true
+                  sourceSize.width: width * Screen.devicePixelRatio
+                  sourceSize.height: height * Screen.devicePixelRatio
+                  source: pinGhost.app && pinGhost.app.icon ? Quickshell.iconPath(pinGhost.app.icon, true) : ""
+                }
+              }
+
+              Rectangle {
+                id: pinDropMark
+                visible: startMenu.dragPinId !== "" && startMenu.dragPinSlot >= 0
+                z: 99
+                width: pinnedGrid.cellWidth - 4
+                height: pinnedGrid.cellHeight - 4
+                radius: Style.cornerRadius
+                color: "transparent"
+                border.width: 2
+                border.color: Color.accent
+                x: pinnedGrid.x + (startMenu.dragPinSlot % 6) * pinnedGrid.cellWidth + 2
+                y: pinnedGrid.y + Math.floor(startMenu.dragPinSlot / 6) * pinnedGrid.cellHeight - pinnedGrid.contentY + 2
               }
 
               Text {
@@ -2751,6 +3109,7 @@ Item {
                 delegate: Item {
                   id: recentTile
                   required property var modelData
+                  required property int index
                   width: recommendedGrid.cellWidth
                   height: recommendedGrid.cellHeight
 
@@ -2758,7 +3117,8 @@ Item {
                     anchors.fill: parent
                     anchors.margins: 2
                     radius: Style.cornerRadius
-                    color: recentMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+                    color: (recentMouse.containsMouse || (startMenu.navSection === "recent" && startMenu.navIndex === recentTile.index))
+                      ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
                   }
 
                   Image {
@@ -2861,11 +3221,44 @@ Item {
 
               Text {
                 anchors.centerIn: parent
-                text: startMenu.userName.charAt(0)
+                text: startMenu.accountName.charAt(0).toUpperCase()
                 color: Color.background
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body
                 font.bold: true
+              }
+
+              // Your picture, ~/.face, cropped to a circle; the initial above
+              // shows when there isn't one.
+              Item {
+                anchors.fill: parent
+                visible: faceImage.status === Image.Ready
+                layer.enabled: true
+                layer.effect: MultiEffect {
+                  maskEnabled: true
+                  maskSource: avatarMask
+                  maskThresholdMin: 0.5
+                  maskSpreadAtMin: 1.0
+                }
+
+                Image {
+                  id: faceImage
+                  anchors.fill: parent
+                  source: startMenu.hasFace ? "file://" + Quickshell.env("HOME") + "/.face" : ""
+                  fillMode: Image.PreserveAspectCrop
+                  asynchronous: true
+                  cache: false
+                  sourceSize.width: width * Screen.devicePixelRatio
+                  sourceSize.height: height * Screen.devicePixelRatio
+                }
+              }
+
+              Item {
+                id: avatarMask
+                anchors.fill: parent
+                visible: false
+                layer.enabled: true
+                Rectangle { anchors.fill: parent; radius: width / 2 }
               }
             }
 
@@ -2874,7 +3267,7 @@ Item {
               anchors.left: avatar.right
               anchors.leftMargin: Style.spacing.md
               anchors.verticalCenter: parent.verticalCenter
-              text: startMenu.userName
+              text: startMenu.accountName
               color: Color.popups.text
               font.family: Style.font.family
               font.pixelSize: Style.font.body

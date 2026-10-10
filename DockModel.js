@@ -395,10 +395,102 @@ function pushRecent(recent, appId, max) {
   return list.slice(0, max || 6);
 }
 
+// `list` with the entry at `from` moved to index `to` (clamped), for dragging
+// a pinned app to a new place in the Start menu. Returns a new array; a bad
+// `from` leaves the order alone.
+function moveItem(list, from, to) {
+  var items = Array.isArray(list) ? list.slice() : [];
+  if (from < 0 || from >= items.length) return items;
+  var target = Math.max(0, Math.min(to, items.length - 1));
+  var moved = items.splice(from, 1)[0];
+  items.splice(target, 0, moved);
+  return items;
+}
+
+// Arrow-key movement on the Start menu's home screen, which is two grids
+// stacked: Pinned (six columns) over Recommended (two). `sel` is
+// { section: "pinned" | "recent" | "", index }, `counts` { pinned, recent },
+// `key` one of left/right/up/down. Moving off an edge stays put, except
+// down from the last Pinned row into Recommended and up back out of it.
+// With nothing selected, any key selects the first app.
+var PINNED_COLUMNS = 6;
+var RECENT_COLUMNS = 2;
+
+function moveSelection(sel, key, counts) {
+  var pinned = (counts && counts.pinned) || 0;
+  var recent = (counts && counts.recent) || 0;
+  var section = sel && sel.section;
+  var index = sel ? sel.index : -1;
+
+  if (section !== "pinned" && section !== "recent") {
+    if (pinned > 0) return { section: "pinned", index: 0 };
+    if (recent > 0) return { section: "recent", index: 0 };
+    return { section: "", index: -1 };
+  }
+
+  var size = section === "pinned" ? pinned : recent;
+  if (size === 0) return moveSelection({ section: "", index: -1 }, key, counts);
+  index = Math.max(0, Math.min(index, size - 1));
+
+  if (section === "pinned") {
+    if (key === "left") return { section: "pinned", index: Math.max(0, index - 1) };
+    if (key === "right") return { section: "pinned", index: Math.min(pinned - 1, index + 1) };
+    if (key === "up") return { section: "pinned", index: index - PINNED_COLUMNS >= 0 ? index - PINNED_COLUMNS : index };
+    if (key === "down") {
+      if (index + PINNED_COLUMNS < pinned) return { section: "pinned", index: index + PINNED_COLUMNS };
+      if (recent > 0) {
+        var column = index % PINNED_COLUMNS < PINNED_COLUMNS / 2 ? 0 : 1;
+        return { section: "recent", index: Math.min(recent - 1, column) };
+      }
+      return { section: "pinned", index: index };
+    }
+  } else {
+    if (key === "left") return { section: "recent", index: index % RECENT_COLUMNS === 1 ? index - 1 : index };
+    if (key === "right") {
+      return { section: "recent", index: index % RECENT_COLUMNS === 0 && index + 1 < recent ? index + 1 : index };
+    }
+    if (key === "down") return { section: "recent", index: index + RECENT_COLUMNS < recent ? index + RECENT_COLUMNS : index };
+    if (key === "up") {
+      if (index - RECENT_COLUMNS >= 0) return { section: "recent", index: index - RECENT_COLUMNS };
+      if (pinned > 0) {
+        var lastRow = Math.floor((pinned - 1) / PINNED_COLUMNS) * PINNED_COLUMNS;
+        var offset = index % RECENT_COLUMNS === 0 ? 1 : 4;
+        return { section: "pinned", index: Math.min(pinned - 1, lastRow + offset) };
+      }
+      return { section: "recent", index: index };
+    }
+  }
+  return { section: section, index: index };
+}
+
+// For the All apps A-Z jump: each letter's first position in the flattened
+// list (`flat` entries carry a `letter`, as Service.qml builds them).
+function letterIndex(flat) {
+  var list = Array.isArray(flat) ? flat : [];
+  var map = {};
+  for (var i = 0; i < list.length; i++) {
+    if (!(list[i].letter in map)) map[list[i].letter] = i;
+  }
+  return map;
+}
+
+// The account's real name from a `getent passwd` line (the fifth,
+// comma-separated field's first part), else `fallback`.
+function parseFullName(passwdLine, fallback) {
+  var line = String(passwdLine || "").split("\n")[0];
+  var fields = line.split(":");
+  var name = fields.length > 4 ? fields[4].split(",")[0].trim() : "";
+  return name.length > 0 ? name : fallback;
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     buildDockItems: buildDockItems,
     filterApps: filterApps,
+    moveItem: moveItem,
+    moveSelection: moveSelection,
+    letterIndex: letterIndex,
+    parseFullName: parseFullName,
     windowActions: windowActions,
     groupAlphabetically: groupAlphabetically,
     pushRecent: pushRecent,
