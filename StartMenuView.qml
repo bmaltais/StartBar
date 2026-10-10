@@ -33,6 +33,13 @@ Item {
   // instantiates the menu; nothing here reaches for `root` or `panel`.
   required property var taskbar        // DockConfig taskbar view: startCommand, startHoverOpen, alignment, barHeight
   required property var settings       // dockSettings: startPins, recentApps, startPlaces, pins, apply(intent)
+  property var scheme: null            // DockConfig.schemeColors: a fixed dark/light palette, null to follow the theme
+  readonly property color colBackground: scheme ? scheme.background : Color.popups.background
+  readonly property color colText: scheme ? scheme.foreground : Color.popups.text
+  readonly property color colBorder: scheme ? scheme.border : Color.popups.border
+  readonly property color colForeground: scheme ? scheme.foreground : Color.foreground
+  readonly property color colAccent: scheme ? scheme.accent : Color.accent
+  readonly property color colOnAccent: scheme ? scheme.background : Color.background
   required property real panelWidth
   required property real panelHeight
   required property real buttonX       // the Start button's x, for left-aligned icons
@@ -248,9 +255,9 @@ Item {
     id: card
     anchors.fill: parent
     radius: Style.cornerRadius
-    color: Color.popups.background
+    color: startMenu.colBackground
     border.width: Style.normalBorderWidth
-    border.color: Color.popups.border
+    border.color: startMenu.colBorder
 
     HoverHandler {
       id: startMenuHover
@@ -268,7 +275,7 @@ Item {
       // Hyprland's window rounding, which many setups (this one
       // included) set to 0, and a sharp search box looks out of place.
       radius: Math.max(Style.cornerRadius, Style.space(6))
-      color: Util.alpha(Color.popups.text, 0.08)
+      color: Util.alpha(startMenu.colText, 0.08)
 
       // In a hover-opened menu, clicking the search box is how you say
       // "I want to type": it takes the focus grab (and the keyboard).
@@ -292,7 +299,7 @@ Item {
         anchors.left: parent.left
         anchors.leftMargin: Style.spacing.lg + 2
         text: "\uDB80\uDF49"
-        color: Util.alpha(Color.popups.text, 0.7)
+        color: Util.alpha(startMenu.colText, 0.7)
         font.family: Style.font.family
         font.pixelSize: Style.font.body + 4
       }
@@ -303,7 +310,7 @@ Item {
         anchors.left: searchGlyph.right
         anchors.leftMargin: Style.spacing.md
         text: "Search..."
-        color: Util.alpha(Color.popups.text, 0.5)
+        color: Util.alpha(startMenu.colText, 0.5)
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
@@ -314,7 +321,7 @@ Item {
         anchors.leftMargin: searchGlyph.x + searchGlyph.width + Style.spacing.md
         anchors.rightMargin: Style.spacing.md
         verticalAlignment: TextInput.AlignVCenter
-        color: Color.popups.text
+        color: startMenu.colText
         font.family: Style.font.family
         font.pixelSize: Style.font.body
         clip: true
@@ -355,7 +362,7 @@ Item {
             width: parent.width
             height: Style.space(38)
             radius: Style.cornerRadius
-            color: placeMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+            color: placeMouse.containsMouse ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
 
             Image {
               id: placeIcon
@@ -379,7 +386,7 @@ Item {
               anchors.verticalCenter: parent.verticalCenter
               elide: Text.ElideRight
               text: placeRow.modelData.label
-              color: Color.popups.text
+              color: startMenu.colText
               font.family: Style.font.family
               font.pixelSize: Style.font.body
             }
@@ -406,7 +413,7 @@ Item {
       width: startMenu.placesWidth - Style.spacing.md * 2
       height: Style.space(38)
       radius: Style.cornerRadius
-      color: settingsRailMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+      color: settingsRailMouse.containsMouse ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
 
       Image {
         id: settingsRailIcon
@@ -430,7 +437,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         elide: Text.ElideRight
         text: "Settings"
-        color: Color.popups.text
+        color: startMenu.colText
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
@@ -472,7 +479,7 @@ Item {
           height: Style.space(44)
           radius: Style.cornerRadius
           color: (resultList.currentIndex === index || resultMouse.containsMouse)
-            ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+            ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
 
           Image {
             id: resultIcon
@@ -496,7 +503,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             elide: Text.ElideRight
             text: resultRow.modelData.name
-            color: Color.popups.text
+            color: startMenu.colText
             font.family: Style.font.family
             font.pixelSize: Style.font.body
           }
@@ -537,7 +544,7 @@ Item {
             anchors.leftMargin: Style.spacing.sm
             anchors.verticalCenter: parent.verticalCenter
             text: parent.section
-            color: Color.accent
+            color: startMenu.colAccent
             font.family: Style.font.family
             font.pixelSize: Style.font.body
             font.bold: true
@@ -560,7 +567,7 @@ Item {
             anchors.leftMargin: Style.spacing.sm
             anchors.verticalCenter: parent.verticalCenter
             text: "‹  Back"
-            color: Color.popups.text
+            color: startMenu.colText
             font.family: Style.font.family
             font.pixelSize: Style.font.body
 
@@ -581,7 +588,7 @@ Item {
           height: Style.space(40)
           radius: Style.cornerRadius
           color: (allMouse.containsMouse || allList.currentIndex === allRow.index)
-            ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+            ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
 
           Image {
             id: allIcon
@@ -605,7 +612,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             elide: Text.ElideRight
             text: allRow.modelData.name
-            color: Color.popups.text
+            color: startMenu.colText
             font.family: Style.font.family
             font.pixelSize: Style.font.body
           }
@@ -630,7 +637,7 @@ Item {
         visible: startMenu.showLetters && startMenu.showAll && !startMenu.searching
         anchors.fill: parent
         z: 5
-        color: Color.popups.background
+        color: startMenu.colBackground
 
         MouseArea { anchors.fill: parent; onClicked: startMenu.send({ type: "letters", open: false }) }
 
@@ -639,7 +646,7 @@ Item {
           anchors.topMargin: Style.spacing.md
           anchors.horizontalCenter: parent.horizontalCenter
           text: "Jump to"
-          color: Util.alpha(Color.popups.text, 0.6)
+          color: Util.alpha(startMenu.colText, 0.6)
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }
@@ -661,13 +668,13 @@ Item {
               height: width
               radius: Style.cornerRadius
               color: letterCell.present && letterMouse.containsMouse
-                ? Style.hoverFillFor(Color.foreground, Color.accent)
-                : (letterCell.present ? Util.alpha(Color.popups.text, 0.08) : "transparent")
+                ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent)
+                : (letterCell.present ? Util.alpha(startMenu.colText, 0.08) : "transparent")
 
               Text {
                 anchors.centerIn: parent
                 text: letterCell.modelData
-                color: letterCell.present ? Color.accent : Util.alpha(Color.popups.text, 0.25)
+                color: letterCell.present ? startMenu.colAccent : Util.alpha(startMenu.colText, 0.25)
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body + 2
                 font.bold: letterCell.present
@@ -698,7 +705,7 @@ Item {
           anchors.left: parent.left
           anchors.leftMargin: Style.spacing.sm
           text: "Pinned"
-          color: Color.popups.text
+          color: startMenu.colText
           font.family: Style.font.family
           font.pixelSize: Style.font.body
           font.bold: true
@@ -711,13 +718,13 @@ Item {
           width: allAppsLabel.implicitWidth + Style.spacing.md * 2
           height: Style.space(26)
           radius: Style.cornerRadius
-          color: allAppsMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+          color: allAppsMouse.containsMouse ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
 
           Text {
             id: allAppsLabel
             anchors.centerIn: parent
             text: "All apps  ›"
-            color: Color.popups.text
+            color: startMenu.colText
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -758,7 +765,7 @@ Item {
               anchors.margins: 2
               radius: Style.cornerRadius
               color: (pinnedMouse.containsMouse || (startMenu.navSection === "pinned" && startMenu.navIndex === pinnedTile.index))
-                ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+                ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
             }
 
             Image {
@@ -785,7 +792,7 @@ Item {
               horizontalAlignment: Text.AlignHCenter
               elide: Text.ElideRight
               text: pinnedTile.modelData.name
-              color: Color.popups.text
+              color: startMenu.colText
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -845,7 +852,7 @@ Item {
             visible: startMenu.pinnedApps.length === 0
             anchors.centerIn: parent
             text: "Right-click an app in All apps to pin it here"
-            color: Util.alpha(Color.popups.text, 0.5)
+            color: Util.alpha(startMenu.colText, 0.5)
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -885,7 +892,7 @@ Item {
           radius: Style.cornerRadius
           color: "transparent"
           border.width: 2
-          border.color: Color.accent
+          border.color: startMenu.colAccent
           x: pinnedGrid.x + (startMenu.dragPinSlot % StartMenu.PINNED_COLUMNS) * pinnedGrid.cellWidth + 2
           y: pinnedGrid.y + Math.floor(startMenu.dragPinSlot / StartMenu.PINNED_COLUMNS) * pinnedGrid.cellHeight - pinnedGrid.contentY + 2
         }
@@ -897,7 +904,7 @@ Item {
           anchors.left: parent.left
           anchors.leftMargin: Style.spacing.sm
           text: "Recommended"
-          color: Color.popups.text
+          color: startMenu.colText
           font.family: Style.font.family
           font.pixelSize: Style.font.body
           font.bold: true
@@ -927,7 +934,7 @@ Item {
               anchors.margins: 2
               radius: Style.cornerRadius
               color: (recentMouse.containsMouse || (startMenu.navSection === "recent" && startMenu.navIndex === recentTile.index))
-                ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+                ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
             }
 
             Image {
@@ -952,7 +959,7 @@ Item {
               anchors.verticalCenter: parent.verticalCenter
               elide: Text.ElideRight
               text: recentTile.modelData.name
-              color: Color.popups.text
+              color: startMenu.colText
               font.family: Style.font.family
               font.pixelSize: Style.font.body
             }
@@ -976,7 +983,7 @@ Item {
             anchors.leftMargin: Style.spacing.sm
             anchors.top: parent.top
             text: "Apps you open from here show up here"
-            color: Util.alpha(Color.popups.text, 0.5)
+            color: Util.alpha(startMenu.colText, 0.5)
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -992,7 +999,7 @@ Item {
       anchors.right: parent.right
       height: Style.space(56)
       radius: Style.cornerRadius
-      color: Util.alpha(Color.popups.text, 0.05)
+      color: Util.alpha(startMenu.colText, 0.05)
 
       // Clicking the account (avatar or name) opens Lock / Sign out.
       Rectangle {
@@ -1003,7 +1010,7 @@ Item {
         width: userNameText.x + userNameText.width + Style.spacing.md
         height: Style.space(44)
         radius: Style.cornerRadius
-        color: userMouse.containsMouse || startMenu.overlayKind === "user" ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+        color: userMouse.containsMouse || startMenu.overlayKind === "user" ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
 
         MouseArea {
           id: userMouse
@@ -1022,12 +1029,12 @@ Item {
         width: Style.space(32)
         height: width
         radius: width / 2
-        color: Color.accent
+        color: startMenu.colAccent
 
         Text {
           anchors.centerIn: parent
           text: startMenu.accountName.charAt(0).toUpperCase()
-          color: Color.background
+          color: startMenu.colOnAccent
           font.family: Style.font.family
           font.pixelSize: Style.font.body
           font.bold: true
@@ -1073,7 +1080,7 @@ Item {
         anchors.leftMargin: Style.spacing.md
         anchors.verticalCenter: parent.verticalCenter
         text: startMenu.accountName
-        color: Color.popups.text
+        color: startMenu.colText
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
@@ -1086,12 +1093,12 @@ Item {
         width: Style.space(36)
         height: width
         radius: Style.cornerRadius
-        color: powerMouse.containsMouse || startMenu.overlayKind === "power" ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+        color: powerMouse.containsMouse || startMenu.overlayKind === "power" ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
 
         Text {
           anchors.centerIn: parent
           text: "⏻"
-          color: Color.popups.text
+          color: startMenu.colText
           font.pixelSize: Style.font.body + 4
         }
 
@@ -1122,9 +1129,9 @@ Item {
       width: Style.space(190)
       height: overlayColumn.implicitHeight + Style.spacing.xxs * 2
       radius: Style.cornerRadius
-      color: Color.popups.background
+      color: startMenu.colBackground
       border.width: Style.normalBorderWidth
-      border.color: Color.popups.border
+      border.color: startMenu.colBorder
       readonly property bool system: startMenu.overlayKind === "power" || startMenu.overlayKind === "user"
       x: startMenu.overlayKind === "power" ? card.width - width - Style.spacing.md
         : (startMenu.overlayKind === "user" ? Style.spacing.md : (startMenu.overlay ? startMenu.overlay.x : 0))
@@ -1146,14 +1153,14 @@ Item {
             width: overlayColumn.width
             height: Style.spacing.popupRowHeight
             radius: Style.cornerRadius
-            color: overlayMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+            color: overlayMouse.containsMouse ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
 
             Text {
               anchors.left: parent.left
               anchors.leftMargin: Style.spacing.controlPaddingX
               anchors.verticalCenter: parent.verticalCenter
               text: overlayRow.modelData.label
-              color: Color.popups.text
+              color: startMenu.colText
               font.family: Style.font.family
               font.pixelSize: Style.font.body
             }

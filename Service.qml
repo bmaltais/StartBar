@@ -68,6 +68,12 @@ Item {
   readonly property color colMuted: scheme ? scheme.muted : Color.muted
   readonly property color colAccent: scheme ? scheme.accent : Color.accent
   readonly property color colBorder: scheme ? scheme.border : Color.muted
+  // The same choice for what rises from the bar (the Start menu, the menus,
+  // the hover previews and tooltips), which otherwise wear the theme's popup
+  // colours.
+  readonly property color colPopupBackground: scheme ? scheme.background : Color.popups.background
+  readonly property color colPopupText: scheme ? scheme.foreground : Color.popups.text
+  readonly property color colPopupBorder: scheme ? scheme.border : Color.popups.border
 
   // Settings and Pins (docs/SPEC.md "Configuration"): read from the Dock's
   // own entry in the shell config's plugins[] array and written back
@@ -1662,12 +1668,12 @@ Item {
                 visible: dockItem.modelData.app === null
                 anchors.fill: parent
                 radius: Style.cornerRadius
-                color: Color.muted
+                color: root.colMuted
 
                 Text {
                   anchors.centerIn: parent
                   text: dockItem.modelData.letter || ""
-                  color: Color.foreground
+                  color: root.colForeground
                   font.family: Style.font.family
                   font.pixelSize: Style.font.icon
                 }
@@ -1681,9 +1687,9 @@ Item {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 radius: height / 2
-                color: Color.background
+                color: root.colBackground
                 border.width: Style.normalBorderWidth
-                border.color: Color.muted
+                border.color: root.colMuted
                 width: Math.max(height, badgeText.implicitWidth + Style.spacing.xs * 2)
                 height: Style.font.caption + Style.spacing.xxs * 2
 
@@ -1691,7 +1697,7 @@ Item {
                   id: badgeText
                   anchors.centerIn: parent
                   text: dockItem.modelData.badge || ""
-                  color: Color.foreground
+                  color: root.colForeground
                   font.family: Style.font.family
                   font.pixelSize: Style.font.caption
                 }
@@ -1840,12 +1846,12 @@ Item {
           visible: dragGhost.item && dragGhost.item.app === null
           anchors.fill: parent
           radius: Style.cornerRadius
-          color: Color.muted
+          color: root.colMuted
 
           Text {
             anchors.centerIn: parent
             text: (dragGhost.item && dragGhost.item.letter) || ""
-            color: Color.foreground
+            color: root.colForeground
             font.family: Style.font.family
             font.pixelSize: Style.font.icon
           }
@@ -1866,7 +1872,7 @@ Item {
         width: 2
         height: dockRow.height
         radius: 1
-        color: Color.accent
+        color: root.colAccent
       }
 
       // Hover previews (taskbar style, showPreviews): a live thumbnail of the
@@ -1978,9 +1984,9 @@ Item {
         Rectangle {
           anchors.fill: parent
           radius: Style.cornerRadius
-          color: Color.popups.background
+          color: root.colPopupBackground
           border.width: Style.normalBorderWidth
-          border.color: Color.popups.border
+          border.color: root.colPopupBorder
 
           HoverHandler {
             onHoveredChanged: previewState.popupHover(hovered)
@@ -2000,7 +2006,7 @@ Item {
                 width: parent.width - closeButton.width - parent.spacing
                 anchors.verticalCenter: parent.verticalCenter
                 elide: Text.ElideRight
-                color: Color.popups.text
+                color: root.colPopupText
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
                 text: previewState.shownItem ? (dockState.titles[previewState.shownItem.window.id] || previewState.shownItem.window.title || previewState.shownItem.window.class) : ""
@@ -2016,7 +2022,7 @@ Item {
                 Text {
                   anchors.centerIn: parent
                   text: "\u2715"
-                  color: Color.popups.text
+                  color: root.colPopupText
                   font.pixelSize: Style.font.caption
                 }
 
@@ -2104,6 +2110,7 @@ Item {
 
         taskbar: root.taskbar
         settings: dockSettings
+        scheme: root.scheme
         panelWidth: panel.width
         panelHeight: panel.height
         buttonX: startButton.x
@@ -2171,9 +2178,9 @@ Item {
         Rectangle {
           anchors.fill: parent
           radius: Style.cornerRadius
-          color: Color.popups.background
+          color: root.colPopupBackground
           border.width: Style.normalBorderWidth
-          border.color: Color.popups.border
+          border.color: root.colPopupBorder
 
           Column {
             id: barMenuColumn
@@ -2202,7 +2209,7 @@ Item {
                   anchors.left: parent.left
                   anchors.right: parent.right
                   height: 1
-                  color: Util.alpha(Color.popups.border, 0.8)
+                  color: Util.alpha(root.colPopupBorder, 0.8)
                 }
 
                 Rectangle {
@@ -2210,14 +2217,14 @@ Item {
                   width: parent.width
                   height: Style.spacing.popupRowHeight
                   radius: Style.cornerRadius
-                  color: barRowMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+                  color: barRowMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : "transparent"
 
                   Text {
                     anchors.left: parent.left
                     anchors.leftMargin: Style.spacing.controlPaddingX
                     anchors.verticalCenter: parent.verticalCenter
                     text: barRow.modelData.checked ? "\u2713" : ""
-                    color: Color.popups.text
+                    color: root.colPopupText
                     font.family: Style.font.family
                     font.pixelSize: Style.font.body
                   }
@@ -2230,7 +2237,7 @@ Item {
                     anchors.rightMargin: Style.spacing.controlPaddingX
                     elide: Text.ElideRight
                     text: barRow.modelData.label
-                    color: Color.popups.text
+                    color: root.colPopupText
                     font.family: Style.font.family
                     font.pixelSize: Style.font.body
                   }
@@ -2414,9 +2421,9 @@ Item {
         Rectangle {
           anchors.fill: parent
           radius: Style.cornerRadius
-          color: Color.popups.background
+          color: root.colPopupBackground
           border.width: Style.normalBorderWidth
-          border.color: Color.popups.border
+          border.color: root.colPopupBorder
 
           HoverHandler {
             id: menuHover
@@ -2449,7 +2456,7 @@ Item {
                   anchors.left: parent.left
                   anchors.right: parent.right
                   height: 1
-                  color: Util.alpha(Color.popups.border, 0.8)
+                  color: Util.alpha(root.colPopupBorder, 0.8)
                 }
 
                 Rectangle {
@@ -2461,7 +2468,7 @@ Item {
                   // containsMouse, not a HoverHandler, to match Button.qml's
                   // own hover-fill convention.
                   color: menuRow.modelData.enabled && rowMouse.containsMouse
-                    ? Style.hoverFillFor(Color.foreground, Color.accent)
+                    ? Style.hoverFillFor(root.colForeground, root.colAccent)
                     : "transparent"
 
                   Text {
@@ -2472,7 +2479,7 @@ Item {
                     anchors.rightMargin: Style.spacing.controlPaddingX
                     elide: Text.ElideRight
                     text: menuRow.modelData.label
-                    color: menuRow.modelData.enabled ? Color.popups.text : Color.muted
+                    color: menuRow.modelData.enabled ? root.colPopupText : root.colMuted
                     font.family: Style.font.family
                     font.pixelSize: Style.font.body
                   }

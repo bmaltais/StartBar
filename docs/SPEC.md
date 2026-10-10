@@ -67,7 +67,7 @@ Stored in the Dock's entry in Omarchy's shell config (`~/.config/omarchy/shell.j
 - Clock (`showClock`, true) at the right end.
 - Indicators: a small pill under each Window Item; a wide accent pill for the Active Window.
 - Previews (`showPreviews`, true): hovering a Window Item shows a live thumbnail with title, a close button, and click-to-focus. Pins without Windows keep the name tooltip. The thumbnail keeps the Window's own aspect ratio inside a fixed-size box and holds its last good frame if the live capture blanks. With `previewWarpPointer` (true) a click on the thumbnail also moves the pointer to the middle of that Window; false only focuses it. Clicking an Item itself never moves the pointer.
-- `colorScheme`: `theme` (default), `dark`, `light` fixed palettes.
+- `colorScheme`: `theme` (default), `dark`, `light` fixed palettes, for the bar and everything that rises from it (Start menu, menus, previews).
 - Right click on the bar (not on an Item) opens a quick menu of the common options in divided groups: icon alignment; colour scheme; the Start button, built-in or Omarchy Start menu and open-on-hover; then auto-hide, clock, previews, pointer-follows-preview, workspace badge and transparent background; then Settings…. Choosing a row writes the setting and closes the menu; the bar updates live. Its last row, "Settings…", opens the full settings window (below). In dock style the same menu holds "Switch to taskbar style" and "Settings…", opened by right-clicking the gap between Items or the very bottom edge of the screen (the Reveal Strip).
 - `autoHide` (false): when true the bar uses the Dock's Reveal Strip and Hidden/Revealed rules unchanged.
 

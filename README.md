@@ -59,14 +59,12 @@ It starts as a floating dock at the bottom edge: rest the pointer there to revea
 
 <table>
   <tr>
-    <th>Theme colours</th>
-    <th>Dark</th>
-    <th>Light</th>
+    <th>Light colours</th>
+    <th>Dark colours</th>
   </tr>
   <tr valign="top">
-    <td><img src="screenshots/taskbar-theme.png" alt="The taskbar following the Omarchy theme"></td>
-    <td><img src="screenshots/taskbar-dark.png" alt="The taskbar with the fixed dark colours"></td>
-    <td><img src="screenshots/taskbar-light.png" alt="The taskbar with the fixed light colours"></td>
+    <td><img src="screenshots/start-menu-light.png" alt="The taskbar and Start menu with the fixed light colours"></td>
+    <td><img src="screenshots/start-menu-dark.png" alt="The taskbar and Start menu with the fixed dark colours"></td>
   </tr>
 </table>
 

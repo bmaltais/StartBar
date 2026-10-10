@@ -43,7 +43,7 @@ Set `"style": "taskbar"` for the Windows 11-like bar. The default, `"dock"`, is 
 | `barHeight` | `48` | Bar height in px |
 | `opacity` | `0.9` | Bar background opacity, 0 to 1 |
 | `transparent` | `false` | No bar background, icons only |
-| `colorScheme` | `theme` | `theme` (follow Omarchy), `dark` or `light` |
+| `colorScheme` | `theme` | `theme` (follow Omarchy), `dark` or `light`; applies to the bar, the Start menu, the menus and the previews |
 | `showStart` | `true` | Show the Start button |
 | `startCommand` | `omarchy-menu toggle apps` | What the Start button runs; `builtin` opens the built-in Start menu |
 | `startHoverOpen` | `true` | With the built-in menu, resting the pointer on the Start button opens it after a moment; it closes when you leave; typing (or clicking its search box) keeps it open; moving to another icon closes it |
