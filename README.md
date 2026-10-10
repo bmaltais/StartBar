@@ -57,6 +57,19 @@ It starts as a floating dock at the bottom edge: rest the pointer there to revea
   </tr>
 </table>
 
+<table>
+  <tr>
+    <th>Theme colours</th>
+    <th>Dark</th>
+    <th>Light</th>
+  </tr>
+  <tr valign="top">
+    <td><img src="screenshots/taskbar-theme.png" alt="The taskbar following the Omarchy theme"></td>
+    <td><img src="screenshots/taskbar-dark.png" alt="The taskbar with the fixed dark colours"></td>
+    <td><img src="screenshots/taskbar-light.png" alt="The taskbar with the fixed light colours"></td>
+  </tr>
+</table>
+
 ### Start menu from the keyboard
 
 Bind a key to toggle the menu, then type to search, use the arrow keys to move and Enter to launch. Escape backs out one step at a time.
