@@ -93,9 +93,9 @@ It restarts the shell with this checkout, fails if the plugin logs anything, and
 
 ### Retaking screenshots
 
-The README images are in `screenshots/`. Retake one only when its subject changed: a new row in the settings window changes `settings.png`; a new look for the Dock or Start menu changes `taskbar.png` and the `start-menu*.png` and `search.png` files.
+The README images are in `screenshots/`. Retake one only when its subject changed: a new row in the settings window changes `settings.png`; a new look for the Dock or Start menu changes `taskbar.png` and the `start-menu*.png` and `search.png` files; the Preview and the bar's menu have `preview.png` and `right-click.png`.
 
-`settings.png` is the settings window cropped out of the smoke run's `settings-window.png`: `magick <smoke dir>/settings-window.png -crop 640x760+640+160 +repage screenshots/settings.png`. The smoke run shows the Dark scheme at full opacity; the other files need the state they show (a hover preview, the right-click menu), set up by hand.
+Run `scripts/screenshots.sh` (needs `ydotool`; see `docs/hyprland-notes.md` "Moving the pointer"). It retakes every image the same way: on an empty workspace, with two throwaway windows for the Preview, the real pointer for the hover and the right-click, and the crops anchored to the monitor's bottom-left corner like the current files. It leaves the results in a scratch directory and prints each size beside the file it would replace; `--only NAME,NAME` takes some, `--install` copies them over `screenshots/`. Look at every image before committing it: the Dock shows your pins and open windows, and the wallpaper and theme are yours, so the images change from release to release for those reasons alone. The Preview shows the throwaway windows' group with a letter tile, not an App's icon.
 
 Releasing is described in [docs/agents/release.md](docs/agents/release.md).
 
