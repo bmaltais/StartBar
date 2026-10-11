@@ -172,7 +172,7 @@ These need `"autoHide": true`. With it off the Dock is always visible.
 - [ ] Unpinning an App with open Windows leaves them as ordinary Window Items.
 - [ ] A Pin whose App is no longer installed shows a Letter Tile with a "missing" tooltip and stays until Unpin.
 - [ ] Pins survive an `omarchy restart shell`.
-- [ ] Dragging an Item within the Dock shows a live insertion preview and drops it at the new position.
+- [ ] Pressing an Item shrinks it; dragging it lifts it a little bigger than the rest, the Items in between step aside, and it stops at the first and last slot (never over the Start button) while the pointer goes on. Dropping puts it there. Dragging it up off the bar still unpins a pinned Item.
 - [ ] A Placed Pin keeps its position across an `omarchy restart shell`.
 - [ ] A Placed Window Item keeps its position until that Window closes, then falls back to Launch Order.
 - [ ] Dragging one Window of a pinned App with several Windows moves only that Window.

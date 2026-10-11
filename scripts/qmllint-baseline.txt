@@ -22,6 +22,7 @@ Service.qml	unqualified	dockRow
 Service.qml	unqualified	dockSettings
 Service.qml	unqualified	dockState
 Service.qml	unqualified	dragGhost
+Service.qml	unqualified	dragProbe
 Service.qml	unqualified	groupBlock
 Service.qml	unqualified	icon
 Service.qml	unqualified	listBox

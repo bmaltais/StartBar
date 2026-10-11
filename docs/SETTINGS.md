@@ -88,7 +88,7 @@ Pins persist across restarts in the shell config above (the `pins` array on the 
 
 ## Drag behaviour
 
-- **Drag within the Dock** reorders Items, with a live insertion preview. The dropped position becomes Placed: a Placed Pin keeps that position permanently; a Placed Window Item keeps it only until that Window closes, after which the Item falls back to Launch Order.
+- **Drag within the Dock** reorders Items: the Items in between step aside to show where it would land, and the dragged one stops at the first or last slot. The dropped position becomes Placed: a Placed Pin keeps that position permanently; a Placed Window Item keeps it only until that Window closes, after which the Item falls back to Launch Order.
 - Dragging one Window of a pinned App (when it has more than one open) moves only that Window; its siblings stay in the Pin's slot.
 - **Drag an Item out of the Dock** (release outside its bounds): if the Item's App is pinned, this unpins it — the Windows remain as ordinary Window Items. If the Item is an unpinned Window Item, it snaps back to where it was.
 - The Dock stays Revealed for the whole of a drag and starts its hide timer only after the drop.
