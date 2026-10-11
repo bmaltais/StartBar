@@ -24,22 +24,24 @@ test("a leftover style: dock does not force auto-hide on", () => {
   assert.equal(effectiveTaskbar({ style: "dock", autoHide: true }).autoHide, true);
 });
 
-test("bar defaults: always visible, centred, theme colours, Start and clock shown", () => {
+test("bar defaults: always visible, left-aligned, theme colours, built-in Start menu, no clock, grouped windows, no hover-open", () => {
   assert.deepEqual(effectiveTaskbar({}), {
-    alignment: "center",
+    alignment: "left",
     colorScheme: "theme",
     autoHide: false,
     barHeight: 48,
     opacity: 0.9,
     transparent: false,
     showStart: true,
-    startCommand: "omarchy-menu toggle apps",
+    startCommand: "builtin",
     startIcon: "grid",
-    showClock: true,
+    showClock: false,
     showPreviews: true,
     previewWarpPointer: true,
+    previewPeek: true,
     showWorkspaceBadge: false,
-    startHoverOpen: true,
+    groupWindows: true,
+    startHoverOpen: false,
   });
 });
 
@@ -68,8 +70,11 @@ test("the bar honours valid values and autoHide", () => {
   assert.equal(s.startIcon, "omarchy");
   assert.equal(s.showClock, false);
   assert.equal(s.showPreviews, false);
-  assert.equal(effectiveTaskbar({ startHoverOpen: false }).startHoverOpen, false);
-  assert.equal(effectiveTaskbar({ startHoverOpen: 1 }).startHoverOpen, true);
+  assert.equal(effectiveTaskbar({ startHoverOpen: true }).startHoverOpen, true);
+  assert.equal(effectiveTaskbar({ startHoverOpen: 1 }).startHoverOpen, false);
+  assert.equal(effectiveTaskbar({ groupWindows: false }).groupWindows, false);
+  assert.equal(effectiveTaskbar({ groupWindows: "no" }).groupWindows, true);
+  assert.equal(effectiveTaskbar({ alignment: "center" }).alignment, "center");
   assert.equal(effectiveTaskbar({ showWorkspaceBadge: true }).showWorkspaceBadge, true);
   assert.equal(effectiveTaskbar({ showWorkspaceBadge: true }).showWorkspaceBadge, true);
   assert.equal(effectiveTaskbar({ showWorkspaceBadge: "yes" }).showWorkspaceBadge, false);
@@ -87,11 +92,11 @@ test("unusable taskbar values fall back to defaults; opacity is clamped to 0..1"
     startIcon: 5,
     showStart: "yes",
   });
-  assert.equal(s.alignment, "center");
+  assert.equal(s.alignment, "left");
   assert.equal(s.colorScheme, "theme");
   assert.equal(s.barHeight, 48);
   assert.equal(s.opacity, 1);
-  assert.equal(s.startCommand, "omarchy-menu toggle apps");
+  assert.equal(s.startCommand, "builtin");
   assert.equal(s.startIcon, "grid");
   assert.equal(s.showStart, true);
   assert.equal(effectiveTaskbar({ opacity: 0 }).opacity, 0);
@@ -142,8 +147,10 @@ test("each row's patch sets its own key; toggles flip the current value", () => 
   assert.deepEqual(patch("Clock"), { showClock: false });
   assert.deepEqual(patch("Window previews"), { showPreviews: false });
   assert.deepEqual(patch("Pointer follows preview click"), { previewWarpPointer: false });
+  assert.deepEqual(patch("Show window on preview hover"), { previewPeek: false });
   assert.deepEqual(patch("Workspace badge"), { showWorkspaceBadge: true });
-  assert.deepEqual(patch("Start menu opens on hover"), { startHoverOpen: false });
+  assert.deepEqual(patch("Group windows of one app"), { groupWindows: false });
+  assert.deepEqual(patch("Start menu opens on hover"), { startHoverOpen: true });
   assert.deepEqual(patch("Transparent background"), { transparent: true });
   assert.deepEqual(patch("Start button"), { showStart: false });
   assert.equal(rows.some((r) => /style/i.test(r.label)), false);
@@ -157,13 +164,14 @@ test("groups are marked so the menu can draw a divider before each new one", () 
 });
 
 test("the menu can switch the Start button between the built-in menu and the Omarchy menu", () => {
-  const omarchy = barMenuRows(effectiveTaskbar({}));
+  const omarchy = barMenuRows(effectiveTaskbar({ startCommand: "omarchy-menu toggle apps" }));
   assert.equal(omarchy.find((r) => r.label === "Built-in Start menu").checked, false);
   assert.equal(omarchy.find((r) => r.label === "Omarchy menu on Start").checked, true);
   assert.deepEqual(omarchy.find((r) => r.label === "Built-in Start menu").patch, { startCommand: "builtin" });
 
-  const builtin = barMenuRows(effectiveTaskbar({ startCommand: "builtin" }));
+  const builtin = barMenuRows(effectiveTaskbar({}));
   assert.equal(builtin.find((r) => r.label === "Built-in Start menu").checked, true);
+  assert.equal(builtin.find((r) => r.label === "Omarchy menu on Start").checked, false);
   assert.deepEqual(builtin.find((r) => r.label === "Omarchy menu on Start").patch, { startCommand: "omarchy-menu toggle apps" });
 });
 

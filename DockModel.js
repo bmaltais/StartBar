@@ -1,4 +1,4 @@
-// Pure Dock model (see docs/SPEC.md, milestones M2-M4; vocabulary in
+// Pure Dock model (see docs/SPEC.md; vocabulary in
 // CONTEXT.md). No Quickshell or QML imports, so the exact same file loads
 // as a JS import inside the shell and via `require` under Node for the
 // test suite.
@@ -110,7 +110,7 @@ function toPinItem(pinId, app) {
 // `openedAt` first, and each new Window is inserted right after the last
 // Item of its own App (or, for a Window whose App can't be resolved, the
 // last Item sharing its window class) instead of at the end of the list.
-function buildWindowItems(windows, resolveApp, pinned) {
+function buildWindowItems(windows, resolveApp, pinned, grouped) {
   var ordered = windows.slice().sort(function (a, b) {
     return a.openedAt - b.openedAt;
   });
@@ -136,7 +136,66 @@ function buildWindowItems(windows, resolveApp, pinned) {
     groupEnd[groupKey] = insertAt;
   }
 
-  return items;
+  return grouped ? groupWindowItems(items) : items;
+}
+
+// Folds the Window Items of one App into a single Group Item (docs/SPEC.md
+// "Grouping"). Launch Order keeps an App's Windows adjacent, so merging
+// neighbours that share a group key is enough. Every Item gains `windows`
+// (its Windows in Launch Order) and `count`. A Group Item of several
+// Windows is keyed "group:<group key>" and stands for its Active Window, or
+// else its most recently opened one; it is active or in Attention when any
+// of its Windows is, and wears a workspace badge only when they all share
+// one. A lone Window keeps its plain Window Item key.
+function groupWindowItems(items) {
+  var result = [];
+  var i = 0;
+  while (i < items.length) {
+    var first = items[i];
+    var key = groupKeyFor(first.window, first.app);
+    var members = [first];
+    while (
+      i + members.length < items.length &&
+      groupKeyFor(items[i + members.length].window, items[i + members.length].app) === key
+    ) {
+      members.push(items[i + members.length]);
+    }
+    i += members.length;
+
+    var windows = members.map(function (m) {
+      return m.window;
+    });
+    if (members.length === 1) {
+      first.windows = windows;
+      first.count = 1;
+      result.push(first);
+      continue;
+    }
+
+    var rep = members[members.length - 1];
+    for (var m = 0; m < members.length; m++) {
+      if (members[m].active) rep = members[m];
+    }
+    var badge = members.every(function (x) {
+      return x.badge === first.badge;
+    })
+      ? first.badge
+      : "";
+    var group = Object.assign({}, rep, {
+      key: "group:" + key,
+      windows: windows,
+      count: members.length,
+      active: members.some(function (x) {
+        return x.active;
+      }),
+      attention: members.some(function (x) {
+        return x.attention;
+      }),
+      badge: badge,
+    });
+    result.push(group);
+  }
+  return result;
 }
 
 // Splits windows into the ones whose App is a Pin (bucketed by which Pin,
@@ -217,12 +276,14 @@ function applyPlacements(items, placements) {
 // `placements` (CONTEXT.md "Placed") is applied over that as a final pass.
 // `pins`, `resolveAppById`, and `placements` are all optional; without
 // them this is Launch Order alone, unchanged from before Pins existed.
-function buildDockItems(windows, resolveApp, pins, resolveAppById, placements) {
+// `grouped` (the `groupWindows` setting) folds each App's Windows into one
+// Group Item.
+function buildDockItems(windows, resolveApp, pins, resolveAppById, placements, grouped) {
   var pinIds = Array.isArray(pins) ? pins : [];
   var items;
 
   if (pinIds.length === 0) {
-    items = buildWindowItems(windows, resolveApp);
+    items = buildWindowItems(windows, resolveApp, false, grouped);
   } else {
     var resolvePinnedApp = typeof resolveAppById === "function"
       ? resolveAppById
@@ -235,13 +296,13 @@ function buildDockItems(windows, resolveApp, pins, resolveAppById, placements) {
     for (var s = 0; s < pinIds.length; s++) {
       var windowsForSlot = partitioned.pinnedSlots[s];
       if (windowsForSlot.length > 0) {
-        items = items.concat(buildWindowItems(windowsForSlot, resolveApp, true));
+        items = items.concat(buildWindowItems(windowsForSlot, resolveApp, true, grouped));
       } else {
         items.push(toPinItem(pinIds[s], resolvePinnedApp(pinIds[s])));
       }
     }
 
-    items = items.concat(buildWindowItems(partitioned.unpinned, resolveApp));
+    items = items.concat(buildWindowItems(partitioned.unpinned, resolveApp, false, grouped));
   }
 
   return applyPlacements(items, placements);

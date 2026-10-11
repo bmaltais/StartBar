@@ -1,0 +1,60 @@
+Service.qml	import	Failed to import qs.Commons. Are your import paths set up properly?
+Service.qml	import	Failed to import qs.Ui. Are your import paths set up properly?
+Service.qml	import	PanelToolTip was not found. Did you add all imports and dependencies?
+Service.qml	import	Warnings occurred while importing module "qs.Commons":
+Service.qml	import	Warnings occurred while importing module "qs.Ui":
+Service.qml	missing-type	No type found for property "adjustment". This may be due to a missing import statement or incomplete qmltypes files.
+Service.qml	missing-type	No type found for property "edges". This may be due to a missing import statement or incomplete qmltypes files.
+Service.qml	missing-type	No type found for property "gravity". This may be due to a missing import statement or incomplete qmltypes files.
+Service.qml	signal-handler-parameters	Type QProcess::ExitStatus of parameter exitStatus in signal called exited was not found, but is required to compile onExited. Did you add all imports and dependencies?
+Service.qml	syntax	id declarations are only allowed in objects
+Service.qml	uncreatable-type	Type PanelWindow is not creatable.
+Service.qml	unqualified	Color
+Service.qml	unqualified	Style
+Service.qml	unqualified	Util
+Service.qml	unqualified	barMenu
+Service.qml	unqualified	barMenuColumn
+Service.qml	unqualified	choiceEditor
+Service.qml	unqualified	choices
+Service.qml	unqualified	contextMenu
+Service.qml	unqualified	dockItem
+Service.qml	unqualified	dockRow
+Service.qml	unqualified	dockSettings
+Service.qml	unqualified	dockState
+Service.qml	unqualified	dragGhost
+Service.qml	unqualified	groupBlock
+Service.qml	unqualified	icon
+Service.qml	unqualified	listBox
+Service.qml	unqualified	listEditor
+Service.qml	unqualified	menuAnchor
+Service.qml	unqualified	menuColumn
+Service.qml	unqualified	panel
+Service.qml	unqualified	previewAnchor
+Service.qml	unqualified	previewPopup
+Service.qml	unqualified	previewState
+Service.qml	unqualified	resolveApp
+Service.qml	unqualified	resolveAppById
+Service.qml	unqualified	revealState
+Service.qml	unqualified	root
+Service.qml	unqualified	settingsColumn
+Service.qml	unqualified	settingsWindow
+Service.qml	unqualified	sliderEditor
+Service.qml	unqualified	startButton
+Service.qml	unqualified	stepperEditor
+Service.qml	unqualified	switchEditor
+Service.qml	unqualified	textEditor
+Service.qml	unqualified	userDirsForSettings
+Service.qml	unresolved-type	Type "PopupAnchor" of property "anchor" not found. This is likely due to a missing dependency entry or a type not being exposed declaratively.
+StartMenuView.qml	signal-handler-parameters	Type QProcess::ExitStatus of parameter exitStatus in signal called exited was not found, but is required to compile onExited. Did you add all imports and dependencies?
+StartMenuView.qml	unqualified	Color
+StartMenuView.qml	unqualified	Style
+StartMenuView.qml	unqualified	Util
+StartMenuView.qml	unqualified	allList
+StartMenuView.qml	unqualified	avatarMask
+StartMenuView.qml	unqualified	home
+StartMenuView.qml	unqualified	overlayColumn
+StartMenuView.qml	unqualified	pinGhost
+StartMenuView.qml	unqualified	pinnedGrid
+StartMenuView.qml	unqualified	recommendedGrid
+StartMenuView.qml	unqualified	resultList
+StartMenuView.qml	unqualified	startMenu

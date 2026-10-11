@@ -8,7 +8,7 @@ All settings are stored (along with Pins and Placed Pin positions) in the Dock's
 
 ### The bar
 
-The Dock is a Windows 11-style bar along the bottom edge of every monitor. A leftover `"style"` key from older versions (which also had a floating dock style) is ignored.
+The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 
 ```json
 {
@@ -25,29 +25,31 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor. A lef
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `alignment` | `center` | `center` or `left` for the Start button and icons |
+| `alignment` | `left` | `left` or `center` for the Start button and icons |
 | `autoHide` | `false` | Hide the bar until the pointer rests on the bottom edge |
 | `revealDelayMs` | `200` | With auto-hide: how long the pointer must rest on the Reveal Strip before the bar shows, in ms |
 | `hideDelayMs` | `300` | With auto-hide: how long after the pointer leaves the bar before it hides, in ms |
 | `iconSize` | `48` | Largest icon size in px; icons are also limited to `barHeight - 20` and shrink further to fit when there are many windows |
 | `showWorkspaceBadge` | `false` | Workspace number or name over each window's icon |
+| `groupWindows` | `true` | One stacked icon per app with two or more windows; hover it to pick a window from the previews |
 | `barHeight` | `48` | Bar height in px |
 | `opacity` | `0.9` | Bar background opacity, 0 to 1 |
 | `transparent` | `false` | No bar background, icons only |
 | `colorScheme` | `theme` | `theme` (follow Omarchy), `dark` or `light`; applies to the bar, the Start menu, the menus and the previews |
 | `showStart` | `true` | Show the Start button |
-| `startCommand` | `omarchy-menu toggle apps` | What the Start button runs; `builtin` opens the built-in Start menu |
-| `startHoverOpen` | `true` | With the built-in menu, resting the pointer on the Start button opens it after a moment; it closes when you leave; typing (or clicking its search box) keeps it open; moving to another icon closes it |
+| `startCommand` | `builtin` | What the Start button runs; `builtin` opens the built-in Start menu, `omarchy-menu toggle apps` the Omarchy menu |
+| `startHoverOpen` | `false` | With the built-in menu, resting the pointer on the Start button opens it after a moment; it closes when you leave; typing (or clicking its search box) keeps it open; moving to another icon closes it |
 | `startIcon` | `grid` | `grid` (drawn in QML), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path |
-| `showClock` | `true` | Clock at the right end |
+| `showClock` | `false` | Clock at the right end |
 | `showPreviews` | `true` | Hover thumbnails with a close button |
+| `previewPeek` | `true` | Hovering a preview thumbnail focuses that window to show it (switching workspace if needed); a maximized or full-screen window covering it is un-maximized for the peek; moving away restores the focus, workspaces and maximized state; clicking keeps it |
 | `previewWarpPointer` | `true` | Clicking a preview also moves the pointer to the middle of that window |
 
-Any numeric value that's missing or not a usable positive number falls back to its default.
+Any numeric value that's missing or not a usable positive number falls back to its default. A `"style"` key left over from versions before 1.1.0 is ignored.
 
 ### Start menu
 
-Set `"startCommand": "builtin"` and the Start button opens a menu anchored right above it (the Omarchy menu always centres on screen and can't be anchored):
+With `"startCommand": "builtin"`, the default, the Start button opens a menu anchored right above it (the Omarchy menu always centres on screen and can't be anchored):
 
 - Opens on a click, or by resting the pointer on the Start button (`startHoverOpen`); a hover-opened menu goes away when you move off it, until you start typing or click its search box, which keeps it open. Clicking the grid icon doesn't keep it, and moving on to another icon closes it so that icon's preview shows.
 - **Search** at the top: type to filter every installed app; Up/Down and Enter launch; Escape backs out one layer at a time.
@@ -75,7 +77,7 @@ Right-click an empty part of the bar and choose **Settings…** (or run `omarchy
 ### Menus
 
 - **Right-click an icon**: Pin/Unpin, New Window and the app's own actions; for a window, Maximize/Restore, Full screen/Exit full screen, Float/Tile, and when floating Center and Pin on top; Move to scratchpad; then Close Window. The menu stays open until you pick a row, click outside it, or move the pointer off it.
-- **Right-click the bar** (an empty part) opens a quick menu of the common options (alignment, colours, Start menu, auto-hide, clock, previews...). Its last row, **Settings…**, opens the full settings window.
+- **Right-click the bar** (an empty part) opens a menu of the common options (alignment, colours, Start menu, auto-hide, clock, previews...). Its last row, **Settings…**, opens the full settings window.
 
 ## Pinning
 

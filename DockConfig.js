@@ -98,7 +98,8 @@ function effectivePlacements(entry) {
 // The bar's settings (docs/SPEC.md "The bar").
 var DEFAULT_BAR_HEIGHT = 48;
 var DEFAULT_OPACITY = 0.9;
-var DEFAULT_START_COMMAND = "omarchy-menu toggle apps";
+var DEFAULT_START_COMMAND = "builtin";
+var OMARCHY_MENU_COMMAND = "omarchy-menu toggle apps";
 var DEFAULT_START_ICON = "grid";
 
 function oneOf(value, allowed, fallback) {
@@ -121,7 +122,7 @@ function opacityOr(value, fallback) {
 function effectiveTaskbar(entry) {
   var source = isPlainObject(entry) ? entry : {};
   return {
-    alignment: oneOf(source.alignment, ["center", "left"], "center"),
+    alignment: oneOf(source.alignment, ["center", "left"], "left"),
     colorScheme: oneOf(source.colorScheme, ["theme", "dark", "light"], "theme"),
     autoHide: booleanOr(source.autoHide, false),
     barHeight: positiveNumberOr(source.barHeight, DEFAULT_BAR_HEIGHT),
@@ -130,11 +131,13 @@ function effectiveTaskbar(entry) {
     showStart: booleanOr(source.showStart, true),
     startCommand: nonBlankStringOr(source.startCommand, DEFAULT_START_COMMAND),
     startIcon: nonBlankStringOr(source.startIcon, DEFAULT_START_ICON),
-    showClock: booleanOr(source.showClock, true),
+    showClock: booleanOr(source.showClock, false),
     showPreviews: booleanOr(source.showPreviews, true),
     previewWarpPointer: booleanOr(source.previewWarpPointer, true),
+    previewPeek: booleanOr(source.previewPeek, true),
     showWorkspaceBadge: booleanOr(source.showWorkspaceBadge, false),
-    startHoverOpen: booleanOr(source.startHoverOpen, true),
+    groupWindows: booleanOr(source.groupWindows, true),
+    startHoverOpen: booleanOr(source.startHoverOpen, false),
   };
 }
 
@@ -210,7 +213,7 @@ function barMenuRows(taskbar) {
     {
       label: "Omarchy menu on Start",
       checked: taskbar.startCommand !== "builtin",
-      patch: { startCommand: DEFAULT_START_COMMAND },
+      patch: { startCommand: OMARCHY_MENU_COMMAND },
       group: 2,
     },
     toggle("Start menu opens on hover", "startHoverOpen", 2),
@@ -218,7 +221,9 @@ function barMenuRows(taskbar) {
     toggle("Clock", "showClock", 3),
     toggle("Window previews", "showPreviews", 3),
     toggle("Pointer follows preview click", "previewWarpPointer", 3),
+    toggle("Show window on preview hover", "previewPeek", 3),
     toggle("Workspace badge", "showWorkspaceBadge", 3),
+    toggle("Group windows of one app", "groupWindows", 3),
     toggle("Transparent background", "transparent", 3),
     SETTINGS_ROW,
   ];
@@ -273,7 +278,9 @@ function settingsSchema() {
         { key: "revealDelayMs", label: "Reveal delay", type: "int", min: 50, max: 2000, step: 50, unit: "ms", hint: "Pointer rests on the edge this long" },
         { key: "hideDelayMs", label: "Hide delay", type: "int", min: 50, max: 3000, step: 50, unit: "ms", hint: "After the pointer leaves" },
         { key: "showClock", label: "Clock", type: "bool" },
+        { key: "groupWindows", label: "Group windows of one app", type: "bool", hint: "One stacked icon per app; hover it to pick a window" },
         { key: "showPreviews", label: "Window previews", type: "bool", hint: "Hover thumbnails" },
+        { key: "previewPeek", label: "Show window on preview hover", type: "bool", hint: "Hovering a thumbnail brings that window into view; moving away puts things back" },
         { key: "previewWarpPointer", label: "Pointer follows preview click", type: "bool", hint: "Move the pointer into the window you click" },
       ],
     },

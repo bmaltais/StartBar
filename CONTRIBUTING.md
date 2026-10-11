@@ -1,6 +1,6 @@
 # Contributing to StartBar
 
-The agreed behaviour is in [docs/SPEC.md](docs/SPEC.md) and the vocabulary in [CONTEXT.md](CONTEXT.md). Work is tracked in the GitHub issues.
+The agreed behaviour is in [docs/SPEC.md](docs/SPEC.md) and the vocabulary in [CONTEXT.md](CONTEXT.md). Candidates that are not issues yet are in [docs/IDEAS.md](docs/IDEAS.md). Accepted work is tracked in the GitHub issues.
 
 ## Development install
 
@@ -35,115 +35,154 @@ Changes to `Service.qml` or `StartMenuView.qml` (loaded as part of the `keepLoad
 
 ### Tests
 
-The Dock model (`DockModel.js`), Start menu logic (`StartMenu.js`) and settings module (`DockConfig.js`) are pure JavaScript with no Quickshell imports, so they run under Node:
+The rules live in pure JavaScript modules with no Quickshell imports, so they run under Node:
+
+| Module | What it decides |
+| --- | --- |
+| `DockModel.js` | Which Items the Dock shows and in what order: Launch Order, Pins, Placed |
+| `DockConfig.js` | Settings: defaults, the effective view of the config entry, and every change to it |
+| `DockInteraction.js` | Reveal and hide, when a Preview shows, and where a dragged Item lands |
+| `StartMenu.js` | The Start menu: opening and closing, Hover mode, search, selection, Escape, Start Pin reorder |
 
 ```sh
 npm test
 ```
 
-Everything else — panels, hover, timers, animation, tooltips, the context menu, drag — is verified by the manual checklist below, since it depends on Quickshell/Hyprland and has no scripted coverage .
+### Checks
+
+```sh
+npm run check
+```
+
+runs everything that can be checked without the shell:
+
+- the tests above, which also keep the docs in step with the code: every setting has a row in `docs/SETTINGS.md`, every `SPEC.md "…"` section a comment cites exists, `manifest.json` and `package.json` agree on the version, and the Dock and what rises from it take their colours from the colour scheme instead of the theme directly;
+- `omarchy plugin validate .`;
+- `npm run lint:qml`, which fails on any `qmllint` warning not already listed in `scripts/qmllint-baseline.txt`. `qmllint` can't see Quickshell's types, so the QML carries standing warnings; a new one is usually a misspelt or removed id. Accept a legitimate new one with `npm run lint:qml -- --update`.
+
+Run it on every commit with the pre-commit hook:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+Pull requests run `npm test` on GitHub; the manifest and QML checks need Omarchy and Qt, so they only run locally.
+
+### Live smoke test
+
+`Service.qml` (the Dock, the menus, the settings window) and `StartMenuView.qml` (the Start menu's view) draw what the modules decide. They depend on Quickshell and Hyprland, so after changing them run:
+
+```sh
+scripts/smoke.sh            # --monitor NAME, --type, --out DIR, --no-restart
+```
+
+It restarts the shell with this checkout, fails if the plugin logs anything, and screenshots the Dock, the Start menu and the settings window in each colour scheme. It edits the plugin's entry in `shell.json` for the run and restores it on exit. Look at the screenshots: the script only knows the plugin loaded quietly. It cannot click, drag or hover, so Previews, the Item menu, the Bar menu and drag still need the checklist below.
+
+Releasing is described in [docs/agents/release.md](docs/agents/release.md).
 
 ## Manual verification checklist
 
-Walk through this after any change to the Quickshell side, on a two-monitor Omarchy machine. Each item names the user story it covers (see [docs/SPEC.md](docs/SPEC.md)/#19). Have at least one pinned app, one unpinned app with a Window, and one app with no matching desktop entry (or rename a `.desktop` file's `Exec`/class temporarily) so the Letter Tile path is reachable.
+Walk through this after any change to the QML, on a two-monitor Omarchy machine. Have at least one Pin, one unpinned App with a Window, and one Window with no matching desktop entry so the Letter Tile is reachable. Leave `startCommand` at its default, `builtin`, for the Start menu items.
 
 ### Last run
 
-- **Date:** 2026-09-11
-- **Machine:** Omarchy 4, two monitors (DP-1, DP-3)
-- **Method:** Presence, layout, Hidden/Revealed, and the indicators were checked by warping the pointer with `hyprctl dispatch` and comparing `grim` screenshots against live `hyprctl` state (window class, workspace, active window). That confirms everything the compositor reports independently of a real pointer. It does **not** exercise anything that needs a genuine click, drag, or fine hover-motion sequence — this machine has no `ydotool`/`uinput` set up for synthetic input, and a plain cursor warp reaches the Dock's Reveal Strip (a surface-level enter) but doesn't generate the intra-surface motion Qt's per-item hover needs, so tooltips didn't appear under warped hover either. Every item below is marked accordingly; unchecked items need a real mouse pass before the next release, not a re-run of this method.
-- **Result:** Everything checked this way passed. Nothing checked this way failed.
-- **Scope:** This run was made on the old dock style, which has since been removed (docs/adr/0002). Items that only describe the frame of that style were reworded for the taskbar and left unchecked, so they need a pass on the taskbar; the rest keep their marks because the code they cover is shared.
+- **Date:** 2026-10-10, version 1.1.0
+- **Machine:** Omarchy, two monitors (DP-1, DP-3)
+- **Method:** `grim` screenshots after driving the plugin with `omarchy-shell` commands, typed keys (`wtype`), a warped pointer and temporary config edits. No real mouse: a warped pointer reaches the Reveal Strip but does not trigger hover inside the Dock, and nothing here can click or drag.
+- **Result:** the ticked items passed. Unticked items were not exercised; none was seen to fail.
 
-### Presence and layout
+### The Dock
 
-- [ ] The Dock appears as a full-width bar along the bottom of every monitor, once enabled. *(not checked on the taskbar; on the old dock style DP-1 and DP-3 both showed the same four Items)*
-- [x] Every Dock shows the same Items, in the same order. *(confirmed: identical icons/badges on both monitors)*
-- [x] One Window Item exists per open Window, across every workspace and monitor, including special workspaces. *(confirmed for ordinary workspaces — the four open Windows across ws2/ws3 all had Items; no special-workspace Window was open to check that half)*
-- [ ] A Window whose App can't be resolved shows a Letter Tile (first letter of the window class). *(not checked — no unresolvable App was open)*
-- [ ] Icons shrink as Items are added, keeping every Item on screen at the monitor's width (overflow). *(not checked — only 4 Items open, not enough to trigger shrink)*
+- [x] The Dock is a full-width bar along the bottom of the monitor with the Start button, the Items and, with `showClock`, a clock.
+- [x] `"alignment": "left"` moves the Start button and Items to the left; `center` centres them.
+- [ ] Every monitor's Dock shows the same Items, in the same order.
+- [ ] One Window Item exists per open Window, across every workspace and monitor, including special workspaces.
+- [ ] A Window whose App can't be resolved shows a Letter Tile (first letter of the window class).
+- [ ] Icons shrink as Items are added, keeping every Item on screen.
+- [x] The Dock floats on the Top layer and reserves no space.
+- [x] `"colorScheme": "light"` and `"dark"` recolour the bar and the Start menu.
+- [ ] ...and the Item menu, the Bar menu and the Previews.
+- [ ] Switching the Omarchy theme updates the Dock live with `"colorScheme": "theme"`.
+- [x] A leftover `"style": "dock"` in the entry changes nothing.
 
 ### Hidden / Revealed
 
-With `autoHide` off (the default) the Dock is always visible and there is no Reveal Strip; the items below need `"autoHide": true`.
+These need `"autoHide": true`. With it off the Dock is always visible.
 
-- [ ] With `autoHide` on, the Dock is Hidden until the pointer rests on the bottom edge, and takes no screen space either way. *(not checked on the taskbar; the old dock style, which always auto-hid, showed no Dock in a baseline screenshot and nothing reserved at the bottom edge)*
-- [x] Resting the pointer on the Reveal Strip shows the Dock. *(confirmed on the old dock style: warping the pointer to the bottom edge and waiting past `revealDelayMs` revealed it; the taskbar's `autoHide` slide-up was also checked, see below)*
-- [ ] A quick pass across the edge does not reveal it. *(not checked — needs a real short hover, not a warp-and-wait)*
-- [ ] The Dock slides up from the edge over ~150ms. *(not checked — a still screenshot can't show the animation; confirmed only by reading `slideDurationMs` in `Service.qml`)*
-- [x] With `autoHide` on, the Dock returns to Hidden after the pointer leaves it. *(confirmed on the old dock style: screenshot after moving the pointer away and waiting past `hideDelayMs` showed no Dock)*
-- [x] The Dock floats on the Top layer and reserves no space. *(confirmed: `hyprctl layers` shows the Dock's surface on layer level 2/top, and other windows' content is not pushed up by it)*
-- [ ] If the bar is at the bottom, the Dock's Reveal Strip and panel sit above its reserved space, never overlapping. *(not applicable this run — this machine's bar is at the top)*
+- [x] The Dock is Hidden until the pointer rests on the bottom edge, then slides up.
+- [ ] A quick pass across the edge does not reveal it.
+- [ ] The Dock returns to Hidden shortly after the pointer leaves it.
+- [ ] It stays Revealed while a menu or the Start menu is open, while the pointer is on the Start button, and for the whole of a drag.
+- [ ] If the Omarchy bar is at the bottom, the Reveal Strip and the Dock sit above its reserved space.
 
-### Indicators
+### Indicators and Previews
 
-- [x] The Active Window's Item is highlighted. *(confirmed: the Chromium Item — matching `hyprctl activewindow`'s real active window — had a visibly lighter background square the other three Items lacked)*
-- [ ] ...and the highlight moves immediately when focus changes. *(not independently re-checked — this run only ever had one active window; the highlight already being wired to live active-window state makes a change of focus the same code path, but that wasn't exercised by switching focus)*
-- [ ] Every Window Item shows a running pill under its icon (wide and accent-coloured for the Active Window); a bare Pin (no Windows) does not. *(not checked on the taskbar; on the old dock style all four open Windows showed a dot and no bare Pin was present)*
-- [x] With `showWorkspaceBadge` on, every Window Item shows a workspace badge (off by default). *(confirmed: badges read 2/3/3/3, matching each Window's real workspace from `hyprctl clients`)*
-- [ ] A special-workspace Window's badge shows its name. *(not checked — no special-workspace Window was open)*
-- [ ] Hovering an Item shows a tooltip with the Window's title and workspace. *(not confirmed — see Method above; a warped hover didn't trigger it)*
-- [ ] Hovering the tooltip never restarts or blocks the hide timer, and it disappears when the Dock hides. *(not checked, follows from the item above)*
-- [ ] A Window requesting Attention gets the theme's urgent-colour tint until focused, and the Dock does not reveal itself for it. *(not checked — no Window was requesting Attention)*
+- [ ] Every Window Item shows a pill under its icon, wide and accent-coloured for the Active Window; a Pin with no Windows shows none.
+- [ ] The Active Window's highlight moves at once when focus changes.
+- [ ] With `showWorkspaceBadge` on, every Window Item shows its workspace; a special-workspace Window shows the workspace's name.
+- [ ] A Window requesting Attention gets the urgent-colour tint until focused, and the Dock does not reveal itself for it.
+- [ ] Hovering a Window Item shows its Preview: a live thumbnail, the title and a close button.
+- [ ] Clicking a Preview focuses the Window and, with `previewWarpPointer`, moves the pointer to its middle.
+- [ ] Sweeping across Items next to a busy browser shows no flicker.
+- [ ] With `showPreviews` off, hovering a Window Item shows a tooltip with its title and workspace. A Pin with no Windows always shows a tooltip with the App's name.
 
 ### Input
 
-- [ ] Left click on a Window Item focuses that Window, switching workspace/monitor as needed.
+- [ ] Left click on a Window Item focuses that Window, switching workspace and monitor as needed.
 - [ ] Left click on the Active Window's own Item does nothing.
 - [ ] Left click on a special-workspace Window's Item toggles it into view.
 - [ ] Left click on a Pin with no Windows launches its App.
-- [ ] Middle click on any Item with a resolvable App launches a new instance; middle click on a Letter Tile does nothing.
-- [ ] Right click opens a themed popup: Pin/Unpin, New Window and the app's own actions; for a window, Maximize, Full screen, Float (plus Center and Pin on top when floating) and Move to scratchpad; then Close Window. Each window-state row labels itself with its undo while active.
-  - [ ] Pin shows for an unpinned App, Unpin for a pinned one.
-  - [ ] Pin is disabled on a Letter Tile Item.
-  - [ ] New Window launches another instance of the Item's App.
-  - [ ] Close Window closes that specific Window.
-  - [ ] Clicking outside the menu closes it; the Dock stays Revealed while it's open and starts its hide timer only once it closes.
+- [ ] Middle click on an Item with a resolvable App launches a new instance; on a Letter Tile it does nothing.
+- [ ] Clicking in another window while using the Dock shows the Dock never took keyboard focus.
 
-  *(none of the above checked — every one needs a real mouse click/press, which this machine has no way to synthesize)*
+### Item menu
 
-### Pins
+- [ ] Right click on an Item opens the Item menu: Pin/Unpin, New Window and the App's own actions; for a Window, Maximize, Full screen, Float (plus Center and Pin on top when floating) and Move to scratchpad; then Close Window.
+- [ ] Pin shows for an unpinned App and Unpin for a pinned one; Pin is disabled on a Letter Tile.
+- [ ] Each window-state row shows its undo label while active (Restore, Exit full screen, Tile).
+- [ ] New Window launches another instance; Close Window closes that specific Window.
+- [ ] The menu closes when a row is chosen, on a click outside it, or when the pointer leaves it.
 
-- [x] Pinning an App keeps it in the Dock after its last Window closes, shown as a bare Pin, and a pinned App's Windows occupy that Pin's slot instead of a separate icon. *(confirmed structurally: `chromium` is in this run's `pins` config, and its one open Window occupied that slot rather than showing twice — matches `dockModel.test.js`'s coverage of the same rule)*
-- [ ] Unpinning an App with open Windows leaves its Windows as ordinary Window Items. *(not exercised live this run — needs the context menu; covered by a Node test)*
-- [ ] A Pin whose App is no longer installed shows a Letter Tile with a "missing" tooltip and stays until Unpin. *(not checked — no missing App was configured this run; covered by a Node test)*
-- [ ] Pins persist in `~/.config/omarchy/shell.json` and survive an `omarchy restart shell`. *(not checked — no restart was performed this run)*
+### Pins and drag
 
-### Drag
-
+- [ ] Pinning an App keeps it in the Dock after its last Window closes, and its Windows occupy the Pin's slot instead of showing a second icon.
+- [ ] Unpinning an App with open Windows leaves them as ordinary Window Items.
+- [ ] A Pin whose App is no longer installed shows a Letter Tile with a "missing" tooltip and stays until Unpin.
+- [ ] Pins survive an `omarchy restart shell`.
 - [ ] Dragging an Item within the Dock shows a live insertion preview and drops it at the new position.
-- [ ] A Placed Pin keeps its dropped position across an `omarchy restart shell`.
-- [ ] A Placed Window Item keeps its position until that Window closes, then reverts to Launch Order.
-- [ ] Dragging one Window of a pinned App with several open Windows moves only that Window; its siblings stay in the Pin's slot.
-- [ ] Dragging a pinned Item out of the Dock unpins its App; the Windows remain as ordinary Window Items.
-- [ ] Dragging an unpinned Window Item out of the Dock snaps it back to its original position.
-- [ ] The Dock stays Revealed for the whole drag and starts its hide timer only after the drop.
+- [ ] A Placed Pin keeps its position across an `omarchy restart shell`.
+- [ ] A Placed Window Item keeps its position until that Window closes, then falls back to Launch Order.
+- [ ] Dragging one Window of a pinned App with several Windows moves only that Window.
+- [ ] Dragging a pinned Item out of the Dock unpins its App; dragging an unpinned Window Item out snaps it back.
+- [ ] Pinning an App and then placing it straight away keeps both changes.
 
-  *(none of the above checked — dragging needs a real mouse-button-down-move-up sequence; the Placed/drag-out rules themselves are covered by Node tests, but the gesture and the "stays Revealed" behaviour are Quickshell-side and untested here)*
+### Start menu
 
-### Theming and ordering
+- [x] `omarchy-shell io.github.bmaltais.startbar startMenu` opens and closes the menu on the focused monitor, above the Start button (centred with centred icons).
+- [ ] Clicking the Start button opens it; clicking again closes it; a click outside closes it.
+- [ ] Hover mode: resting the pointer on the Start button opens the menu after a moment; it stays while the pointer is on the button or the menu and closes shortly after it leaves, or at once on reaching an Item. Clicking the Start button does not make it stay.
+- [ ] Typing a key, or clicking the search box, in a hover-opened menu keeps it open after the pointer leaves.
+- [x] Typing filters every installed App and the first result is highlighted.
+- [ ] Up/Down move the highlight and Enter launches; the App then appears under Recommended.
+- [ ] With nothing typed, the arrow keys walk Pinned then Recommended and Enter launches the selection.
+- [ ] All apps lists A-Z; Up/Down walk it; a letter heading opens the jump grid and a letter jumps to its first App.
+- [ ] Escape backs out one layer at a time: overlay menu, jump grid, search text, All apps, then the menu.
+- [ ] Right-click an App: Pin to / Unpin from Start and Dock leave the menu open; Open launches it.
+- [ ] Dragging a Start Pin to another slot reorders it and the order survives a restart; a plain click still launches.
+- [ ] Places opens Home, Documents and Downloads in the file manager.
+- [ ] The footer shows the account name and a `~/.face` picture in a circle; it offers Lock and Sign out, and the power button Sleep, Restart and Shut down (try Lock first).
+- [ ] Keyboard focus returns to the previous window when the menu closes.
+- [ ] With a `startCommand` other than `builtin`, the Start button and the command run it and never open the menu.
 
-- [x] Dock colours and fonts match the current Omarchy theme. *(confirmed visually: the Dock's badges, highlight, and panel colours matched this machine's active theme palette in the screenshots)*
-- [ ] Switching the Omarchy theme updates the Dock live, with no restart. *(not checked — no theme switch was performed this run)*
-- [x] New Windows join Launch Order next to existing Windows of the same App, not at the end. *(confirmed structurally by the Pins slot ordering above and by `dockModel.test.js`'s same-App-clustering coverage; not independently re-checked by opening a new Window live)*
-- [ ] The Dock never takes keyboard focus. *(not checked — needs typing into another window while hovering/clicking the Dock)*
+### Bar menu and settings window
 
-### Start menu and menus
-
-Not yet walked through with a real mouse; the pieces marked *checked* were confirmed with screenshots and `hyprctl` only.
-
-- [x] The Dock is a full-width bar with the Start grid, centred icons and a clock; `"alignment": "left"` moves the group to the left. *(checked)*
-- [x] With `"autoHide": true` the bar hides and slides up when the pointer reaches the bottom edge. *(checked)*
-- [ ] Resting the pointer on the Start button keeps the bar up, and clicking it opens the chosen menu. With the built-in menu and `startHoverOpen`, resting opens it after a moment, it stays up while the pointer is on the button or the menu (no flicker), closes shortly after you leave (or at once on reaching another icon), and typing, or clicking the search box, keeps it open.
-- [ ] Right-clicking an empty part of the bar opens the quick menu; each row changes its setting live; "Settings…" opens the settings window on that monitor, where each switch, choice, stepper, slider, text field and list change takes effect live and survives a shell restart; Escape closes it; "Reset to defaults" asks twice.
-- [x] Hovering a window's icon shows a live thumbnail with its title and a close button. *(checked)*
-- [ ] Clicking a thumbnail focuses the window and, with `previewWarpPointer`, moves the pointer to its middle.
-- [ ] Sweeping across icons next to a busy browser shows no flicker.
-- [ ] `omarchy-shell io.github.bmaltais.startbar startMenu` opens and closes the menu on the focused monitor; with nothing typed the arrow keys select pinned then recommended apps and Enter launches; in All apps Up/Down move; clicking a letter heading opens the A-Z grid; dragging a pinned app to another slot reorders it and survives a restart; the Settings button opens the Omarchy setup menu; a `~/.face` picture shows in a circle.
-- [ ] Start menu (`"startCommand": "builtin"`): typing searches, Enter launches, Escape backs out a layer; All apps lists A-Z; right-click pins and unpins; Recommended fills after launching an app.
-- [ ] Places opens Home, Documents and Downloads in the file manager; the power menu's Sleep, Restart and Shut down work, and the name menu's Lock and Sign out (try Lock first).
-- [ ] Right-clicking an icon shows the window rows (Maximize, Full screen, Float...); their labels flip when active; the menu stays open until a row is chosen or the pointer leaves it.
+- [ ] Right-clicking an empty part of the Dock opens the Bar menu; each row changes its setting live.
+- [x] `omarchy-shell io.github.bmaltais.startbar settings` opens the settings window on the focused monitor.
+- [ ] "Settings…" in the Bar menu opens it on that monitor; Escape and the close button close it.
+- [ ] Each switch, choice, stepper, slider, text field and list change takes effect live and survives a shell restart.
+- [ ] "Reset to defaults" asks twice and leaves Pins, Placed positions, Start Pins and Recommended alone.
 
 ### Install path
 
-- [x] From a clean plugins directory, `omarchy plugin add https://github.com/bmaltais/StartBar.git --enable` succeeds, `omarchy plugin validate` accepts the manifest, and the Dock appears on every monitor without further setup.
+- [ ] From a clean plugins directory, `omarchy plugin add https://github.com/bmaltais/StartBar --enable` succeeds and the Dock appears on every monitor without further setup.
+- [x] `omarchy plugin validate .` accepts the manifest.

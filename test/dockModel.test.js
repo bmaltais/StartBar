@@ -510,3 +510,127 @@ test("dragging an unpinned Window Item out of the Dock snaps back: with no place
 
   assert.deepEqual(describeItems(before), describeItems(after));
 });
+
+// --- Grouped windows (docs/SPEC.md "Grouping") --------------------------------
+
+function grouped(windows, resolveApp, pins, resolveAppById, placements) {
+  return buildDockItems(windows, resolveApp, pins, resolveAppById, placements, true);
+}
+
+test("grouping off leaves every Window as its own Item", () => {
+  const items = buildDockItems(
+    [
+      makeWindow({ id: "a", class: "firefox", openedAt: 1 }),
+      makeWindow({ id: "b", class: "firefox", openedAt: 2 }),
+    ],
+    resolveBrowserAndTerminal,
+  );
+  assert.deepEqual(itemIds(items), ["a", "b"]);
+  assert.equal(items[0].windows, undefined);
+});
+
+test("grouping folds the Windows of one App into a single Group Item", () => {
+  const items = grouped(
+    [
+      makeWindow({ id: "a", class: "firefox", openedAt: 1 }),
+      makeWindow({ id: "t", class: "alacritty", openedAt: 2 }),
+      makeWindow({ id: "b", class: "firefox", openedAt: 3 }),
+    ],
+    resolveBrowserAndTerminal,
+  );
+  assert.equal(items.length, 2);
+  assert.equal(items[0].kind, "window");
+  assert.equal(items[0].key, "group:app:firefox");
+  assert.deepEqual(items[0].windows.map((w) => w.id), ["a", "b"]);
+  assert.equal(items[0].count, 2);
+  assert.equal(items[1].key, "window:t");
+  assert.equal(items[1].count, 1);
+});
+
+test("a Group Item stands for its most recent Window unless one is Active", () => {
+  const windows = [
+    makeWindow({ id: "a", class: "firefox", openedAt: 1 }),
+    makeWindow({ id: "b", class: "firefox", openedAt: 2 }),
+  ];
+  assert.equal(grouped(windows, resolveBrowserAndTerminal)[0].window.id, "b");
+
+  windows[0].active = true;
+  const item = grouped(windows, resolveBrowserAndTerminal)[0];
+  assert.equal(item.window.id, "a");
+  assert.equal(item.active, true);
+});
+
+test("a Group Item shows Attention when any of its Windows asks for it", () => {
+  const item = grouped(
+    [
+      makeWindow({ id: "a", class: "firefox", openedAt: 1, attention: true }),
+      makeWindow({ id: "b", class: "firefox", openedAt: 2 }),
+    ],
+    resolveBrowserAndTerminal,
+  )[0];
+  assert.equal(item.attention, true);
+});
+
+test("a Group Item's workspace badge is shown only when its Windows share a workspace", () => {
+  const same = grouped(
+    [
+      makeWindow({ id: "a", class: "firefox", workspace: "2", openedAt: 1 }),
+      makeWindow({ id: "b", class: "firefox", workspace: "2", openedAt: 2 }),
+    ],
+    resolveBrowserAndTerminal,
+  )[0];
+  assert.equal(same.badge, "2");
+
+  const mixed = grouped(
+    [
+      makeWindow({ id: "a", class: "firefox", workspace: "2", openedAt: 1 }),
+      makeWindow({ id: "b", class: "firefox", workspace: "3", openedAt: 2 }),
+    ],
+    resolveBrowserAndTerminal,
+  )[0];
+  assert.equal(mixed.badge, "");
+});
+
+test("Windows with no App group by window class", () => {
+  const items = grouped(
+    [
+      makeWindow({ id: "a", class: "mystery", openedAt: 1 }),
+      makeWindow({ id: "b", class: "mystery", openedAt: 2 }),
+      makeWindow({ id: "c", class: "other", openedAt: 3 }),
+    ],
+    resolveBrowserAndTerminal,
+  );
+  assert.equal(items.length, 2);
+  assert.equal(items[0].count, 2);
+  assert.equal(items[0].pinnable, false);
+});
+
+test("a pinned App's Windows form one Group Item in the Pin's slot", () => {
+  const items = grouped(
+    [
+      makeWindow({ id: "t", class: "alacritty", openedAt: 1 }),
+      makeWindow({ id: "a", class: "firefox", openedAt: 2 }),
+      makeWindow({ id: "b", class: "firefox", openedAt: 3 }),
+    ],
+    resolveBrowserAndTerminal,
+    ["firefox"],
+    (id) => ({ id }),
+  );
+  assert.deepEqual(items.map((i) => i.key), ["group:app:firefox", "window:t"]);
+  assert.equal(items[0].pinned, true);
+});
+
+test("a Placed Group Item keeps its position by the group's key", () => {
+  const items = grouped(
+    [
+      makeWindow({ id: "a", class: "firefox", openedAt: 1 }),
+      makeWindow({ id: "b", class: "firefox", openedAt: 2 }),
+      makeWindow({ id: "t", class: "alacritty", openedAt: 3 }),
+    ],
+    resolveBrowserAndTerminal,
+    [],
+    null,
+    [{ key: "group:app:firefox", index: 1 }],
+  );
+  assert.deepEqual(items.map((i) => i.key), ["window:t", "group:app:firefox"]);
+});

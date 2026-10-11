@@ -1,9 +1,12 @@
 {
   "name": "startbar",
   "private": true,
-  "version": "1.1.0",
-  "description": "Node test harness for StartBar's pure JS modules.",
+  "version": "1.2.0",
+  "description": "Checks for StartBar: Node tests for the pure JS modules, plus the manifest and QML checks.",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "lint:qml": "node scripts/qmllint-check.js",
+    "check": "node --test && omarchy plugin validate . && node scripts/qmllint-check.js",
+    "smoke": "scripts/smoke.sh"
   }
 }
