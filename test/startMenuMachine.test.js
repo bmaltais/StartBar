@@ -475,16 +475,53 @@ test("dragging a pinned app names the slot under it, and releasing saves the reo
   const { state, log } = drag("a", { x: 250, y: 50 });
   assert.equal(log[0], 2);
   assert.deepEqual(log[1], { type: "apply", intent: { type: "reorderStartPins", order: ["b", "c", "a", "d"] } });
-  assert.deepEqual(state.drag, { id: "", slot: -1 });
+  assert.deepEqual(state.drag, { id: "", from: -1, slot: -1 });
 });
 
-test("the slot is clamped to the pins shown, and -1 outside the grid so nothing is saved", () => {
+test("the slot is clamped to the pins shown, and -1 a cell or more beyond the grid so nothing is saved", () => {
   assert.equal(drag("a", { x: 550, y: 250 }).log[0], 3);
-  const outside = drag("a", { x: -1, y: 50 });
+  // just past an edge still names the nearest slot, the way the Dock's ends hold the icon
+  assert.equal(drag("a", { x: -1, y: 50 }).log[0], 0);
+  assert.equal(drag("a", { x: 650, y: 50 }).log[0], 3);
+  const outside = drag("a", { x: -150, y: 50 });
   assert.equal(outside.log[0], -1);
   assert.equal(outside.log.length, 1);
   assert.equal(drag("a", { x: 50, y: 150 }).log[0], 3);
   assert.equal(drag("a", { x: 50, y: 150 }, null, Object.assign({}, GRID, { contentY: 100 })).log[0], 3);
+});
+
+test("a drag remembers the slot the app started in", () => {
+  const ctx = Object.assign(ctxFor(), { pinned: dragApps, startPinIds: ["a", "b", "c", "d"] });
+  const state = S.transition(Object.assign(S.initial(), { open: true }), { type: "pinDragStart", id: "c" }, ctx).state;
+  assert.deepEqual(state.drag, { id: "c", from: 2, slot: 2 });
+});
+
+test("the ghost's top-left is held inside the grid and stops at the last pin", () => {
+  const g = GRID; // 6 columns of 100 x 100; 4 pins: one row, last slot starts at x=300
+  assert.deepEqual(S.clampPinGhost({ x: -40, y: -40 }, g, 4, 6), { x: 0, y: 0 });
+  assert.deepEqual(S.clampPinGhost({ x: 120, y: 30 }, g, 4, 6), { x: 120, y: 0 });
+  assert.deepEqual(S.clampPinGhost({ x: 590, y: 250 }, g, 4, 6), { x: 300, y: 0 });
+  // 8 pins: a second row of two; the last slot is column 1 of row 1
+  assert.deepEqual(S.clampPinGhost({ x: 590, y: 250 }, g, 8, 6), { x: 100, y: 100 });
+  assert.deepEqual(S.clampPinGhost({ x: 590, y: 20 }, g, 8, 6), { x: 500, y: 20 });
+  // scrolled: the grid's own y includes the scroll offset
+  assert.deepEqual(S.clampPinGhost({ x: 0, y: -10 }, Object.assign({}, g, { contentY: 50 }), 8, 6), { x: 0, y: -10 });
+  assert.deepEqual(S.clampPinGhost({ x: 0, y: -90 }, Object.assign({}, g, { contentY: 50 }), 8, 6), { x: 0, y: -50 });
+});
+
+test("tiles between the dragged app's slot and the target step aside, wrapping rows", () => {
+  const g = GRID;
+  const shifts = (from, slot, n) => Array.from({ length: n }, (_, i) => S.pinTileShift({ id: "x", from, slot }, i, g, 6));
+  // 1 -> 3: tiles 2 and 3 move one slot left
+  assert.deepEqual(shifts(1, 3, 5), [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: -100, y: 0 }, { x: -100, y: 0 }, { x: 0, y: 0 }]);
+  // 3 -> 1: tiles 1 and 2 move one slot right
+  assert.deepEqual(shifts(3, 1, 5), [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }]);
+  // 4 -> 6: tile 6 moves from the start of row 1 to the end of row 0 (slot 5)
+  assert.deepEqual(shifts(4, 6, 8)[6], { x: 500, y: -100 });
+  assert.deepEqual(shifts(6, 5, 8)[5], { x: -500, y: 100 });
+  // not dragging, or outside the grid: nothing moves
+  assert.deepEqual(S.pinTileShift({ id: "", from: -1, slot: -1 }, 2, g, 6), { x: 0, y: 0 });
+  assert.deepEqual(S.pinTileShift({ id: "x", from: 1, slot: -1 }, 2, g, 6), { x: 0, y: 0 });
 });
 
 test("dropping on the app's own slot, or dragging an app that is not pinned, saves nothing", () => {
@@ -506,5 +543,5 @@ test("the grid skips a pin whose app is gone, and the slot maps back to the save
 
 test("a drag move with no drag in progress does nothing", () => {
   const result = S.transition(Object.assign(S.initial(), { open: true }), { type: "pinDragMove", point: { x: 1, y: 1 }, grid: GRID }, ctxFor());
-  assert.deepEqual(result.state.drag, { id: "", slot: -1 });
+  assert.deepEqual(result.state.drag, { id: "", from: -1, slot: -1 });
 });

@@ -18,10 +18,12 @@ Service.qml	unqualified	choiceEditor
 Service.qml	unqualified	choices
 Service.qml	unqualified	contextMenu
 Service.qml	unqualified	dockItem
+Service.qml	unqualified	dockItemKeys
 Service.qml	unqualified	dockRow
 Service.qml	unqualified	dockSettings
 Service.qml	unqualified	dockState
 Service.qml	unqualified	dragGhost
+Service.qml	unqualified	dragProbe
 Service.qml	unqualified	groupBlock
 Service.qml	unqualified	icon
 Service.qml	unqualified	listBox
@@ -38,6 +40,7 @@ Service.qml	unqualified	revealState
 Service.qml	unqualified	root
 Service.qml	unqualified	settingsColumn
 Service.qml	unqualified	settingsWindow
+Service.qml	unqualified	settle
 Service.qml	unqualified	sliderEditor
 Service.qml	unqualified	startButton
 Service.qml	unqualified	stepperEditor
@@ -54,6 +57,9 @@ StartMenuView.qml	unqualified	avatarMask
 StartMenuView.qml	unqualified	home
 StartMenuView.qml	unqualified	overlayColumn
 StartMenuView.qml	unqualified	pinGhost
+StartMenuView.qml	unqualified	pinGhostSettle
+StartMenuView.qml	unqualified	pinHoldTimer
+StartMenuView.qml	unqualified	pinProbe
 StartMenuView.qml	unqualified	pinnedGrid
 StartMenuView.qml	unqualified	recommendedGrid
 StartMenuView.qml	unqualified	resultList

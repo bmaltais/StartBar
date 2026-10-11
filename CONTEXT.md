@@ -64,6 +64,10 @@ _Avoid_: thumbnail (that is the picture inside a Preview), popup, peek
 The menu opened by a right click on an Item: pinning, the App's own actions, the Window's state, and Close.
 _Avoid_: context menu, window menu
 
+**Preview menu**:
+The menu opened by a right click on one Window's thumbnail in a Preview: that Window's state rows and Close Window. Its bottom-left corner is at the pointer.
+_Avoid_: thumbnail menu, window menu
+
 **Bar menu**:
 The menu opened by a right click on the Dock away from any Item. It holds the common settings and the way into the settings window.
 _Avoid_: quick menu, settings menu

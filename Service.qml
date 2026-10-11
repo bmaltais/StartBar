@@ -17,6 +17,8 @@ import "DockModel.js" as DockModel
 import "DockConfig.js" as DockConfig
 import "StartMenu.js" as StartMenu
 import "DockInteraction.js" as DockInteraction
+import "DockPreview.js" as DockPreview
+import "DockHyprland.js" as DockHyprland
 
 Item {
   id: root
@@ -169,6 +171,8 @@ Item {
   // the others. Named dockState, not state — every Item already has a
   // built-in `state` property, which would silently shadow an id of that
   // name in any binding written inside an Item (Repeater, Row, ...).
+  ListModel { id: dockItemKeys }
+
   QtObject {
     id: dockState
 
@@ -271,6 +275,32 @@ Item {
       if (signature === dockState.itemsSignature) return
       dockState.itemsSignature = signature
       dockState.items = next
+      dockState.syncItemModel(next)
+    }
+
+    // The Dock's Repeater runs over dockItemKeys, one row per Item key, and
+    // each delegate looks its Item up in itemByKey. Replacing the Items
+    // array instead would tear down and rebuild every delegate on any
+    // reorder, so a drop made every icon flash as it loaded again. Here an
+    // Item that stays keeps its delegate, and a reorder is a `move`.
+    property var itemByKey: ({})
+
+    function syncItemModel(next) {
+      var byKey = {}
+      for (var n = 0; n < next.length; n++) byKey[next[n].key] = next[n]
+      for (var r = dockItemKeys.count - 1; r >= 0; r--) {
+        if (!byKey[dockItemKeys.get(r).key]) dockItemKeys.remove(r)
+      }
+      dockState.itemByKey = byKey
+      for (var i = 0; i < next.length; i++) {
+        if (i < dockItemKeys.count && dockItemKeys.get(i).key === next[i].key) continue
+        var at = -1
+        for (var j = i + 1; j < dockItemKeys.count; j++) {
+          if (dockItemKeys.get(j).key === next[i].key) { at = j; break }
+        }
+        if (at >= 0) dockItemKeys.move(at, i, 1)
+        else dockItemKeys.insert(i, { key: next[i].key })
+      }
     }
   }
 
@@ -383,42 +413,16 @@ Item {
     return appId ? DesktopEntries.byId(appId) || null : null
   }
 
-  // HyprlandToplevel.address comes back as bare hex ("56538020a4f0"),
-  // unlike hyprctl's own "0x"-prefixed address strings — normalize before
-  // handing it to a dispatch's "address:0x.." window selector.
-  function normalizedAddress(address) {
-    if (typeof address !== "string") return null
-    var hex = address.indexOf("0x") === 0 ? address.slice(2) : address
-    return /^[0-9a-fA-F]+$/.test(hex) ? "0x" + hex : null
-  }
-
-  // A click on a hover preview can also bring the pointer along
-  // (previewWarpPointer): after focusing, the pointer is moved to the middle
-  // of the Window, read from `hyprctl -j clients`, which also covers a
-  // Window on another workspace or monitor once focus has switched to it.
+  // Everything that asks Hyprland for something is built in DockHyprland.js,
+  // which returns the command to run; these only run it.
   function focusWindowAndWarp(address) {
-    var normalized = normalizedAddress(address)
-    if (!normalized) return
-    var script = "addr=\"$1\"; "
-      + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\" >/dev/null; "
-      + "sleep 0.1; "
-      + "pos=$(hyprctl -j clients | jq -r --arg a \"$addr\" '.[] | select(.address == $a) | \"\\(.at[0] + (.size[0] / 2) | floor) \\(.at[1] + (.size[1] / 2) | floor)\"'); "
-      + "[ -n \"$pos\" ] && hyprctl dispatch \"hl.dsp.cursor.move({ x = ${pos% *}, y = ${pos#* } })\" >/dev/null"
-    Quickshell.execDetached(["bash", "-lc", script, "bash", normalized])
+    var command = DockHyprland.focusWindowAndWarp(address)
+    if (command) Quickshell.execDetached(command)
   }
 
   function focusWindow(address) {
-    var normalized = normalizedAddress(address)
-    if (!normalized) return
-    // Toggle cursor:no_warps around the dispatch so clicking a Dock Item
-    // never yanks the pointer off the Dock to the centre of the newly
-    // focused Window.
-    var script = "addr=\"$1\"; "
-      + "orig=false; hyprctl -j getoption cursor:no_warps | grep -q '\"bool\": true' && orig=true; "
-      + "hyprctl eval 'hl.config({ cursor = { no_warps = true } })' >/dev/null; "
-      + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\"; "
-      + "hyprctl eval \"hl.config({ cursor = { no_warps = $orig } })\" >/dev/null"
-    Quickshell.execDetached(["bash", "-lc", script, "bash", normalized])
+    var command = DockHyprland.focusWindow(address)
+    if (command) Quickshell.execDetached(command)
   }
 
   // Left click on a Pin with no Windows launches its App (docs/SPEC.md
@@ -430,35 +434,17 @@ Item {
     app.execute()
   }
 
-  // A Window-state row of the context menu (DockModel.windowActions maps
-  // the ids): one hyprctl dispatch aimed at the Window by address, whether
-  // or not it is the focused one. The dispatch string is passed as an
-  // argument, so there is nothing to shell-escape.
+  // A Window-state row of the context menu (DockModel.windowActions has the
+  // ids and labels, DockHyprland.windowAction the dispatch).
   function runWindowAction(id, address) {
-    var normalized = normalizedAddress(address)
-    if (!normalized) return
-    var target = "window = \"address:" + normalized + "\""
-    var dispatch = {
-      maximize: "hl.dsp.window.fullscreen({ mode = \"maximized\", " + target + " })",
-      fullscreen: "hl.dsp.window.fullscreen({ mode = \"fullscreen\", " + target + " })",
-      float: "hl.dsp.window.float({ action = \"toggle\", " + target + " })",
-      center: "hl.dsp.window.center({ " + target + " })",
-      pin: "hl.dsp.window.pin({ " + target + " })",
-      scratchpad: "hl.dsp.window.move({ workspace = \"special:scratchpad\", follow = false, " + target + " })",
-    }[id]
-    if (!dispatch) return
-    Quickshell.execDetached(["bash", "-lc", "hyprctl dispatch \"$1\"", "bash", dispatch])
+    var command = DockHyprland.windowAction(id, address)
+    if (command) Quickshell.execDetached(command)
   }
 
-  // Close Window (docs/SPEC.md "Input", the context menu): the same
-  // dispatch convention as focusWindow, minus the cursor no-warp dance
-  // that dispatch needs but this one doesn't.
+  // Close Window (docs/SPEC.md "Input", the context menu).
   function closeWindow(address) {
-    var normalized = normalizedAddress(address)
-    if (!normalized) return
-    Quickshell.execDetached(["bash", "-lc",
-      "hyprctl dispatch \"hl.dsp.window.close({ window = \\\"address:$1\\\" })\"",
-      "bash", normalized])
+    var command = DockHyprland.closeWindow(address)
+    if (command) Quickshell.execDetached(command)
   }
 
   // Pin/Unpin (docs/SPEC.md "Input", the context menu): DockConfig.applyIntent
@@ -471,17 +457,23 @@ Item {
   }
 
   // Drag within the Dock (docs/SPEC.md "Input": "reorder"; CONTEXT.md
-  // "Placed"): a Pin Item's own drop is persisted through dockSettings.apply
-  // exactly like Pin/Unpin already is, so it survives a restart. A Window
-  // Item's drop only updates dockState.windowPlacements directly — it has
-  // no write-back of its own to trigger dockState.refresh() the way a
-  // settings change does, so this calls it explicitly.
+  // "Placed"): DockModel.movedPlacements works out every Placed position
+  // after the drop. The Pins' are persisted through dockSettings.apply
+  // exactly like Pin/Unpin already is, so they survive a restart; the Window
+  // Items' go to dockState.windowPlacements directly.
   function placeItem(item, targetIndex) {
-    if (item.kind === "pin") {
-      dockSettings.apply({ type: "placeItem", key: item.key, index: targetIndex })
-      return
+    var placements = DockModel.movedPlacements(dockState.items, dockState.placements(), item.key, targetIndex)
+    var windowPlacements = {}
+    var pinPlacements = []
+    for (var i = 0; i < placements.length; i++) {
+      if (placements[i].key.indexOf("pin:") === 0) pinPlacements.push(placements[i])
+      else windowPlacements[placements[i].key] = placements[i].index
     }
-    dockState.windowPlacements[item.key] = targetIndex
+    dockState.windowPlacements = windowPlacements
+    // Shown now, not once the config file has been written and read back: the
+    // Dock would otherwise sit in the old order for a moment after a drop.
+    dockSettings.placements = pinPlacements
+    dockSettings.apply({ type: "setPlacements", placements: pinPlacements })
     dockState.refresh()
   }
 
@@ -517,13 +509,8 @@ Item {
   // show it, and leaving puts things back. The first peek saves the
   // focused Window and each monitor's workspace in a state file; peekRestore
   // replays it, peekCommit (a click picked the Window) throws it away.
-  // `peeking` is the in-QML truth, so a restore never runs after a commit.
-  property bool peeking: false
-  readonly property string peekNoWarps: "orig=false; hyprctl -j getoption cursor:no_warps | grep -q '\"bool\": true' && orig=true; "
-    + "hyprctl eval 'hl.config({ cursor = { no_warps = true } })' >/dev/null; "
-  readonly property string peekWarpsBack: "hyprctl eval \"hl.config({ cursor = { no_warps = $orig } })\" >/dev/null"
-  readonly property string peekState: "\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek\""
-
+  // DockPreview.js decides when each is asked for, DockHyprland.js builds them.
+  //
   // Peek scripts run one at a time, in the order asked for (a plain
   // execDetached per script let a restore overtake a peek).
   property var peekQueue: []
@@ -533,8 +520,8 @@ Item {
     onExited: root.peekNext()
   }
 
-  function peekRun(script, arg) {
-    root.peekQueue.push(arg === undefined ? ["bash", "-lc", script, "bash"] : ["bash", "-lc", script, "bash", arg])
+  function peekRun(command) {
+    root.peekQueue.push(command)
     if (!peekRunner.running) root.peekNext()
   }
 
@@ -545,85 +532,16 @@ Item {
   }
 
   function peekWindow(address) {
-    var normalized = normalizedAddress(address)
-    if (!normalized) return
-    root.peeking = true
-    var script = "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek.lock\"; flock 9\n"
-      + "undo() {\n"
-      + "  echo \"$rest\" | while read -r kind a b; do\n"
-      + "    [ \"$kind\" = f ] || continue\n"
-      + "    cur=$(hyprctl -j clients | jq -r --arg a \"$a\" '.[] | select(.address == $a) | .fullscreen')\n"
-      + "    [ \"$cur\" = 0 ] || continue\n"
-      + "    mode=maximized; [ \"$b\" = 2 ] && mode=fullscreen\n"
-      + "    hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$mode\\\", action = \\\"set\\\", window = \\\"address:$a\\\" })\" >/dev/null\n"
-      + "  done\n"
-      + "  echo \"$rest\" | while read -r kind name ws; do\n"
-      + "    [ \"$kind\" = m ] || continue\n"
-      + "    cur=$(hyprctl -j monitors | jq -r --arg n \"$name\" '.[] | select(.name == $n) | .activeWorkspace.id')\n"
-      + "    if [ \"$cur\" != \"$ws\" ]; then\n"
-      + "      hyprctl dispatch \"hl.dsp.focus({ monitor = \\\"$name\\\" })\" >/dev/null\n"
-      + "      hyprctl dispatch \"hl.dsp.focus({ workspace = \\\"$ws\\\" })\" >/dev/null\n"
-      + "    fi\n"
-      + "  done\n"
-      + "}\n"
-      + "addr=\"$1\"; state=\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek\"\n"
-      + root.peekNoWarps
-      + "if [ -f \"$state\" ]; then\n"
-      + "  # Moving on from an earlier peek: put its changes back first, keeping the\n"
-      + "  # saved original state, so only this window's peek is in effect.\n"
-      + "  rest=$(tail -n +2 \"$state\")\n"
-      + "  undo\n"
-      + "else\n"
-      + "  {\n"
-      + "    hyprctl -j activewindow | jq -r '.address // \"\"'\n"
-      + "    hyprctl -j monitors | jq -r '.[] | \"m \\(.name) \\(.activeWorkspace.id)\"'\n"
-      + "    hyprctl -j clients | jq -r '.[] | select(.fullscreen != 0) | \"f \\(.address) \\(.fullscreen)\"'\n"
-      + "  } > \"$state\"\n"
-      + "fi\n"
-      + "hyprctl -j clients | jq -r --arg a \"$addr\" '. as $c | ($c[] | select(.address == $a) | .workspace.id) as $w | $c[] | select(.workspace.id == $w and .fullscreen != 0 and .address != $a) | \"\\(.address) \\(.fullscreen)\"' | while read -r other fs; do\n"
-      + "  mode=maximized; [ \"$fs\" = 2 ] && mode=fullscreen\n"
-      + "  hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$mode\\\", action = \\\"unset\\\", window = \\\"address:$other\\\" })\" >/dev/null\n"
-      + "done\n"
-      + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\" >/dev/null\n"
-      + root.peekWarpsBack
-    root.peekRun(script, normalized)
+    var command = DockHyprland.peekWindow(address)
+    if (command) root.peekRun(command)
   }
 
   function peekRestore() {
-    // Unconditional: the script does nothing without a state file, and a
-    // restore skipped because `peeking` was stale would leave the peeked
-    // window showing.
-    root.peeking = false
-    var script = "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek.lock\"; flock 9\n"
-      + "undo() {\n"
-      + "  echo \"$rest\" | while read -r kind a b; do\n"
-      + "    [ \"$kind\" = f ] || continue\n"
-      + "    cur=$(hyprctl -j clients | jq -r --arg a \"$a\" '.[] | select(.address == $a) | .fullscreen')\n"
-      + "    [ \"$cur\" = 0 ] || continue\n"
-      + "    mode=maximized; [ \"$b\" = 2 ] && mode=fullscreen\n"
-      + "    hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$mode\\\", action = \\\"set\\\", window = \\\"address:$a\\\" })\" >/dev/null\n"
-      + "  done\n"
-      + "  echo \"$rest\" | while read -r kind name ws; do\n"
-      + "    [ \"$kind\" = m ] || continue\n"
-      + "    cur=$(hyprctl -j monitors | jq -r --arg n \"$name\" '.[] | select(.name == $n) | .activeWorkspace.id')\n"
-      + "    if [ \"$cur\" != \"$ws\" ]; then\n"
-      + "      hyprctl dispatch \"hl.dsp.focus({ monitor = \\\"$name\\\" })\" >/dev/null\n"
-      + "      hyprctl dispatch \"hl.dsp.focus({ workspace = \\\"$ws\\\" })\" >/dev/null\n"
-      + "    fi\n"
-      + "  done\n"
-      + "}\n"
-      + "state=\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek\"; [ -f \"$state\" ] || exit 0\n"
-      + "prev=$(head -n1 \"$state\"); rest=$(tail -n +2 \"$state\"); rm -f \"$state\"\n"
-      + root.peekNoWarps
-      + "undo\n"
-      + "[ -n \"$prev\" ] && hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$prev\\\" })\" >/dev/null\n"
-      + root.peekWarpsBack
-    root.peekRun(script)
+    root.peekRun(DockHyprland.peekRestore())
   }
 
   function peekCommit() {
-    root.peeking = false
-    root.peekRun("exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek.lock\"; flock 9; rm -f " + root.peekState)
+    root.peekRun(DockHyprland.peekCommit())
   }
 
   // Previews off: a click on a Group Item focuses the Window after the
@@ -1420,7 +1338,8 @@ Item {
         property var model: DockInteraction.initialReveal()
         readonly property bool revealed: revealState.model.revealed
 
-        // `name` is one of strip, dock, bar, start, preview, menu, drag.
+        // `name` is one of strip, dock, bar, start, preview, menu, barMenu,
+        // startMenu, drag.
         function set(name, value) {
           revealState.apply(DockInteraction.setRevealFlag(revealState.model, name, value))
         }
@@ -1652,19 +1571,17 @@ Item {
         // model mid-drag would make the Repeater tear down and rebuild
         // every delegate, destroying the very Item whose MouseArea is
         // driving the drag) but renders invisible for as long as its key
-        // matches dragKey; dragGhost (declared below, a sibling of this
-        // Row) shows in its place and follows the pointer, and dropLine
-        // (also below) is the live insertion preview: a bar at whichever
-        // gap dragPreviewGap currently names. dragKey empty and
-        // dragPreviewGap -1 both mean "no drag in progress".
+        // matches dragKey. dragProbe (declared below, a sibling of this
+        // Row) is what the pointer drags; dragGhost shows the Item in its
+        // place, a little bigger than the rest and stopping at the first
+        // and last slot; the Items between the two slots step aside by
+        // dragShift, so the gap shows where a drop would land. dragKey
+        // empty means "no drag in progress".
         property var drag: DockInteraction.initialDrag()
         readonly property string dragKey: dockRow.drag.key
-        readonly property int dragPreviewGap: dockRow.drag.gap
-        // Recomputed alongside dragPreviewGap (see updateDragPreview):
-        // hides dropLine once the drag has left the Dock, since a drag-out
-        // has nothing to do with dragPreviewGap any more (docs/SPEC.md
-        // "Input": drag-out is unpin-or-snap-back, never a reorder).
-        readonly property bool draggingOutside: dockRow.drag.outside
+        // True from the drop until the Items have been reordered, so their
+        // dragShift snaps back to 0 instead of gliding against the reorder.
+        property bool dropping: false
 
         function indexOfKey(items, key) {
           for (var i = 0; i < items.length; i++) {
@@ -1681,10 +1598,15 @@ Item {
           if (!dockRow.dragKey) return
           dockRow.drag = DockInteraction.dragMove(dockRow.drag, dockRow.ghostCenter(), dockRow.rect(),
             dockRow.itemWidth + dockRow.spacing, dockRow.iconSize, dockState.items.length)
+          dragGhost.x = DockInteraction.clampGhostX(dragProbe.x, dockRow.rect(),
+            dockRow.itemWidth + dockRow.spacing, dockState.items.length)
+          dragGhost.y = dragProbe.y
         }
 
+        // Where the pointer has taken the Item, not where the ghost is
+        // drawn: the ghost stops at the ends of the row, the pointer does not.
         function ghostCenter() {
-          return { x: dragGhost.x + dragGhost.width / 2, y: dragGhost.y + dragGhost.height / 2 }
+          return { x: dragProbe.x + dragProbe.width / 2, y: dragProbe.y + dragProbe.height / 2 }
         }
 
         function rect() {
@@ -1704,22 +1626,48 @@ Item {
           var decision = DockInteraction.dragDrop(dockRow.drag, dockRow.ghostCenter(), dockRow.rect(),
             dockRow.iconSize, { pinned: item.kind === "pin" || !!item.pinned })
 
+          var from = dockRow.drag.from
+          dockRow.dropping = true
           dockRow.drag = DockInteraction.initialDrag()
-          dragGhost.visible = false
           revealState.set("drag", false)
           root.dragInProgress = false
 
-          if (decision.action === "unpin") root.unpinFromDrag(root.menuAppId(item))
-          else if (decision.action === "reorder") root.placeItem(item, decision.index)
+          // The ghost settles into the slot the Item now has, then gives way
+          // to it; a drag-out has no slot to settle into.
+          if (decision.action === "unpin") {
+            dragGhost.visible = false
+            root.unpinFromDrag(root.menuAppId(item))
+          } else {
+            var slot = decision.action === "reorder" ? decision.index : from
+            dockRow.settlingKey = item.key
+            settleX.to = dockRow.x + slot * (dockRow.itemWidth + dockRow.spacing)
+            settleY.to = dockRow.dragHomeY
+            dragGhost.scale = 1
+            settle.restart()
+            if (decision.action === "reorder") root.placeItem(item, decision.index)
+          }
+          Qt.callLater(function () { dockRow.dropping = false })
         }
+
+        // The Item whose ghost is still settling into its slot, and where the
+        // ghost's top edge rests (where the Item's own was when pressed).
+        property string settlingKey: ""
+        property real dragHomeY: 0
 
         Repeater {
           id: repeater
-          model: dockState.items
+          model: dockItemKeys
 
           delegate: Item {
             id: dockItem
-            required property var modelData
+            required property string key
+            required property int index
+            // The Item itself, looked up by key; it keeps the last one found
+            // for the moment between an Item going and its delegate going.
+            readonly property var live: dockState.itemByKey[dockItem.key]
+            property var modelData: ({})
+            onLiveChanged: if (dockItem.live) dockItem.modelData = dockItem.live
+            Component.onCompleted: if (dockItem.live) dockItem.modelData = dockItem.live
 
             readonly property bool active: dockItem.modelData.active
             readonly property bool attention: dockItem.modelData.attention
@@ -1729,7 +1677,19 @@ Item {
             // would also focus/launch the Item it was just dropped near.
             property bool wasDragged: false
 
-            opacity: dockRow.dragKey === dockItem.modelData.key ? 0 : 1
+            opacity: dockRow.dragKey === dockItem.key || dockRow.settlingKey === dockItem.key ? 0 : 1
+
+            // Items the dragged one has passed step aside by one slot, and a
+            // pressed Item shrinks a little before it is lifted.
+            property real dragShift: dockRow.dragKey !== ""
+              ? DockInteraction.slotShift(dockRow.drag, dockItem.index, dockRow.itemWidth + dockRow.spacing) : 0
+            Behavior on dragShift {
+              enabled: !dockRow.dropping
+              NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+            }
+            transform: Translate { x: dockItem.dragShift }
+            scale: (mouseArea.pressedButtons & Qt.LeftButton) && dockRow.dragKey === "" ? 0.88 : 1
+            Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
             width: dockRow.itemWidth
             height: icon.height + runningDot.height + Style.spacing.xxs
 
@@ -1838,7 +1798,7 @@ Item {
                 // moves dragGhost, a sibling of dockRow, not this Item
                 // itself — dockRow is a positioner and would fight any
                 // attempt to move dockItem directly.
-                drag.target: dragGhost
+                drag.target: dragProbe
 
                 onContainsMouseChanged: {
                   if (mouseArea.containsMouse) previewState.hoverStart(dockItem)
@@ -1851,13 +1811,21 @@ Item {
                     mouseArea.drag.target = null
                     return
                   }
-                  mouseArea.drag.target = dragGhost
+                  mouseArea.drag.target = dragProbe
                   dragGhost.item = dockItem.modelData
                   var origin = dockItem.mapToItem(dockRow.parent, 0, 0)
+                  dragProbe.x = origin.x
+                  dragProbe.y = origin.y
+                  dockRow.dragHomeY = origin.y
+                  settle.stop()
+                  dockRow.settlingKey = ""
+                  dragProbe.width = dockItem.width
+                  dragProbe.height = dockItem.height
                   dragGhost.x = origin.x
                   dragGhost.y = origin.y
                   dragGhost.width = dockItem.width
                   dragGhost.height = dockItem.height
+                  dragGhost.scale = 0.88
                 }
 
                 drag.onActiveChanged: {
@@ -1867,6 +1835,7 @@ Item {
                     revealState.set("drag", true)
                     dockRow.drag = DockInteraction.dragStart(dockItem.modelData.key, dockRow.indexOfKey(dockState.items, dockItem.modelData.key))
                     dragGhost.visible = true
+                    dragGhost.scale = 1.15
                   } else if (dockRow.dragKey === dockItem.modelData.key) {
                     dockRow.finishDrag(dockItem.modelData)
                   }
@@ -1877,6 +1846,8 @@ Item {
                   if (mouse.button === Qt.RightButton) {
                     // Drop any hover preview first, so the menu never shows over it.
                     previewState.dismiss()
+                    contextMenu.previewCell = null
+                    contextMenu.previewWindowId = ""
                     contextMenu.anchorItem = dockItem
                     contextMenu.menuItem = dockItem.modelData
                     contextMenu.visible = true
@@ -1953,14 +1924,33 @@ Item {
         }
       }
 
-      // The floating icon a drag follows (docs/SPEC.md "Input": "Drag
-      // within the Dock: reorder"; issue #16's own acceptance criteria add
-      // "with a live insertion preview"). A sibling of dockRow, not one of
-      // its Repeater delegates, so dockRow's own positioning never fights its
-      // position; mouseArea.drag.target (above) moves it directly by the
-      // pointer's own delta, in this shared parent's coordinate space,
-      // starting from wherever the dragged delegate's onPressed measured
-      // it to be.
+      // What the pointer drags (mouseArea.drag.target above): an invisible
+      // Item that goes wherever the pointer does, in this shared parent's
+      // coordinate space, starting from wherever the dragged delegate's
+      // onPressed measured it to be. dragGhost is drawn from it.
+      Item {
+        id: dragProbe
+        visible: false
+        onXChanged: dockRow.updateDragPreview()
+        onYChanged: dockRow.updateDragPreview()
+      }
+
+      // The drop: the ghost glides into its slot, then the Item shows again.
+      ParallelAnimation {
+        id: settle
+        onFinished: {
+          dragGhost.visible = false
+          dockRow.settlingKey = ""
+        }
+        NumberAnimation { id: settleX; target: dragGhost; property: "x"; duration: 120; easing.type: Easing.OutCubic }
+        NumberAnimation { id: settleY; target: dragGhost; property: "y"; duration: 120; easing.type: Easing.OutCubic }
+      }
+
+      // The floating icon of a drag (docs/SPEC.md "Input"): a little bigger
+      // than the Items beside it, following the pointer sideways until it
+      // reaches the first or last slot, where it stays while the pointer
+      // goes on. A sibling of dockRow, not one of its Repeater delegates, so
+      // dockRow's own positioning never fights its position.
       Item {
         id: dragGhost
 
@@ -1968,14 +1958,9 @@ Item {
 
         visible: false
         z: 1000
-        opacity: 0.85
-
-        // Recomputes the live insertion preview directly off of the
-        // position mouseArea.drag.target (above) is actually driving —
-        // rather than off the mouse event that causes it, so this never
-        // races whatever order Qt applies the two in.
-        onXChanged: if (dockRow.dragKey) dockRow.updateDragPreview()
-        onYChanged: if (dockRow.dragKey) dockRow.updateDragPreview()
+        opacity: 0.95
+        scale: 1
+        Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
         Image {
           visible: dragGhost.item && dragGhost.item.app !== null
@@ -2005,27 +1990,12 @@ Item {
         }
       }
 
-      // The live insertion preview itself (issue #16's acceptance
-      // criteria, on top of docs/SPEC.md "Input"'s own "Drag within the
-      // Dock: reorder"): a bar at the gap dragPreviewGap names, hidden
-      // once the drag has left the Dock (see draggingOutside) since
-      // drag-out is never a reorder.
-      Rectangle {
-        id: dropLine
-
-        visible: dockRow.dragKey !== "" && !dockRow.draggingOutside
-        x: dockRow.x + DockInteraction.dropGap(dockRow.drag) * (dockRow.itemWidth + dockRow.spacing) - dockRow.spacing / 2 - width / 2
-        y: dockRow.y
-        width: 2
-        height: dockRow.height
-        radius: 1
-        color: root.colAccent
-      }
-
       // Hover previews (showPreviews): a live thumbnail of the
-      // hovered Window with its title and a close button. previewState holds
-      // which Item is shown and the open/leave timers; hovering the popup
-      // itself keeps it (and the bar, via revealState "preview") up.
+      // hovered Window with its title and a close button. The rules are in
+      // DockPreview.js (the Preview, Peek, the Preview menu holding it up);
+      // previewState keeps its state, arms the timers it names and carries out
+      // the effects. Hovering the popup itself keeps it (and the bar, via
+      // revealState "preview") up.
       QtObject {
         id: previewState
 
@@ -2033,7 +2003,7 @@ Item {
         // time so the popup never depends on the delegate staying alive.
         property real anchorX: 0
         property real anchorY: 0
-        property var model: DockInteraction.initialPreview()
+        property var model: DockPreview.initial()
         readonly property var hoveredItem: previewState.model.hovered
         readonly property var shownItem: previewState.model.shown
         readonly property bool showing: shownItem !== null
@@ -2042,48 +2012,92 @@ Item {
           return root.taskbar.showPreviews && item.kind === "window"
         }
 
-        function apply(result) {
+        function send(event) {
+          var result = DockPreview.transition(previewState.model, event,
+            { previewPeek: root.taskbar.previewPeek, warp: root.taskbar.previewWarpPointer })
+          // The state first: it can flip the popup's visibility, whose
+          // handler sends its own event and reads the state as it now is.
           previewState.model = result.state
-          if (result.timers.open === "stop") previewOpenTimer.stop()
-          else if (result.timers.open === "start") previewOpenTimer.restart()
-          if (result.timers.leave === "stop") previewLeaveTimer.stop()
-          else if (result.timers.leave === "start") previewLeaveTimer.restart()
+          previewState.arm(result.timers)
+          for (var i = 0; i < result.effects.length; i++) previewState.perform(result.effects[i])
+        }
+
+        function arm(timers) {
+          if (timers.open === "stop") previewOpenTimer.stop()
+          else if (timers.open === "start") previewOpenTimer.restart()
+          if (timers.leave === "stop") previewLeaveTimer.stop()
+          else if (timers.leave === "start") previewLeaveTimer.restart()
+          if (timers.peek === "stop") peekTimer.stop()
+          else if (timers.peek === "start") peekTimer.restart()
+          if (timers.peekRestore === "stop") peekRestoreTimer.stop()
+          else if (timers.peekRestore === "start") peekRestoreTimer.restart()
+        }
+
+        function perform(effect) {
+          switch (effect.type) {
+          case "peek": root.peekWindow(effect.id); break
+          case "restore": root.peekRestore(); break
+          case "commit": root.peekCommit(); break
+          case "focus":
+            if (effect.warp) root.focusWindowAndWarp(effect.id)
+            else root.focusWindow(effect.id)
+            break
+          }
         }
 
         function hoverStart(delegate) {
           // Moving on to an icon takes over from a hover-opened Start menu at
           // once, instead of both showing until the menu's leave timer fires.
           startMenu.send({ type: "itemHovered" })
-          if (root.dragInProgress || !enabledFor(delegate.modelData)) return
-          var point = delegate.mapToItem(panel.contentItem, delegate.width / 2, 0)
-          previewState.anchorX = point.x
-          previewState.anchorY = point.y
-          previewState.apply(DockInteraction.previewHoverStart(previewState.model, delegate.modelData, true, false))
+          var enabled = enabledFor(delegate.modelData)
+          // The anchor only moves for an Item that can have a Preview: a Pin
+          // hovered while another Item's is up must not drag that one along.
+          if (enabled && !root.dragInProgress) {
+            var point = delegate.mapToItem(panel.contentItem, delegate.width / 2, 0)
+            previewState.anchorX = point.x
+            previewState.anchorY = point.y
+          }
+          previewState.send({ type: "hoverStart", item: delegate.modelData, enabled: enabled, dragging: root.dragInProgress })
         }
 
         function hoverEnd() {
-          previewState.apply(DockInteraction.previewHoverEnd(previewState.model))
+          previewState.send({ type: "hoverEnd" })
         }
 
         function popupHover(hovered) {
-          previewState.apply(DockInteraction.previewPopupHover(previewState.model, hovered))
+          previewState.send({ type: "previewHover", hovered: hovered })
         }
 
         function dismiss() {
-          previewState.apply(DockInteraction.previewDismiss(previewState.model))
+          previewState.send({ type: "dismiss" })
         }
       }
 
       Timer {
         id: previewOpenTimer
         interval: 350
-        onTriggered: previewState.apply(DockInteraction.previewOpenFired(previewState.model))
+        onTriggered: previewState.send({ type: "openFired" })
       }
 
       Timer {
         id: previewLeaveTimer
         interval: 250
-        onTriggered: previewState.apply(DockInteraction.previewLeaveFired(previewState.model))
+        onTriggered: previewState.send({ type: "leaveFired" })
+      }
+
+      // Peek, debounced so sweeping the pointer along the thumbnails
+      // doesn't flash every window in turn, and so passing between two
+      // cells doesn't restore in between.
+      Timer {
+        id: peekTimer
+        interval: 150
+        onTriggered: previewState.send({ type: "peekFired" })
+      }
+
+      Timer {
+        id: peekRestoreTimer
+        interval: 200
+        onTriggered: previewState.send({ type: "peekRestoreFired" })
       }
 
       // Keep the popup anchored if the hovered Item's position changes while
@@ -2104,20 +2118,7 @@ Item {
       PopupWindow {
         id: previewPopup
 
-        readonly property var liveItem: {
-          var shown = previewState.shownItem
-          if (!shown) return null
-          var ids = {}
-          var shownWindows = shown.windows || [shown.window]
-          for (var i = 0; i < shownWindows.length; i++) ids[shownWindows[i].id] = true
-          for (var j = 0; j < dockState.items.length; j++) {
-            var item = dockState.items[j]
-            if (item.kind !== "window") continue
-            var windows = item.windows || [item.window]
-            for (var k = 0; k < windows.length; k++) if (ids[windows[k].id]) return item
-          }
-          return null
-        }
+        readonly property var liveItem: DockPreview.liveItem(previewState.shownItem, dockState.items)
         readonly property var liveWindows: liveItem ? (liveItem.windows || [liveItem.window]) : []
         // The thumbnail cells are keyed by Window id and only rebuilt when
         // the set of Windows changes. A peek moves focus, which rebuilds
@@ -2125,11 +2126,7 @@ Item {
         // the one under the pointer would be destroyed, its hover would
         // end and the peek would be undone at once.
         property var windowIds: []
-        onLiveWindowsChanged: {
-          var ids = []
-          for (var i = 0; i < liveWindows.length; i++) ids.push(liveWindows[i].id)
-          if (JSON.stringify(ids) !== JSON.stringify(windowIds)) windowIds = ids
-        }
+        onLiveWindowsChanged: windowIds = DockPreview.windowIds(windowIds, liveWindows)
 
         function windowFor(id) {
           for (var i = 0; i < liveWindows.length; i++) if (liveWindows[i].id === id) return liveWindows[i]
@@ -2147,43 +2144,25 @@ Item {
 
         // The delegates below can't see `root`, so they act through these.
         function focusPicked(window) {
-          peekTimer.stop()
-          root.peekCommit()
-          previewState.dismiss()
-          if (root.taskbar.previewWarpPointer) root.focusWindowAndWarp(window.id)
-          else root.focusWindow(window.id)
+          previewState.send({ type: "thumbPicked", window: window })
         }
 
-        // Peek, debounced so sweeping the pointer along the thumbnails
-        // doesn't flash every window in turn, and so passing between two
-        // cells doesn't restore in between.
-        // Qt can report the next cell's enter before the previous cell's
-        // leave, so a leave only counts if it is from the cell we think the
-        // pointer is on; a stale one must not cancel the new cell's peek.
-        property var peekTarget: null
         function peekHover(window, hovered) {
-          if (!root.taskbar.previewPeek || !window) return
-          if (hovered) {
-            peekRestoreTimer.stop()
-            peekTarget = window
-            peekTimer.restart()
-          } else if (peekTarget && peekTarget.id === window.id) {
-            peekTarget = null
-            peekTimer.stop()
-            peekRestoreTimer.restart()
-          }
+          previewState.send({ type: "thumbHover", window: window, hovered: hovered })
         }
 
-        Timer {
-          id: peekTimer
-          interval: 150
-          onTriggered: if (previewPopup.peekTarget) root.peekWindow(previewPopup.peekTarget.id)
-        }
-
-        Timer {
-          id: peekRestoreTimer
-          interval: 200
-          onTriggered: root.peekRestore()
+        // Right click on a thumbnail: that Window's menu, above the thumbnail.
+        // What happens to a peek meanwhile is DockPreview.js's "thumbMenu".
+        function openMenu(cell, pointX, pointY) {
+          previewState.send({ type: "thumbMenu", windowId: cell.modelData })
+          contextMenu.close()
+          contextMenu.previewCell = cell
+          contextMenu.previewPointX = pointX
+          contextMenu.previewPointY = pointY
+          contextMenu.previewWindowId = cell.modelData
+          contextMenu.anchorItem = null
+          contextMenu.menuItem = null
+          contextMenu.visible = true
         }
 
         function closePicked(window) {
@@ -2200,11 +2179,7 @@ Item {
           previewSlideAnim.stop()
           if (visible && root.taskbar.previewSlide) previewSlideAnim.start()
           else slide = 1
-          if (!previewPopup.visible) {
-            previewPopup.peekTarget = null
-            peekTimer.stop()
-            root.peekRestore()
-          }
+          if (!previewPopup.visible) previewState.send({ type: "previewClosed" })
         }
         onImplicitWidthChanged: if (visible) previewPopup.anchor.updateAnchor()
 
@@ -2285,6 +2260,17 @@ Item {
                   HoverHandler {
                     id: cellHover
                     onHoveredChanged: previewPopup.peekHover(cell.win, hovered)
+                  }
+
+                  // Right click anywhere on the cell: this Window's menu. Left
+                  // clicks fall through to the thumbnail and close button.
+                  MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.RightButton
+                    onClicked: function (mouse) {
+                      var at = mapToItem(previewPopup.contentItem, mouse.x, mouse.y)
+                      previewPopup.openMenu(cell, previewAnchor.rect.x + at.x, previewAnchor.rect.y + at.y)
+                    }
                   }
 
                 Column {
@@ -2424,7 +2410,7 @@ Item {
 
         onLaunchRequested: function (entry) { root.launchApp(entry) }
         onTogglePinRequested: function (appId, pinned) { root.togglePin(appId, pinned) }
-        onDockHoldRequested: function (held) { revealState.set("menu", held) }
+        onDockHoldRequested: function (held) { revealState.set("startMenu", held) }
       }
 
 
@@ -2478,7 +2464,7 @@ Item {
         implicitWidth: rowWidth
         implicitHeight: barMenuColumn.implicitHeight + Style.spacing.xxs * 2
 
-        onVisibleChanged: revealState.set("menu", barMenu.visible)
+        onVisibleChanged: revealState.set("barMenu", barMenu.visible)
         onClosed: barMenu.close()
 
         Rectangle {
@@ -2581,7 +2567,19 @@ Item {
 
         property var anchorItem: null
         property var menuItem: null
-        readonly property var anchorWindow: contextMenu.anchorItem ? contextMenu.anchorItem.QsWindow.window : null
+        // Set when opened from a Preview thumbnail (docs/SPEC.md "Input"):
+        // the menu is then for that one Window and sits above the thumbnail.
+        // It is anchored to the panel, not the Preview popup, using the
+        // thumbnail's place worked out in panel coordinates.
+        property var previewCell: null
+        property string previewWindowId: ""
+        // Where the pointer was, in panel coordinates: the menu's bottom-left
+        // corner goes there, as in Windows 11.
+        property real previewPointX: 0
+        property real previewPointY: 0
+        readonly property bool forPreview: contextMenu.previewWindowId !== ""
+        readonly property var anchorWindow: contextMenu.forPreview ? panel
+          : (contextMenu.anchorItem ? contextMenu.anchorItem.QsWindow.window : null)
         readonly property int menuMargin: Style.spacing.xs
         // Sized to its longest row, since app actions ("New Private Window")
         // and window rows ("Move to scratchpad") vary; see barMenu.rowWidth.
@@ -2601,6 +2599,30 @@ Item {
         // and Close Window. DockModel.menuFor supplies each row's enabled
         // state from the Item alone.
         readonly property var rows: {
+          if (contextMenu.forPreview) {
+            // Live, so a state that changes while the menu is open (or a
+            // peek being put back) is reflected in the labels.
+            var win = previewPopup.windowFor(contextMenu.previewWindowId)
+            var previewRows = []
+            var winStates = DockModel.windowActions(win)
+            for (var s = 0; s < winStates.length; s++) {
+              previewRows.push({
+                label: winStates[s].label,
+                enabled: true,
+                group: 1,
+                // Choosing a state row keeps the peeked Window focused, as a
+                // click on the thumbnail does, instead of the peek being put back.
+                trigger: (function (id) { return function () { previewState.send({ type: "menuRowChosen" }); root.runWindowAction(id, win.id) } })(winStates[s].id),
+              })
+            }
+            previewRows.push({
+              label: "Close Window",
+              enabled: true,
+              group: 2,
+              trigger: function () { root.closeWindow(win.id) },
+            })
+            return previewRows
+          }
           var item = contextMenu.menuItem
           if (!item) return []
           var menu = DockModel.menuFor(item)
@@ -2681,6 +2703,7 @@ Item {
           revealState.set("menu", contextMenu.visible)
           contextMenu.enteredMenu = false
           menuLeaveTimer.stop()
+          previewState.send({ type: "menuVisible", visible: contextMenu.visible, forPreview: contextMenu.forPreview })
         }
 
         onHoveringMenuChanged: {
@@ -2716,6 +2739,13 @@ Item {
           rect.height: 1
 
           onAnchoring: {
+            if (contextMenu.forPreview) {
+              var px = Math.max(contextMenu.menuMargin,
+                Math.min(contextMenu.previewPointX, panel.width - contextMenu.implicitWidth - contextMenu.menuMargin))
+              menuAnchor.rect.x = Math.round(px)
+              menuAnchor.rect.y = Math.round(Math.max(contextMenu.menuMargin, contextMenu.previewPointY - contextMenu.implicitHeight))
+              return
+            }
             if (!contextMenu.anchorItem || !contextMenu.anchorWindow) return
             var target = contextMenu.anchorItem
             var popupWidth = contextMenu.implicitWidth

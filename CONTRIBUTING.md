@@ -41,12 +41,27 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 | --- | --- |
 | `DockModel.js` | Which Items the Dock shows and in what order: Launch Order, Pins, Placed |
 | `DockConfig.js` | Settings: defaults, the effective view of the config entry, and every change to it |
-| `DockInteraction.js` | Reveal and hide, when a Preview shows, and where a dragged Item lands |
+| `DockInteraction.js` | Reveal and hide (one hold per holder: strip, dock, menus, Start menu, drag), and where a dragged Item lands |
+| `DockHyprland.js` | How to ask Hyprland for each thing the Dock wants: focus, raise, close, Window-state rows, Peek. Returns the command; tests run `bash -n` over every script |
+| `DockPreview.js` | The hover Preview, Peek and the Preview menu: when a Preview shows and goes, what is peeked, kept or put back, and that the Preview's menu holds it up |
 | `StartMenu.js` | The Start menu: opening and closing, Hover mode, search, selection, Escape, Start Pin reorder |
 
 ```sh
 npm test
 ```
+
+### Where things are in `Service.qml`
+
+It is one long file. Search for these names:
+
+| Name | What it is |
+| --- | --- |
+| `focusWindow`, `focusWindowAndWarp`, `runWindowAction`, `closeWindow` | Run what `DockHyprland.js` builds for a click or a menu row |
+| `peekWindow`, `peekRestore`, `peekCommit` | Peek: run the scripts (`DockHyprland.js`) that show a Window and put things back (`DockPreview.js` decides when) |
+| `previewState`, `previewPopup` | The state, timers and effects of `DockPreview.js`, and the Preview itself with its thumbnails |
+| `contextMenu` | The Item menu, and the Preview menu (`previewWindowId`) |
+| `barMenu` | The Bar menu |
+| `dockRow` | The Items, drag and drop |
 
 ### Checks
 
@@ -58,6 +73,7 @@ runs everything that can be checked without the shell:
 
 - the tests above, which also keep the docs in step with the code: every setting has a row in `docs/SETTINGS.md`, every `SPEC.md "…"` section a comment cites exists, `manifest.json` and `package.json` agree on the version, and the Dock and what rises from it take their colours from the colour scheme instead of the theme directly;
 - `omarchy plugin validate .`;
+- `npm run lint:sh`, which syntax-checks `scripts/*.sh` and runs `shellcheck` over them when it is installed;
 - `npm run lint:qml`, which fails on any `qmllint` warning not already listed in `scripts/qmllint-baseline.txt`. `qmllint` can't see Quickshell's types, so the QML carries standing warnings; a new one is usually a misspelt or removed id. Accept a legitimate new one with `npm run lint:qml -- --update`.
 
 Run it on every commit with the pre-commit hook:
@@ -76,7 +92,13 @@ Pull requests run `npm test` on GitHub; the manifest and QML checks need Omarchy
 scripts/smoke.sh            # --monitor NAME, --type, --out DIR, --no-restart
 ```
 
-It restarts the shell with this checkout, fails if the plugin logs anything, and screenshots the Dock, the Start menu and the settings window in each colour scheme. It edits the plugin's entry in `shell.json` for the run and restores it on exit. Look at the screenshots: the script only knows the plugin loaded quietly. It cannot click, drag or hover, so Previews, the Item menu, the Bar menu and drag still need the checklist below.
+It restarts the shell with this checkout, fails if the plugin logs anything, and screenshots the Dock, the Start menu and the settings window in each colour scheme. It edits the plugin's entry in `shell.json` for the run and restores it on exit. Look at the screenshots: the script only knows the plugin loaded quietly. It cannot click, drag or hover. `scripts/pointer.sh` can (`move X Y`, `left`, `right`, `shot FILE`), given `ydotool` and a writable `/dev/uinput` (`docs/hyprland-notes.md` "Moving the pointer"); use it for Previews, the Item menu and the Bar menu. Drag, and anything it could not reach, still needs the checklist below.
+
+### Retaking screenshots
+
+The README images are in `screenshots/`. Retake one only when its subject changed: a new row in the settings window changes `settings.png`; a new look for the Dock or Start menu changes `taskbar.png` and the `start-menu*.png` and `search.png` files; the Preview and the bar's menu have `preview.png` and `right-click.png`.
+
+Run `scripts/screenshots.sh` (needs `ydotool`; see `docs/hyprland-notes.md` "Moving the pointer"). It retakes every image the same way: on an empty workspace, with two throwaway windows for the Preview, the real pointer for the hover and the right-click, and the crops anchored to the monitor's bottom-left corner like the current files. It leaves the results in a scratch directory and prints each size beside the file it would replace; `--only NAME,NAME` takes some, `--install` copies them over `screenshots/`. Look at every image before committing it: the Dock shows your pins and open windows, and the wallpaper and theme are yours, so the images change from release to release for those reasons alone. The Preview shows the throwaway windows' group with a letter tile, not an App's icon.
 
 Releasing is described in [docs/agents/release.md](docs/agents/release.md).
 
@@ -122,6 +144,8 @@ These need `"autoHide": true`. With it off the Dock is always visible.
 - [ ] With `showWorkspaceBadge` on, every Window Item shows its workspace; a special-workspace Window shows the workspace's name.
 - [ ] A Window requesting Attention gets the urgent-colour tint until focused, and the Dock does not reveal itself for it.
 - [ ] Hovering a Window Item shows its Preview: a live thumbnail, the title and a close button.
+- [ ] Right-clicking a thumbnail in a Preview opens a menu with its bottom-left corner at the pointer, with that Window's state rows and Close Window; the Preview stays up while it is open, and the rows act on that Window even if it is not focused. In a group, try it on each thumbnail.
+- [ ] A floating Window hidden behind another floating Window (a full-size floating terminal, say): hovering its Preview peeks it to the front, and clicking the Preview or its Item brings it to the front and makes it the focused Window.
 - [ ] Clicking a Preview focuses the Window and, with `previewWarpPointer`, moves the pointer to its middle.
 - [ ] Sweeping across Items next to a busy browser shows no flicker.
 - [ ] With `showPreviews` off, hovering a Window Item shows a tooltip with its title and workspace. A Pin with no Windows always shows a tooltip with the App's name.
@@ -149,7 +173,7 @@ These need `"autoHide": true`. With it off the Dock is always visible.
 - [ ] Unpinning an App with open Windows leaves them as ordinary Window Items.
 - [ ] A Pin whose App is no longer installed shows a Letter Tile with a "missing" tooltip and stays until Unpin.
 - [ ] Pins survive an `omarchy restart shell`.
-- [ ] Dragging an Item within the Dock shows a live insertion preview and drops it at the new position.
+- [ ] Pressing an Item shrinks it; dragging it lifts it a little bigger than the rest, the Items in between step aside, and it stops at the first and last slot (never over the Start button) while the pointer goes on. Dropping puts it there. Dragging it up off the bar still unpins a pinned Item.
 - [ ] A Placed Pin keeps its position across an `omarchy restart shell`.
 - [ ] A Placed Window Item keeps its position until that Window closes, then falls back to Launch Order.
 - [ ] Dragging one Window of a pinned App with several Windows moves only that Window.
@@ -168,7 +192,7 @@ These need `"autoHide": true`. With it off the Dock is always visible.
 - [ ] All apps lists A-Z; Up/Down walk it; a letter heading opens the jump grid and a letter jumps to its first App.
 - [ ] Escape backs out one layer at a time: overlay menu, jump grid, search text, All apps, then the menu.
 - [ ] Right-click an App: Pin to / Unpin from Start and Dock leave the menu open; Open launches it.
-- [ ] Dragging a Start Pin to another slot reorders it and the order survives a restart; a plain click still launches.
+- [ ] Dragging a Start Pin works like the Dock's drag (shrinks on press, bigger when lifted, the tiles in between step aside, stops at the first and last pin), across rows too; the order survives a restart; a plain click still launches; dropping well outside the grid changes nothing.
 - [ ] Places opens Home, Documents and Downloads in the file manager.
 - [ ] The footer shows the account name and a `~/.face` picture in a circle; it offers Lock and Sign out, and the power button Sleep, Restart and Shut down (try Lock first).
 - [ ] Keyboard focus returns to the previous window when the menu closes.

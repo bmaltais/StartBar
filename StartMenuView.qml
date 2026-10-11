@@ -212,16 +212,108 @@ Item {
   property string fullName: ""
   readonly property string accountName: startMenu.fullName.length > 0 ? startMenu.fullName : startMenu.userName
 
-  // Drag to reorder a pinned app: tell the state machine where the
-  // ghost's centre is, in the grid's own coordinates.
+  // Drag to reorder a pinned app, as on the Dock: pinProbe is what the
+  // pointer drags, pinGhost is drawn from it but held to the cells that hold
+  // a pin, and the tiles between the two slots step aside (pinShift). The
+  // state machine is told where the pointer is, in the grid's coordinates.
+  function pinGridInfo() {
+    return { width: pinnedGrid.width, height: pinnedGrid.height, cellWidth: pinnedGrid.cellWidth, cellHeight: pinnedGrid.cellHeight, contentY: pinnedGrid.contentY }
+  }
+
   function pinDragMoved() {
     if (startMenu.dragPinId === "") return
-    var p = pinnedGrid.mapFromItem(pinGhost.parent, pinGhost.x + pinGhost.width / 2, pinGhost.y + pinGhost.height / 2)
-    startMenu.send({
-      type: "pinDragMove",
-      point: p,
-      grid: { width: pinnedGrid.width, height: pinnedGrid.height, cellWidth: pinnedGrid.cellWidth, cellHeight: pinnedGrid.cellHeight, contentY: pinnedGrid.contentY },
-    })
+    var grid = startMenu.pinGridInfo()
+    var centre = pinnedGrid.mapFromItem(pinProbe.parent, pinProbe.x + pinProbe.width / 2, pinProbe.y + pinProbe.height / 2)
+    startMenu.send({ type: "pinDragMove", point: centre, grid: grid })
+    var topLeft = pinnedGrid.mapFromItem(pinProbe.parent, pinProbe.x, pinProbe.y)
+    var held = StartMenu.clampPinGhost(topLeft, grid, startMenu.pinnedApps.length, StartMenu.PINNED_COLUMNS)
+    var at = pinnedGrid.mapToItem(pinGhost.parent, held.x, held.y)
+    pinGhost.x = at.x
+    pinGhost.y = at.y
+    startMenu.holdDrag = startMenu.model.drag
+  }
+
+  // The drag the tiles are drawn for. It outlives the drag until the new
+  // order arrives (the saved list is read back from the config), so the tiles
+  // do not return to the old order for a moment after a drop.
+  property var holdDrag: ({ id: "", from: -1, slot: -1 })
+  property bool pinDropping: false
+  property string pinSettlingId: ""
+
+  function pinShift(index) {
+    return StartMenu.pinTileShift(startMenu.holdDrag, index, startMenu.pinGridInfo(), StartMenu.PINNED_COLUMNS)
+  }
+
+  // The grid's tiles, by app id, so a reorder moves them and rebuilds none of
+  // them (they flashed as their icons loaded again).
+  property var pinnedById: ({})
+
+  function syncPinTiles() {
+    var apps = startMenu.pinnedApps
+    var byId = {}
+    for (var n = 0; n < apps.length; n++) byId[apps[n].id] = apps[n]
+    for (var r = pinKeys.count - 1; r >= 0; r--) {
+      if (!byId[pinKeys.get(r).id]) pinKeys.remove(r)
+    }
+    startMenu.pinnedById = byId
+    for (var i = 0; i < apps.length; i++) {
+      if (i < pinKeys.count && pinKeys.get(i).id === apps[i].id) continue
+      var at = -1
+      for (var j = i + 1; j < pinKeys.count; j++) {
+        if (pinKeys.get(j).id === apps[i].id) { at = j; break }
+      }
+      if (at >= 0) pinKeys.move(at, i, 1)
+      else pinKeys.insert(i, { id: apps[i].id })
+    }
+  }
+
+  ListModel { id: pinKeys }
+
+  // True from a drop that saves a new order until it is read back: the ghost
+  // stays on its slot meanwhile, so the tile is never seen in its old one.
+  property bool pinAwaiting: false
+
+  function releasePinHold() {
+    if (startMenu.dragPinId !== "") return
+    startMenu.pinDropping = true
+    startMenu.holdDrag = ({ id: "", from: -1, slot: -1 })
+    if (startMenu.pinAwaiting) {
+      startMenu.pinAwaiting = false
+      pinGhost.visible = false
+      startMenu.pinSettlingId = ""
+    }
+    Qt.callLater(function () { startMenu.pinDropping = false })
+  }
+
+  onPinnedAppsChanged: {
+    startMenu.pinDropping = true
+    startMenu.syncPinTiles()
+    startMenu.releasePinHold()
+  }
+  Component.onCompleted: startMenu.syncPinTiles()
+
+  Timer {
+    id: pinHoldTimer
+    interval: 800
+    onTriggered: startMenu.releasePinHold()
+  }
+
+  // The drop: the ghost glides into the slot the app now has (or back to its
+  // own, if the drop saves nothing), then gives way to the tile.
+  function finishPinDrag(id) {
+    var drag = startMenu.model.drag
+    var slot = drag.slot >= 0 ? drag.slot : drag.from
+    startMenu.pinSettlingId = id
+    var cols = StartMenu.PINNED_COLUMNS
+    var cell = pinnedGrid.mapToItem(pinGhost.parent, (slot % cols) * pinnedGrid.cellWidth,
+      Math.floor(slot / cols) * pinnedGrid.cellHeight - pinnedGrid.contentY)
+    pinSettleX.to = cell.x
+    pinSettleY.to = cell.y
+    pinGhost.scale = 1
+    startMenu.pinAwaiting = drag.slot >= 0 && drag.slot !== drag.from
+    pinGhostSettle.restart()
+    startMenu.send({ type: "pinDragEnd" })
+    pinHoldTimer.restart()
   }
 
   function openAppMenu(app, item, mouse) {
@@ -751,16 +843,33 @@ Item {
           clip: true
           cellWidth: Math.floor(width / StartMenu.PINNED_COLUMNS)
           cellHeight: Style.space(92)
-          model: startMenu.pinnedApps
+          model: pinKeys
           boundsBehavior: Flickable.StopAtBounds
 
           delegate: Item {
             id: pinnedTile
-            required property var modelData
+            required property string id
             required property int index
+            // The app itself, looked up by id; it keeps the last one found
+            // for the moment between it going and its tile going.
+            readonly property var live: startMenu.pinnedById[pinnedTile.id]
+            property var modelData: ({})
+            onLiveChanged: if (pinnedTile.live) pinnedTile.modelData = pinnedTile.live
+            Component.onCompleted: if (pinnedTile.live) pinnedTile.modelData = pinnedTile.live
             width: pinnedGrid.cellWidth
             height: pinnedGrid.cellHeight
-            opacity: startMenu.dragPinId === pinnedTile.modelData.id ? 0.25 : 1
+            opacity: startMenu.dragPinId === pinnedTile.id || startMenu.pinSettlingId === pinnedTile.id ? 0 : 1
+
+            // Tiles the dragged one has passed step aside by one slot, and a
+            // pressed tile shrinks a little before it is lifted.
+            property var shift: startMenu.pinShift(pinnedTile.index)
+            property real shiftX: pinnedTile.shift.x
+            property real shiftY: pinnedTile.shift.y
+            Behavior on shiftX { enabled: !startMenu.pinDropping; NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+            Behavior on shiftY { enabled: !startMenu.pinDropping; NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+            transform: Translate { x: pinnedTile.shiftX; y: pinnedTile.shiftY }
+            scale: (pinnedMouse.pressedButtons & Qt.LeftButton) && startMenu.dragPinId === "" ? 0.88 : 1
+            Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
 
             Rectangle {
               anchors.fill: parent
@@ -806,10 +915,10 @@ Item {
               acceptedButtons: Qt.LeftButton | Qt.RightButton
               cursorShape: Qt.PointingHandCursor
               // Left-drag a pin to reorder it: the ghost (a sibling of
-              // the grid) follows the pointer, the slot under it is
-              // outlined, and releasing writes the new order.
+              // the grid) follows the pointer, the tiles in between step
+              // aside, and releasing writes the new order.
               preventStealing: true
-              drag.target: pinGhost
+              drag.target: pinProbe
               drag.threshold: 8
               // A drag still ends in a click event; this stops the drop
               // from also launching the app.
@@ -821,24 +930,33 @@ Item {
                   pinnedMouse.drag.target = null
                   return
                 }
-                pinnedMouse.drag.target = pinGhost
+                pinnedMouse.drag.target = pinProbe
+                pinGhostSettle.stop()
+                startMenu.pinSettlingId = ""
+                pinHoldTimer.stop()
                 var origin = pinnedTile.mapToItem(home, 0, 0)
+                pinProbe.x = origin.x
+                pinProbe.y = origin.y
+                pinProbe.width = pinnedTile.width
+                pinProbe.height = pinnedTile.height
                 pinGhost.x = origin.x
                 pinGhost.y = origin.y
                 pinGhost.width = pinnedTile.width
                 pinGhost.height = pinnedTile.height
+                pinGhost.scale = 0.88
                 pinGhost.app = pinnedTile.modelData
               }
 
               drag.onActiveChanged: {
                 if (pinnedMouse.drag.active) {
                   pinnedMouse.wasDragged = true
-                  startMenu.send({ type: "pinDragStart", id: pinnedTile.modelData.id })
+                  startMenu.send({ type: "pinDragStart", id: pinnedTile.id })
+                  startMenu.holdDrag = startMenu.model.drag
                   pinGhost.visible = true
+                  pinGhost.scale = 1.15
                   startMenu.pinDragMoved()
-                } else if (startMenu.dragPinId === pinnedTile.modelData.id) {
-                  pinGhost.visible = false
-                  startMenu.send({ type: "pinDragEnd" })
+                } else if (startMenu.dragPinId === pinnedTile.id) {
+                  startMenu.finishPinDrag(pinnedTile.id)
                 }
               }
 
@@ -860,16 +978,37 @@ Item {
           }
         }
 
-        // The icon that follows the pointer while a pin is dragged, and
-        // an outline on the slot it would land in.
+        // What the pointer drags (pinnedMouse.drag.target above): invisible,
+        // it goes wherever the pointer does. pinGhost is drawn from it.
+        Item {
+          id: pinProbe
+          visible: false
+          onXChanged: startMenu.pinDragMoved()
+          onYChanged: startMenu.pinDragMoved()
+        }
+
+        // The drop: the ghost glides into its slot, then the tile shows again.
+        ParallelAnimation {
+          id: pinGhostSettle
+          onFinished: {
+            if (startMenu.pinAwaiting) return
+            pinGhost.visible = false
+            startMenu.pinSettlingId = ""
+          }
+          NumberAnimation { id: pinSettleX; target: pinGhost; property: "x"; duration: 120; easing.type: Easing.OutCubic }
+          NumberAnimation { id: pinSettleY; target: pinGhost; property: "y"; duration: 120; easing.type: Easing.OutCubic }
+        }
+
+        // The icon of a drag: a little bigger than the tiles beside it,
+        // following the pointer until it reaches the first or last slot.
         Item {
           id: pinGhost
           property var app: null
           visible: false
           z: 100
-          opacity: 0.85
-          onXChanged: startMenu.pinDragMoved()
-          onYChanged: startMenu.pinDragMoved()
+          opacity: 0.95
+          scale: 1
+          Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
           Image {
             anchors.top: parent.top
@@ -883,20 +1022,6 @@ Item {
             sourceSize.height: height * Screen.devicePixelRatio
             source: pinGhost.app && pinGhost.app.icon ? Quickshell.iconPath(pinGhost.app.icon, true) : ""
           }
-        }
-
-        Rectangle {
-          id: pinDropMark
-          visible: startMenu.dragPinId !== "" && startMenu.dragPinSlot >= 0
-          z: 99
-          width: pinnedGrid.cellWidth - 4
-          height: pinnedGrid.cellHeight - 4
-          radius: Style.cornerRadius
-          color: "transparent"
-          border.width: 2
-          border.color: startMenu.colAccent
-          x: pinnedGrid.x + (startMenu.dragPinSlot % StartMenu.PINNED_COLUMNS) * pinnedGrid.cellWidth + 2
-          y: pinnedGrid.y + Math.floor(startMenu.dragPinSlot / StartMenu.PINNED_COLUMNS) * pinnedGrid.cellHeight - pinnedGrid.contentY + 2
         }
 
         Text {

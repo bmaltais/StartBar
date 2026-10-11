@@ -352,10 +352,38 @@ function windowActions(window) {
   return actions;
 }
 
+// The Placed positions after dropping the Item `key` at slot `index` of the
+// Items as shown. Every Placed position is an index into the finished list, so
+// moving one Item shifts the others: each Item that is Placed is rewritten to
+// the slot it has now, which is what keeps a rebuild showing the order the
+// drop made. A Placed position whose Item is not shown (a closed Window, a Pin
+// behind its App's Windows) is kept as it is.
+function movedPlacements(items, placements, key, index) {
+  var order = [];
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].key !== key) order.push(items[i].key);
+  }
+  order.splice(Math.max(0, Math.min(index, order.length)), 0, key);
+
+  var slotOf = {};
+  for (var s = 0; s < order.length; s++) slotOf[order[s]] = s;
+
+  var result = [];
+  var list = Array.isArray(placements) ? placements : [];
+  for (var p = 0; p < list.length; p++) {
+    var entry = list[p];
+    if (!entry || entry.key === key) continue;
+    result.push(slotOf[entry.key] === undefined ? entry : { key: entry.key, index: slotOf[entry.key] });
+  }
+  result.push({ key: key, index: slotOf[key] });
+  return result;
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     buildDockItems: buildDockItems,
     windowActions: windowActions,
+    movedPlacements: movedPlacements,
     menuFor: menuFor,
   };
 }
