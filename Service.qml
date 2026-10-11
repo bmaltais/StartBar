@@ -484,18 +484,23 @@ Item {
   }
 
   // Drag within the Dock (docs/SPEC.md "Input": "reorder"; CONTEXT.md
-  // "Placed"): a Pin Item's own drop is persisted through dockSettings.apply
-  // exactly like Pin/Unpin already is, so it survives a restart. A Window
-  // Item's drop only updates dockState.windowPlacements directly — it has
-  // no write-back of its own to trigger dockState.refresh() the way a
-  // settings change does, so this calls it explicitly.
+  // "Placed"): DockModel.movedPlacements works out every Placed position
+  // after the drop. The Pins' are persisted through dockSettings.apply
+  // exactly like Pin/Unpin already is, so they survive a restart; the Window
+  // Items' go to dockState.windowPlacements directly.
   function placeItem(item, targetIndex) {
-    if (item.kind === "pin") {
-      dockSettings.apply({ type: "placeItem", key: item.key, index: targetIndex })
-      return
+    var placements = DockModel.movedPlacements(dockState.items, dockState.placements(), item.key, targetIndex)
+    var windowPlacements = {}
+    var pinPlacements = []
+    for (var i = 0; i < placements.length; i++) {
+      if (placements[i].key.indexOf("pin:") === 0) pinPlacements.push(placements[i])
+      else windowPlacements[placements[i].key] = placements[i].index
     }
-    dockState.windowPlacements[item.key] = targetIndex
-    dockState.refresh()
+    dockState.windowPlacements = windowPlacements
+    // A change to the Pins' Placed positions refreshes the Dock itself once
+    // the config is written; otherwise refresh now.
+    var pinsChanged = JSON.stringify(pinPlacements) !== JSON.stringify(dockSettings.placements)
+    if (!pinsChanged || !dockSettings.apply({ type: "setPlacements", placements: pinPlacements })) dockState.refresh()
   }
 
   // Drag out of the Dock, for an Item whose App is pinned (docs/SPEC.md

@@ -238,21 +238,18 @@ test("an intent without a usable App id changes nothing", () => {
   assert.deepEqual(applyIntent(entry, null), entry);
 });
 
-test("placeItem records a new Placed index for a Pin with no prior placement", () => {
-  const next = applyIntent({}, { type: "placeItem", key: "pin:firefox", index: 3 });
-  assert.deepEqual(next.placements, [{ key: "pin:firefox", index: 3 }]);
-});
-
-test("placeItem moves a Pin already Placed instead of adding a second entry for it", () => {
-  const entry = { placements: [{ key: "pin:firefox", index: 0 }, { key: "pin:alacritty", index: 1 }] };
-
-  const next = applyIntent(entry, { type: "placeItem", key: "pin:firefox", index: 5 });
-
+test("setPlacements records the Placed positions of Pins, replacing the old ones", () => {
+  const entry = { placements: [{ key: "pin:firefox", index: 0 }] };
+  const next = applyIntent(entry, {
+    type: "setPlacements",
+    placements: [{ key: "pin:alacritty", index: 1 }, { key: "pin:firefox", index: 5 }],
+  });
   assert.deepEqual(next.placements, [{ key: "pin:alacritty", index: 1 }, { key: "pin:firefox", index: 5 }]);
 });
 
-test("placeItem never persists a Window Item's position", () => {
-  assert.deepEqual(applyIntent({}, { type: "placeItem", key: "window:w1", index: 2 }), {});
+test("setPlacements never persists a Window Item's position", () => {
+  const next = applyIntent({}, { type: "setPlacements", placements: [{ key: "window:w1", index: 2 }] });
+  assert.deepEqual(next.placements || [], []);
 });
 
 test("unpinAppFromDrag unpins the App and drops its Pin's Placed position in one entry, leaving other Pins and positions", () => {
@@ -276,7 +273,7 @@ test("two intents in one tick both survive when the second folds onto the first'
   const entry = { id: PLUGIN_ID, pins: ["firefox"] };
 
   const first = applyIntent(entry, { type: "pinApp", appId: "alacritty" });
-  const second = applyIntent(first, { type: "placeItem", key: "pin:alacritty", index: 0 });
+  const second = applyIntent(first, { type: "setPlacements", placements: [{ key: "pin:alacritty", index: 0 }] });
 
   assert.deepEqual(second.pins, ["firefox", "alacritty"]);
   assert.deepEqual(second.placements, [{ key: "pin:alacritty", index: 0 }]);

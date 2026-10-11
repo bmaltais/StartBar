@@ -15,7 +15,7 @@
 //                              defaulting anything missing or hand-edited
 //                              into something unusable.
 //   applyIntent(entry, intent) a named intent -> the next entry. Callers
-//                              say what happened ("pinApp", "placeItem",
+//                              say what happened ("pinApp", "setPlacements",
 //                              "setSettings"...), never which keys change.
 //
 // findPluginEntry locates the entry (or null if the Dock has never been
@@ -338,14 +338,6 @@ function withoutId(list, id) {
   return list.filter(function (other) { return other !== id; });
 }
 
-// `placements` with `key` recorded at `index`: a re-drag of an already-Placed
-// Item moves it rather than stacking a second entry.
-function placedAt(placements, key, index) {
-  var list = unplaced(placements, key);
-  list.push({ key: key, index: index });
-  return list;
-}
-
 // `placements` without `key`'s Placed position; a no-op when never Placed.
 function unplaced(placements, key) {
   return placements.filter(function (placement) { return placement.key !== key; });
@@ -363,8 +355,9 @@ function pushedRecent(recent, appId) {
 //   { type: "unpinAppFromDrag", appId }
 //       unpin, and drop that Pin's Placed position in the same entry
 //       (docs/SPEC.md "Input": drag out of the Dock).
-//   { type: "placeItem", key, index }
-//       a Pin Item's drop within the Dock (key is "pin:<appId>").
+//   { type: "setPlacements", placements }
+//       the Placed positions after a drop within the Dock; only a Pin's
+//       ("pin:<appId>") is kept, a Window Item's never persists.
 //   { type: "pinStartApp", appId } / { type: "unpinStartApp", appId }
 //       the same for the Start menu's own pinned list.
 //   { type: "reorderStartPins", order }
@@ -391,8 +384,8 @@ function applyIntent(entry, intent) {
   else if (kind === "unpinAppFromDrag" && appId) {
     patch.pins = withoutId(view.pins, appId);
     patch.placements = unplaced(view.placements, "pin:" + appId);
-  } else if (kind === "placeItem" && typeof intent.key === "string" && intent.key.indexOf("pin:") === 0) {
-    patch.placements = placedAt(view.placements, intent.key, intent.index);
+  } else if (kind === "setPlacements") {
+    patch.placements = effectivePlacements({ placements: intent.placements });
   } else if (kind === "pinStartApp" && appId) patch.startPins = withId(view.startPins, appId);
   else if (kind === "unpinStartApp" && appId) patch.startPins = withoutId(view.startPins, appId);
   else if (kind === "reorderStartPins") patch.startPins = uniqueStrings(intent.order);
