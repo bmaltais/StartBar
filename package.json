@@ -4,6 +4,7 @@
   "version": "1.1.0",
   "description": "Node test harness for StartBar's pure JS modules.",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "smoke": "bash scripts/smoke.sh"
   }
 }
