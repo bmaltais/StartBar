@@ -14,10 +14,12 @@ What StartBar does today. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); 
 - One Dock per monitor: a full-width bar along the bottom edge with the Start button, the Items and an optional clock. Every Dock shows the same Items.
 - One Window Item per Window, across all workspaces and all monitors, including special workspaces.
 - A Window whose App cannot be resolved shows a Letter Tile and cannot be pinned.
+- Grouping (`groupWindows`, true; added 2026-10-10): with it on, an App's Windows collapse into one Group Item when it has two or more; a lone Window is a plain Window Item as ever. See "Grouping" below.
 - Pins: an App kept in the Dock whether or not it has Windows. A Pin holds a slot; while its App has Windows their Window Items occupy that slot, otherwise the Pin is shown and launches the App on click. A Pin whose App is no longer installed shows a Letter Tile with a "missing" tooltip and stays until unpinned.
 - Ordering: Launch Order, with a new Window joining the Window Items of its own App. Any Item may be dragged to a Placed position; a Placed Pin keeps it permanently, a Placed Window Item until the Window closes. Dragging one Window of a pinned App moves only that Window.
 - Indicators: a small pill under every Window Item, wide and accent-coloured for the Active Window, which is also highlighted; a workspace badge on every Window Item when `showWorkspaceBadge` is on (default off); an urgent-colour tint for Attention. No magnification.
 - Previews (`showPreviews`, on): hovering a Window Item shows its Preview, a live thumbnail with the title and a close button. The thumbnail keeps the Window's own aspect ratio inside a fixed-size box and holds its last good frame if the live capture blanks. A Pin without Windows shows a tooltip with the App's name instead. With previews off, a Window Item shows a tooltip with its title and workspace.
+- Peek (`previewPeek`, true; added 2026-10-10): hovering a thumbnail for 150ms shows that Window by focusing it, as Windows' Aero Peek does: its workspace comes into view, and a maximized or full-screen Window covering it on that workspace is un-maximized for the peek. Moving to another thumbnail first undoes the previous peek, then applies the new one. Leaving the thumbnails (200ms) or closing the popup restores the focused Window, each monitor's workspace and the maximized state; a click on the thumbnail keeps the Window focused instead. State is saved in `$XDG_RUNTIME_DIR/startbar-peek` and any leftover is restored when the shell starts. Hyprland cannot unset a window's opacity, so the peek focuses rather than fading other windows.
 - Overflow: icons shrink until every Item fits the monitor width.
 - Colours and fonts come from the current Omarchy theme and follow theme switches live, unless a fixed palette is chosen (see "The bar").
 
@@ -25,7 +27,7 @@ What StartBar does today. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); 
 
 - Full-width along the bottom, `barHeight` (48) tall, with `opacity` (0.9) or `transparent` (icons only).
 - Icons are `iconSize` (48) at most and also fit inside the bar (`barHeight - 20`), so with the defaults they are 28px.
-- `alignment`: `center` or `left` for the group of Start button and Items.
+- `alignment`: `left` (default, changed from `center` 2026-10-10) or `center` for the group of Start button and Items.
 - Start button (`showStart`, on) at the start of that group. It runs `startCommand`, which is `builtin` by default and opens the Start menu; any other value is run as a command, such as `omarchy-menu toggle apps` for the Omarchy menu. `startIcon` is `grid` (drawn by the plugin, the default), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path.
 - Clock (`showClock`, off) at the right end.
 - `colorScheme`: `theme` (default) follows Omarchy; `dark` and `light` are fixed palettes. It applies to the bar and everything that rises from it: the Start menu, the menus and the Previews. Tooltips and the settings window always follow the theme.
@@ -46,7 +48,7 @@ What StartBar does today. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); 
 - Middle click on any Item with a resolvable App: launch a new instance.
 - Click on a Preview: focus its Window and, with `previewWarpPointer` (on), move the pointer to the middle of that Window. Clicking an Item itself never moves the pointer.
 - Right click on an Item: the Item menu, in three groups. (1) Pin/Unpin, New Window, and the App's own desktop actions (e.g. "New Private Window"). (2) For a Window Item, its state: Maximize/Restore, Full screen/Exit full screen, Float/Tile, and, when floating, Center and Pin on top/Unpin from top; Move to scratchpad (hidden once there). (3) Close Window. Pin is disabled on Letter Tile Items. The state rows act on that Window whether or not it is focused. The menu stays open until a row is chosen, a click lands outside it, or the pointer leaves it.
-- Right click on the bar (not on an Item): the Bar menu, the common options in divided groups: icon alignment; colour scheme; the Start button, built-in or Omarchy menu, and open-on-hover; then auto-hide, clock, previews, pointer-follows-preview, workspace badge and transparent background; then Settings…. Choosing a row writes the setting and closes the menu; the bar updates live.
+- Right click on the bar (not on an Item): the Bar menu, the common options in divided groups: icon alignment; colour scheme; the Start button, built-in or Omarchy menu, and open-on-hover; then auto-hide, clock, previews, pointer-follows-preview, show-window-on-hover, group windows, workspace badge and transparent background; then Settings…. Choosing a row writes the setting and closes the menu; the bar updates live.
 - Drag within the Dock: reorder, with a live insertion preview (see Placed). Drag out of the Dock: unpin the Item's App if pinned, otherwise snap back.
 - The Dock never takes keyboard focus. The two exceptions are the Start menu while it is open and the settings window.
 
@@ -54,7 +56,7 @@ What StartBar does today. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); 
 
 With `startCommand: "builtin"`, the default, the Start button opens StartBar's own menu, anchored above the button (the Omarchy menu always centres on screen and can't be anchored). With centred icons it is centred on the monitor.
 
-- Opening: a click on the Start button, or, with `startHoverOpen` (on), the pointer resting on the Start button for 400 ms.
+- Opening: a click on the Start button, or, with `startHoverOpen` (off by default, changed from on 2026-10-10), the pointer resting on the Start button for 400 ms.
 - Hover mode: a menu opened by resting the pointer. It already has the keyboard, so typing searches at once, but it closes 500 ms after the pointer is on neither the button nor the menu. Clicking the Start button does not make it stay, and moving the pointer on to an Item closes it at once so that Item's Preview takes over. Typing a key, or clicking the search box, ends hover mode: the menu then stays until dismissed, like a clicked-open one.
 - From the keyboard: `omarchy-shell io.github.bmaltais.startbar startMenu` toggles it on the focused monitor and `closeStartMenu` closes it, for a Super-key binding. It never opens in hover mode this way. With a `startCommand` other than `builtin`, both the button and this command run that command instead.
 - Search box at the top: type to filter all Apps; Up/Down move the highlight and Enter launches it.
@@ -77,6 +79,16 @@ Stored in StartBar's entry in Omarchy's shell config (`~/.config/omarchy/shell.j
 - `startPins`, `recentApps` and `startPlaces` for the Start menu
 
 A value that is missing or unusable falls back to its default. A leftover `style` key from the removed dock style ([ADR 0002](adr/0002-startbar-is-only-a-taskbar.md)) is ignored.
+
+## Grouping
+
+Optional, on by default (`groupWindows`, which can be turned off; also a row in the bar's right-click menu and in the settings window). Modelled on the Windows taskbar. The "one Window Item per Window" rule above holds while it is off.
+
+- Windows of one App (Windows with no App group by window class) become a single Group Item, in the slot Launch Order or the App's Pin gives them. The icon has the edges of the other Windows stacked behind it, and the running indicator shows one dot per Window (at most three). The Group Item is highlighted when any of its Windows is the Active Window, and tinted when any is in Attention. Its workspace badge shows only when all its Windows are on one workspace.
+- Hover: the preview popup shows one thumbnail per Window in a row, each with title and close button; the Active Window's is outlined. Thumbnails shrink to fit the screen. Clicking a thumbnail focuses that Window; closing one leaves the popup up for the rest, and the last one closing takes it away. With `showPreviews` off the tooltip gives the App name and Window count.
+- Left click on a Group Item does nothing (pick from the preview, as on Windows), except with previews off, where it focuses the Window after the Active one. Middle click launches a new instance.
+- Right click: Pin/Unpin, New Window and the App's actions as for any Item; the Window-state rows are left out; "Close all N windows" replaces Close Window.
+- Placed: a Group Item's position is kept until the App's last Window closes. Dragging it moves the whole group, and dragging a pinned App's group out unpins the App.
 
 ## Settings window
 

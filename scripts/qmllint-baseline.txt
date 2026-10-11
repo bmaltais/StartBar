@@ -6,6 +6,7 @@ Service.qml	import	Warnings occurred while importing module "qs.Ui":
 Service.qml	missing-type	No type found for property "adjustment". This may be due to a missing import statement or incomplete qmltypes files.
 Service.qml	missing-type	No type found for property "edges". This may be due to a missing import statement or incomplete qmltypes files.
 Service.qml	missing-type	No type found for property "gravity". This may be due to a missing import statement or incomplete qmltypes files.
+Service.qml	signal-handler-parameters	Type QProcess::ExitStatus of parameter exitStatus in signal called exited was not found, but is required to compile onExited. Did you add all imports and dependencies?
 Service.qml	syntax	id declarations are only allowed in objects
 Service.qml	uncreatable-type	Type PanelWindow is not creatable.
 Service.qml	unqualified	Color
@@ -16,17 +17,20 @@ Service.qml	unqualified	barMenuColumn
 Service.qml	unqualified	choiceEditor
 Service.qml	unqualified	choices
 Service.qml	unqualified	contextMenu
+Service.qml	unqualified	dockItem
 Service.qml	unqualified	dockRow
 Service.qml	unqualified	dockSettings
 Service.qml	unqualified	dockState
 Service.qml	unqualified	dragGhost
 Service.qml	unqualified	groupBlock
+Service.qml	unqualified	icon
 Service.qml	unqualified	listBox
 Service.qml	unqualified	listEditor
 Service.qml	unqualified	menuAnchor
 Service.qml	unqualified	menuColumn
 Service.qml	unqualified	panel
 Service.qml	unqualified	previewAnchor
+Service.qml	unqualified	previewPopup
 Service.qml	unqualified	previewState
 Service.qml	unqualified	resolveApp
 Service.qml	unqualified	resolveAppById

@@ -20,6 +20,14 @@ _Avoid_: icon (an icon is what an Item displays), entry, button
 A single top-level window managed by Hyprland, on any workspace of any monitor. Each Window is represented by exactly one Window Item.
 _Avoid_: client, toplevel, application (a Window belongs to an App; the two are different)
 
+**Group Item**:
+With `groupWindows` on, the single Item that stands for all of an App's Windows when there are two or more. It shows the icon with the edges of the others stacked behind it. It replaces that App's Window Items, so "one Window Item per Window" holds only while grouping is off. Hovering it previews every Window in the group.
+_Avoid_: stack, bundle, combined icon
+
+**Peek**:
+Hovering a preview thumbnail to see its Window: the Window is focused for as long as the pointer is on it, then the previous focus, workspaces and maximized state are put back. Clicking the thumbnail keeps the Window focused instead.
+_Avoid_: hover focus, preview focus
+
 **App**:
 The desktop entry that identifies which program a Window belongs to. An App supplies the icon and the launch command.
 _Avoid_: application, program, class
@@ -45,7 +53,7 @@ The order in which Windows appeared, except that a new Window joins the Window I
 _Avoid_: creation order, open order, z-order
 
 **Placed**:
-An Item the user has dragged to a position of their choosing. A Placed Pin keeps its position permanently; a Placed Window Item keeps it until the Window closes.
+An Item the user has dragged to a position of their choosing. A Placed Pin keeps its position permanently; a Placed Window Item keeps it until the Window closes, and a Placed Group Item until the App's last Window closes.
 _Avoid_: reordered, moved, custom order
 
 **Preview**:
