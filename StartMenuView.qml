@@ -44,6 +44,7 @@ Item {
   required property real panelHeight
   required property real buttonX       // the Start button's x, for left-aligned icons
   required property bool buttonHovered // the pointer is on the Start button
+  required property var icons          // IconResolver: icons.source(name) is an Image source
   signal launchRequested(var entry)    // launch this desktop entry
   signal togglePinRequested(string appId, bool pinned) // Pin/Unpin on the Dock
   signal dockHoldRequested(bool held)  // keep the Dock Revealed while the menu is up
@@ -410,24 +411,77 @@ Item {
         font.pixelSize: Style.font.body
       }
 
-      TextInput {
+      // The search field draws its own text and takes the keys itself instead
+      // of being a TextInput: a native TextInput reads the clipboard whenever
+      // it changes (to know whether Paste is on), with no size limit, which
+      // lets a hostile clipboard owner stall the shell. So there is no
+      // clipboard, no caret movement or selection and no IME composition:
+      // typing, Backspace and Ctrl+U (clear) are all it does.
+      Item {
         id: searchInput
         anchors.fill: parent
         anchors.leftMargin: searchGlyph.x + searchGlyph.width + Style.spacing.md
         anchors.rightMargin: Style.spacing.md
-        verticalAlignment: TextInput.AlignVCenter
-        color: startMenu.colText
-        font.family: Style.font.family
-        font.pixelSize: Style.font.body
         clip: true
         focus: true
+
+        readonly property int maxLength: 256
+        property string text: ""
         onTextChanged: startMenu.send({ type: "queryChanged", text: searchInput.text })
+
+        Text {
+          id: typed
+          anchors.verticalCenter: parent.verticalCenter
+          // Scroll so the end (the caret) stays in view.
+          x: Math.min(0, searchInput.width - width - searchCaret.width)
+          text: searchInput.text
+          color: startMenu.colText
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+        }
+
+        Rectangle {
+          id: searchCaret
+          visible: searchInput.activeFocus && caretBlink.on
+          anchors.verticalCenter: parent.verticalCenter
+          x: typed.x + typed.width
+          width: 1
+          height: Style.font.body + 4
+          color: startMenu.colText
+        }
+
+        Timer {
+          id: caretBlink
+          property bool on: true
+          interval: 530
+          running: searchInput.activeFocus
+          repeat: true
+          onTriggered: caretBlink.on = !caretBlink.on
+          onRunningChanged: caretBlink.on = true
+        }
 
         // Using the keyboard means you want the menu: StartMenu.js ends
         // hover mode on any key, then says whether it took this one
         // (otherwise the key goes into the box).
         Keys.onPressed: function (event) {
-          event.accepted = startMenu.send({ type: "key", key: startMenu.keyName(event.key) })
+          if (startMenu.send({ type: "key", key: startMenu.keyName(event.key) })) {
+            event.accepted = true
+            return
+          }
+          caretBlink.on = true
+          var ctrl = (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) !== 0
+          if (event.key === Qt.Key_Backspace) {
+            if (ctrl) searchInput.text = ""
+            else searchInput.text = searchInput.text.slice(0, -1)
+            event.accepted = true
+          } else if (event.key === Qt.Key_U && (event.modifiers & Qt.ControlModifier)) {
+            searchInput.text = ""
+            event.accepted = true
+          } else if (!ctrl && event.text.length > 0 && event.text.charCodeAt(0) >= 32 && event.text.charCodeAt(0) !== 127) {
+            if (searchInput.text.length < searchInput.maxLength)
+              searchInput.text = (searchInput.text + event.text).slice(0, searchInput.maxLength)
+            event.accepted = true
+          }
         }
       }
     }
@@ -470,7 +524,7 @@ Item {
               asynchronous: true
               sourceSize.width: width * Screen.devicePixelRatio
               sourceSize.height: height * Screen.devicePixelRatio
-              source: Quickshell.iconPath(placeRow.modelData.icon, true)
+              source: startMenu.icons.source(placeRow.modelData.icon)
             }
 
             Text {
@@ -539,7 +593,7 @@ Item {
             asynchronous: true
             sourceSize.width: width * Screen.devicePixelRatio
             sourceSize.height: height * Screen.devicePixelRatio
-            source: resultRow.modelData.icon ? Quickshell.iconPath(resultRow.modelData.icon, true) : ""
+            source: resultRow.modelData.icon ? startMenu.icons.source(resultRow.modelData.icon) : ""
           }
 
           Text {
@@ -670,7 +724,7 @@ Item {
             asynchronous: true
             sourceSize.width: width * Screen.devicePixelRatio
             sourceSize.height: height * Screen.devicePixelRatio
-            source: allRow.modelData.icon ? Quickshell.iconPath(allRow.modelData.icon, true) : ""
+            source: allRow.modelData.icon ? startMenu.icons.source(allRow.modelData.icon) : ""
           }
 
           Column {
@@ -890,7 +944,7 @@ Item {
               asynchronous: true
               sourceSize.width: width * Screen.devicePixelRatio
               sourceSize.height: height * Screen.devicePixelRatio
-              source: pinnedTile.modelData.icon ? Quickshell.iconPath(pinnedTile.modelData.icon, true) : ""
+              source: pinnedTile.modelData.icon ? startMenu.icons.source(pinnedTile.modelData.icon) : ""
             }
 
             Text {
@@ -1020,7 +1074,7 @@ Item {
             asynchronous: true
             sourceSize.width: width * Screen.devicePixelRatio
             sourceSize.height: height * Screen.devicePixelRatio
-            source: pinGhost.app && pinGhost.app.icon ? Quickshell.iconPath(pinGhost.app.icon, true) : ""
+            source: pinGhost.app && pinGhost.app.icon ? startMenu.icons.source(pinGhost.app.icon) : ""
           }
         }
 
@@ -1075,7 +1129,7 @@ Item {
               asynchronous: true
               sourceSize.width: width * Screen.devicePixelRatio
               sourceSize.height: height * Screen.devicePixelRatio
-              source: recentTile.modelData.icon ? Quickshell.iconPath(recentTile.modelData.icon, true) : ""
+              source: recentTile.modelData.icon ? startMenu.icons.source(recentTile.modelData.icon) : ""
             }
 
             Column {
