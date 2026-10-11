@@ -57,6 +57,15 @@ It shows a taskbar at the bottom of every monitor. Everything it needs comes wit
 
 <table>
   <tr>
+    <th>Grouped windows</th>
+  </tr>
+  <tr valign="top">
+    <td><img src="screenshots/preview.png" alt="Hovering a grouped icon shows one thumbnail per window to pick from" width="473"></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
     <th>Light colours</th>
     <th>Dark colours</th>
   </tr>
