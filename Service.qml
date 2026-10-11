@@ -171,6 +171,8 @@ Item {
   // the others. Named dockState, not state — every Item already has a
   // built-in `state` property, which would silently shadow an id of that
   // name in any binding written inside an Item (Repeater, Row, ...).
+  ListModel { id: dockItemKeys }
+
   QtObject {
     id: dockState
 
@@ -273,6 +275,32 @@ Item {
       if (signature === dockState.itemsSignature) return
       dockState.itemsSignature = signature
       dockState.items = next
+      dockState.syncItemModel(next)
+    }
+
+    // The Dock's Repeater runs over dockItemKeys, one row per Item key, and
+    // each delegate looks its Item up in itemByKey. Replacing the Items
+    // array instead would tear down and rebuild every delegate on any
+    // reorder, so a drop made every icon flash as it loaded again. Here an
+    // Item that stays keeps its delegate, and a reorder is a `move`.
+    property var itemByKey: ({})
+
+    function syncItemModel(next) {
+      var byKey = {}
+      for (var n = 0; n < next.length; n++) byKey[next[n].key] = next[n]
+      for (var r = dockItemKeys.count - 1; r >= 0; r--) {
+        if (!byKey[dockItemKeys.get(r).key]) dockItemKeys.remove(r)
+      }
+      dockState.itemByKey = byKey
+      for (var i = 0; i < next.length; i++) {
+        if (i < dockItemKeys.count && dockItemKeys.get(i).key === next[i].key) continue
+        var at = -1
+        for (var j = i + 1; j < dockItemKeys.count; j++) {
+          if (dockItemKeys.get(j).key === next[i].key) { at = j; break }
+        }
+        if (at >= 0) dockItemKeys.move(at, i, 1)
+        else dockItemKeys.insert(i, { key: next[i].key })
+      }
     }
   }
 
@@ -442,10 +470,11 @@ Item {
       else windowPlacements[placements[i].key] = placements[i].index
     }
     dockState.windowPlacements = windowPlacements
-    // A change to the Pins' Placed positions refreshes the Dock itself once
-    // the config is written; otherwise refresh now.
-    var pinsChanged = JSON.stringify(pinPlacements) !== JSON.stringify(dockSettings.placements)
-    if (!pinsChanged || !dockSettings.apply({ type: "setPlacements", placements: pinPlacements })) dockState.refresh()
+    // Shown now, not once the config file has been written and read back: the
+    // Dock would otherwise sit in the old order for a moment after a drop.
+    dockSettings.placements = pinPlacements
+    dockSettings.apply({ type: "setPlacements", placements: pinPlacements })
+    dockState.refresh()
   }
 
   // Drag out of the Dock, for an Item whose App is pinned (docs/SPEC.md
@@ -1597,25 +1626,48 @@ Item {
           var decision = DockInteraction.dragDrop(dockRow.drag, dockRow.ghostCenter(), dockRow.rect(),
             dockRow.iconSize, { pinned: item.kind === "pin" || !!item.pinned })
 
+          var from = dockRow.drag.from
           dockRow.dropping = true
           dockRow.drag = DockInteraction.initialDrag()
-          dragGhost.visible = false
           revealState.set("drag", false)
           root.dragInProgress = false
 
-          if (decision.action === "unpin") root.unpinFromDrag(root.menuAppId(item))
-          else if (decision.action === "reorder") root.placeItem(item, decision.index)
+          // The ghost settles into the slot the Item now has, then gives way
+          // to it; a drag-out has no slot to settle into.
+          if (decision.action === "unpin") {
+            dragGhost.visible = false
+            root.unpinFromDrag(root.menuAppId(item))
+          } else {
+            var slot = decision.action === "reorder" ? decision.index : from
+            dockRow.settlingKey = item.key
+            settleX.to = dockRow.x + slot * (dockRow.itemWidth + dockRow.spacing)
+            settleY.to = dockRow.dragHomeY
+            dragGhost.scale = 1
+            settle.restart()
+            if (decision.action === "reorder") root.placeItem(item, decision.index)
+          }
           Qt.callLater(function () { dockRow.dropping = false })
         }
 
+        // The Item whose ghost is still settling into its slot, and where the
+        // ghost's top edge rests (where the Item's own was when pressed).
+        property string settlingKey: ""
+        property real dragHomeY: 0
+
         Repeater {
           id: repeater
-          model: dockState.items
+          model: dockItemKeys
 
           delegate: Item {
             id: dockItem
-            required property var modelData
+            required property string key
             required property int index
+            // The Item itself, looked up by key; it keeps the last one found
+            // for the moment between an Item going and its delegate going.
+            readonly property var live: dockState.itemByKey[dockItem.key]
+            property var modelData: ({})
+            onLiveChanged: if (dockItem.live) dockItem.modelData = dockItem.live
+            Component.onCompleted: if (dockItem.live) dockItem.modelData = dockItem.live
 
             readonly property bool active: dockItem.modelData.active
             readonly property bool attention: dockItem.modelData.attention
@@ -1625,7 +1677,7 @@ Item {
             // would also focus/launch the Item it was just dropped near.
             property bool wasDragged: false
 
-            opacity: dockRow.dragKey === dockItem.modelData.key ? 0 : 1
+            opacity: dockRow.dragKey === dockItem.key || dockRow.settlingKey === dockItem.key ? 0 : 1
 
             // Items the dragged one has passed step aside by one slot, and a
             // pressed Item shrinks a little before it is lifted.
@@ -1764,6 +1816,9 @@ Item {
                   var origin = dockItem.mapToItem(dockRow.parent, 0, 0)
                   dragProbe.x = origin.x
                   dragProbe.y = origin.y
+                  dockRow.dragHomeY = origin.y
+                  settle.stop()
+                  dockRow.settlingKey = ""
                   dragProbe.width = dockItem.width
                   dragProbe.height = dockItem.height
                   dragGhost.x = origin.x
@@ -1878,6 +1933,17 @@ Item {
         visible: false
         onXChanged: dockRow.updateDragPreview()
         onYChanged: dockRow.updateDragPreview()
+      }
+
+      // The drop: the ghost glides into its slot, then the Item shows again.
+      ParallelAnimation {
+        id: settle
+        onFinished: {
+          dragGhost.visible = false
+          dockRow.settlingKey = ""
+        }
+        NumberAnimation { id: settleX; target: dragGhost; property: "x"; duration: 120; easing.type: Easing.OutCubic }
+        NumberAnimation { id: settleY; target: dragGhost; property: "y"; duration: 120; easing.type: Easing.OutCubic }
       }
 
       // The floating icon of a drag (docs/SPEC.md "Input"): a little bigger
