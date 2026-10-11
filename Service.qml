@@ -1537,19 +1537,17 @@ Item {
         // model mid-drag would make the Repeater tear down and rebuild
         // every delegate, destroying the very Item whose MouseArea is
         // driving the drag) but renders invisible for as long as its key
-        // matches dragKey; dragGhost (declared below, a sibling of this
-        // Row) shows in its place and follows the pointer, and dropLine
-        // (also below) is the live insertion preview: a bar at whichever
-        // gap dragPreviewGap currently names. dragKey empty and
-        // dragPreviewGap -1 both mean "no drag in progress".
+        // matches dragKey. dragProbe (declared below, a sibling of this
+        // Row) is what the pointer drags; dragGhost shows the Item in its
+        // place, a little bigger than the rest and stopping at the first
+        // and last slot; the Items between the two slots step aside by
+        // dragShift, so the gap shows where a drop would land. dragKey
+        // empty means "no drag in progress".
         property var drag: DockInteraction.initialDrag()
         readonly property string dragKey: dockRow.drag.key
-        readonly property int dragPreviewGap: dockRow.drag.gap
-        // Recomputed alongside dragPreviewGap (see updateDragPreview):
-        // hides dropLine once the drag has left the Dock, since a drag-out
-        // has nothing to do with dragPreviewGap any more (docs/SPEC.md
-        // "Input": drag-out is unpin-or-snap-back, never a reorder).
-        readonly property bool draggingOutside: dockRow.drag.outside
+        // True from the drop until the Items have been reordered, so their
+        // dragShift snaps back to 0 instead of gliding against the reorder.
+        property bool dropping: false
 
         function indexOfKey(items, key) {
           for (var i = 0; i < items.length; i++) {
@@ -1566,10 +1564,15 @@ Item {
           if (!dockRow.dragKey) return
           dockRow.drag = DockInteraction.dragMove(dockRow.drag, dockRow.ghostCenter(), dockRow.rect(),
             dockRow.itemWidth + dockRow.spacing, dockRow.iconSize, dockState.items.length)
+          dragGhost.x = DockInteraction.clampGhostX(dragProbe.x, dockRow.rect(),
+            dockRow.itemWidth + dockRow.spacing, dockState.items.length)
+          dragGhost.y = dragProbe.y
         }
 
+        // Where the pointer has taken the Item, not where the ghost is
+        // drawn: the ghost stops at the ends of the row, the pointer does not.
         function ghostCenter() {
-          return { x: dragGhost.x + dragGhost.width / 2, y: dragGhost.y + dragGhost.height / 2 }
+          return { x: dragProbe.x + dragProbe.width / 2, y: dragProbe.y + dragProbe.height / 2 }
         }
 
         function rect() {
@@ -1589,6 +1592,7 @@ Item {
           var decision = DockInteraction.dragDrop(dockRow.drag, dockRow.ghostCenter(), dockRow.rect(),
             dockRow.iconSize, { pinned: item.kind === "pin" || !!item.pinned })
 
+          dockRow.dropping = true
           dockRow.drag = DockInteraction.initialDrag()
           dragGhost.visible = false
           revealState.set("drag", false)
@@ -1596,6 +1600,7 @@ Item {
 
           if (decision.action === "unpin") root.unpinFromDrag(root.menuAppId(item))
           else if (decision.action === "reorder") root.placeItem(item, decision.index)
+          Qt.callLater(function () { dockRow.dropping = false })
         }
 
         Repeater {
@@ -1605,6 +1610,7 @@ Item {
           delegate: Item {
             id: dockItem
             required property var modelData
+            required property int index
 
             readonly property bool active: dockItem.modelData.active
             readonly property bool attention: dockItem.modelData.attention
@@ -1615,6 +1621,18 @@ Item {
             property bool wasDragged: false
 
             opacity: dockRow.dragKey === dockItem.modelData.key ? 0 : 1
+
+            // Items the dragged one has passed step aside by one slot, and a
+            // pressed Item shrinks a little before it is lifted.
+            property real dragShift: dockRow.dragKey !== ""
+              ? DockInteraction.slotShift(dockRow.drag, dockItem.index, dockRow.itemWidth + dockRow.spacing) : 0
+            Behavior on dragShift {
+              enabled: !dockRow.dropping
+              NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+            }
+            transform: Translate { x: dockItem.dragShift }
+            scale: (mouseArea.pressedButtons & Qt.LeftButton) && dockRow.dragKey === "" ? 0.88 : 1
+            Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
             width: dockRow.itemWidth
             height: icon.height + runningDot.height + Style.spacing.xxs
 
@@ -1723,7 +1741,7 @@ Item {
                 // moves dragGhost, a sibling of dockRow, not this Item
                 // itself — dockRow is a positioner and would fight any
                 // attempt to move dockItem directly.
-                drag.target: dragGhost
+                drag.target: dragProbe
 
                 onContainsMouseChanged: {
                   if (mouseArea.containsMouse) previewState.hoverStart(dockItem)
@@ -1736,13 +1754,18 @@ Item {
                     mouseArea.drag.target = null
                     return
                   }
-                  mouseArea.drag.target = dragGhost
+                  mouseArea.drag.target = dragProbe
                   dragGhost.item = dockItem.modelData
                   var origin = dockItem.mapToItem(dockRow.parent, 0, 0)
+                  dragProbe.x = origin.x
+                  dragProbe.y = origin.y
+                  dragProbe.width = dockItem.width
+                  dragProbe.height = dockItem.height
                   dragGhost.x = origin.x
                   dragGhost.y = origin.y
                   dragGhost.width = dockItem.width
                   dragGhost.height = dockItem.height
+                  dragGhost.scale = 0.88
                 }
 
                 drag.onActiveChanged: {
@@ -1752,6 +1775,7 @@ Item {
                     revealState.set("drag", true)
                     dockRow.drag = DockInteraction.dragStart(dockItem.modelData.key, dockRow.indexOfKey(dockState.items, dockItem.modelData.key))
                     dragGhost.visible = true
+                    dragGhost.scale = 1.15
                   } else if (dockRow.dragKey === dockItem.modelData.key) {
                     dockRow.finishDrag(dockItem.modelData)
                   }
@@ -1840,14 +1864,22 @@ Item {
         }
       }
 
-      // The floating icon a drag follows (docs/SPEC.md "Input": "Drag
-      // within the Dock: reorder"; issue #16's own acceptance criteria add
-      // "with a live insertion preview"). A sibling of dockRow, not one of
-      // its Repeater delegates, so dockRow's own positioning never fights its
-      // position; mouseArea.drag.target (above) moves it directly by the
-      // pointer's own delta, in this shared parent's coordinate space,
-      // starting from wherever the dragged delegate's onPressed measured
-      // it to be.
+      // What the pointer drags (mouseArea.drag.target above): an invisible
+      // Item that goes wherever the pointer does, in this shared parent's
+      // coordinate space, starting from wherever the dragged delegate's
+      // onPressed measured it to be. dragGhost is drawn from it.
+      Item {
+        id: dragProbe
+        visible: false
+        onXChanged: dockRow.updateDragPreview()
+        onYChanged: dockRow.updateDragPreview()
+      }
+
+      // The floating icon of a drag (docs/SPEC.md "Input"): a little bigger
+      // than the Items beside it, following the pointer sideways until it
+      // reaches the first or last slot, where it stays while the pointer
+      // goes on. A sibling of dockRow, not one of its Repeater delegates, so
+      // dockRow's own positioning never fights its position.
       Item {
         id: dragGhost
 
@@ -1855,14 +1887,9 @@ Item {
 
         visible: false
         z: 1000
-        opacity: 0.85
-
-        // Recomputes the live insertion preview directly off of the
-        // position mouseArea.drag.target (above) is actually driving —
-        // rather than off the mouse event that causes it, so this never
-        // races whatever order Qt applies the two in.
-        onXChanged: if (dockRow.dragKey) dockRow.updateDragPreview()
-        onYChanged: if (dockRow.dragKey) dockRow.updateDragPreview()
+        opacity: 0.95
+        scale: 1
+        Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
         Image {
           visible: dragGhost.item && dragGhost.item.app !== null
@@ -1890,23 +1917,6 @@ Item {
             font.pixelSize: Style.font.icon
           }
         }
-      }
-
-      // The live insertion preview itself (issue #16's acceptance
-      // criteria, on top of docs/SPEC.md "Input"'s own "Drag within the
-      // Dock: reorder"): a bar at the gap dragPreviewGap names, hidden
-      // once the drag has left the Dock (see draggingOutside) since
-      // drag-out is never a reorder.
-      Rectangle {
-        id: dropLine
-
-        visible: dockRow.dragKey !== "" && !dockRow.draggingOutside
-        x: dockRow.x + DockInteraction.dropGap(dockRow.drag) * (dockRow.itemWidth + dockRow.spacing) - dockRow.spacing / 2 - width / 2
-        y: dockRow.y
-        width: 2
-        height: dockRow.height
-        radius: 1
-        color: root.colAccent
       }
 
       // Hover previews (showPreviews): a live thumbnail of the

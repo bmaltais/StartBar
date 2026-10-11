@@ -61,40 +61,51 @@ test("setting a flag to its current value, or an unknown flag, changes nothing",
 
 const row = { x: 100, y: 500, width: 400, height: 60 };
 
-test("dragMove names the nearest insertion gap, including after the last Item", () => {
+test("dragMove names the slot under the ghost's centre, never past the first or last Item", () => {
   const d = DI.dragStart("pin:x", 0);
-  // 4 Items, 50px apart from x=100: gaps sit at 100, 150, 200, 250, 300
-  assert.equal(DI.dragMove(d, { x: 100 + 10, y: 530 }, row, 50, 40, 4).gap, 0);
-  assert.equal(DI.dragMove(d, { x: 100 + 2 * 50 + 10, y: 530 }, row, 50, 40, 4).gap, 2);
-  assert.equal(DI.dragMove(d, { x: 100 + 3 * 50 + 30, y: 530 }, row, 50, 40, 4).gap, 4);
-  assert.equal(DI.dragMove(d, { x: 100 + 900, y: 530 }, row, 50, 40, 4).gap, 4);
-  assert.equal(DI.dragMove(d, { x: 100 - 30, y: 530 }, row, 50, 40, 4).gap, 0);
-  assert.equal(DI.dragMove(d, { x: 300, y: 530 }, row, 0, 40, 4).gap, 0);
+  // 4 Items, 50px apart from x=100: slots start at 100, 150, 200, 250
+  assert.equal(DI.dragMove(d, { x: 100 + 10, y: 530 }, row, 50, 40, 4).to, 0);
+  assert.equal(DI.dragMove(d, { x: 100 + 2 * 50 + 10, y: 530 }, row, 50, 40, 4).to, 2);
+  assert.equal(DI.dragMove(d, { x: 100 + 3 * 50 + 30, y: 530 }, row, 50, 40, 4).to, 3);
+  assert.equal(DI.dragMove(d, { x: 100 + 900, y: 530 }, row, 50, 40, 4).to, 3);
+  assert.equal(DI.dragMove(d, { x: 100 - 300, y: 530 }, row, 50, 40, 4).to, 0);
+  assert.equal(DI.dragMove(d, { x: 300, y: 530 }, row, 0, 40, 4).to, 0);
 });
 
-test("dragging icon 1 of 4 between icons 3 and 4 lands it third, not last", () => {
-  const d = DI.dragMove(DI.dragStart("pin:a", 0), { x: 100 + 3 * 50, y: 530 }, row, 50, 40, 4);
-  assert.equal(DI.dropGap(d), 3);
-  assert.equal(DI.finalIndex(d), 2);
-  assert.deepEqual(DI.dragDrop(d, { x: 250, y: 530 }, row, 40, { pinned: true }), { action: "reorder", index: 2 });
-});
-
-test("dropping after the last Item makes it last; moving left lands on the gap itself", () => {
-  const end = DI.dragMove(DI.dragStart("pin:a", 0), { x: 100 + 4 * 50, y: 530 }, row, 50, 40, 4);
-  assert.equal(DI.finalIndex(end), 3);
-  const left = DI.dragMove(DI.dragStart("pin:d", 3), { x: 100 + 1 * 50, y: 530 }, row, 50, 40, 4);
-  assert.equal(DI.finalIndex(left), 1);
-  // a gap beside the Item's own slot is a no-op
-  assert.equal(DI.finalIndex(DI.dragMove(DI.dragStart("pin:b", 1), { x: 100 + 2 * 50, y: 530 }, row, 50, 40, 4)), 1);
+test("a drag starts on its own slot, so dropping it unmoved lands where it was", () => {
   assert.equal(DI.finalIndex(DI.dragStart("pin:b", 1)), 1);
+  const right = DI.dragMove(DI.dragStart("pin:a", 0), { x: 100 + 3 * 50 + 25, y: 530 }, row, 50, 40, 4);
+  assert.equal(DI.finalIndex(right), 3);
+  assert.deepEqual(DI.dragDrop(right, { x: 275, y: 530 }, row, 40, { pinned: true }), { action: "reorder", index: 3 });
+  const left = DI.dragMove(DI.dragStart("pin:d", 3), { x: 100 + 60, y: 530 }, row, 50, 40, 4);
+  assert.equal(DI.finalIndex(left), 1);
 });
 
-test("a drag is outside once the ghost centre clears the row by half an icon", () => {
+test("the dragged Item's slot holds still while the Items between it and the target step aside", () => {
+  const right = DI.dragMove(DI.dragStart("a", 1), { x: 100 + 3 * 50 + 25, y: 530 }, row, 50, 40, 5);
+  assert.deepEqual([0, 1, 2, 3, 4].map((i) => DI.slotShift(right, i, 50)), [0, 0, -50, -50, 0]);
+  const left = DI.dragMove(DI.dragStart("d", 3), { x: 100 + 25, y: 530 }, row, 50, 40, 5);
+  assert.deepEqual([0, 1, 2, 3, 4].map((i) => DI.slotShift(left, i, 50)), [50, 50, 50, 0, 0]);
+  assert.deepEqual([0, 1, 2].map((i) => DI.slotShift(DI.dragStart("a", 1), i, 50)), [0, 0, 0]);
+  assert.equal(DI.slotShift(DI.initialDrag(), 2, 50), 0);
+});
+
+test("the ghost's left edge stops at the first and last slot while the pointer goes on", () => {
+  // 4 Items from x=100, 50px apart: the last slot starts at 250
+  assert.equal(DI.clampGhostX(10, row, 50, 4), 100);
+  assert.equal(DI.clampGhostX(180, row, 50, 4), 180);
+  assert.equal(DI.clampGhostX(900, row, 50, 4), 250);
+  assert.equal(DI.clampGhostX(300, row, 50, 0), 100);
+});
+
+test("a drag is outside only once it leaves the bar vertically, by half an icon", () => {
   const d = DI.dragStart("pin:x", 1);
   assert.equal(DI.dragMove(d, { x: 300, y: 530 }, row, 50, 40, 5).outside, false);
   assert.equal(DI.dragMove(d, { x: 300, y: 500 - 20 }, row, 50, 40, 5).outside, false);
   assert.equal(DI.dragMove(d, { x: 300, y: 500 - 21 }, row, 50, 40, 5).outside, true);
-  assert.equal(DI.dragMove(d, { x: 100 + 400 + 21, y: 530 }, row, 50, 40, 5).outside, true);
+  assert.equal(DI.dragMove(d, { x: 300, y: 560 + 21 }, row, 50, 40, 5).outside, true);
+  // sideways it only stops at the end of the row
+  assert.equal(DI.dragMove(d, { x: 100 + 400 + 300, y: 530 }, row, 50, 40, 5).outside, false);
 });
 
 test("dragMove with no drag in progress returns the idle drag unchanged", () => {
@@ -103,9 +114,9 @@ test("dragMove with no drag in progress returns the idle drag unchanged", () => 
   assert.equal(DI.dragActive(idle), false);
 });
 
-test("dropping inside reorders to the previewed index", () => {
-  const d = DI.dragMove(DI.dragStart("pin:x", 3), { x: 200, y: 530 }, row, 50, 40, 5);
-  assert.deepEqual(DI.dragDrop(d, { x: 200, y: 530 }, row, 40, { pinned: true }), { action: "reorder", index: 2 });
+test("dropping inside reorders to the slot it shows", () => {
+  const d = DI.dragMove(DI.dragStart("pin:x", 3), { x: 100 + 2 * 50 + 25, y: 530 }, row, 50, 40, 5);
+  assert.deepEqual(DI.dragDrop(d, { x: 225, y: 530 }, row, 40, { pinned: true }), { action: "reorder", index: 2 });
 });
 
 test("dropping outside unpins a pinned Item and snaps an unpinned one back", () => {
