@@ -634,3 +634,44 @@ test("a Placed Group Item keeps its position by the group's key", () => {
   );
   assert.deepEqual(items.map((i) => i.key), ["window:t", "group:app:firefox"]);
 });
+
+// A drop: the Items as shown, the Placed positions, the key moved and the
+// index it lands on. The result must rebuild to exactly the order shown after
+// the move, whatever was Placed before.
+const { movedPlacements } = require("../DockModel.js");
+
+function dropped(pins, placements, key, index) {
+  const items = buildDockItems([], () => null, pins, (id) => ({ id }), placements);
+  const next = movedPlacements(items, placements, key, index);
+  const rebuilt = buildDockItems([], () => null, pins, (id) => ({ id }), next);
+  const expected = items.map((i) => i.key).filter((k) => k !== key);
+  expected.splice(index, 0, key);
+  return { next, order: rebuilt.map((i) => i.key), expected };
+}
+
+test("a drop lands where it was dropped when another Item was Placed earlier", () => {
+  // d was Placed at 1: shown [a, d, b, c]; dragging a to the end must give [d, b, c, a]
+  const { order, expected } = dropped(["a", "b", "c", "d"], [{ key: "pin:d", index: 1 }], "pin:a", 3);
+  assert.deepEqual(expected, ["pin:d", "pin:b", "pin:c", "pin:a"]);
+  assert.deepEqual(order, expected);
+});
+
+test("a drop lands as shown for every Item, slot and earlier Placed position", () => {
+  const pins = ["a", "b", "c", "d", "e"];
+  const earlier = [[], [{ key: "pin:e", index: 0 }], [{ key: "pin:b", index: 3 }, { key: "pin:e", index: 1 }]];
+  for (const placements of earlier) {
+    for (const key of pins.map((p) => "pin:" + p)) {
+      for (let index = 0; index < pins.length; index++) {
+        const { order, expected } = dropped(pins, placements, key, index);
+        assert.deepEqual(order, expected, `${key} to ${index} after ${JSON.stringify(placements)}`);
+      }
+    }
+  }
+});
+
+test("a drop keeps the Placed position of a Pin currently hidden behind its App's Windows", () => {
+  const items = buildDockItems([], () => null, ["a", "b"], (id) => ({ id }), []);
+  const next = movedPlacements(items, [{ key: "pin:gone", index: 4 }], "pin:b", 0);
+  assert.deepEqual(next.find((p) => p.key === "pin:gone"), { key: "pin:gone", index: 4 });
+  assert.deepEqual(next.find((p) => p.key === "pin:b"), { key: "pin:b", index: 0 });
+});
