@@ -71,6 +71,7 @@ runs everything that can be checked without the shell:
 
 - the tests above, which also keep the docs in step with the code: every setting has a row in `docs/SETTINGS.md`, every `SPEC.md "…"` section a comment cites exists, `manifest.json` and `package.json` agree on the version, and the Dock and what rises from it take their colours from the colour scheme instead of the theme directly;
 - `omarchy plugin validate .`;
+- `npm run lint:sh`, which syntax-checks `scripts/*.sh` and runs `shellcheck` over them when it is installed;
 - `npm run lint:qml`, which fails on any `qmllint` warning not already listed in `scripts/qmllint-baseline.txt`. `qmllint` can't see Quickshell's types, so the QML carries standing warnings; a new one is usually a misspelt or removed id. Accept a legitimate new one with `npm run lint:qml -- --update`.
 
 Run it on every commit with the pre-commit hook:
@@ -89,7 +90,7 @@ Pull requests run `npm test` on GitHub; the manifest and QML checks need Omarchy
 scripts/smoke.sh            # --monitor NAME, --type, --out DIR, --no-restart
 ```
 
-It restarts the shell with this checkout, fails if the plugin logs anything, and screenshots the Dock, the Start menu and the settings window in each colour scheme. It edits the plugin's entry in `shell.json` for the run and restores it on exit. Look at the screenshots: the script only knows the plugin loaded quietly. It cannot click, drag or hover, so Previews, the Item menu, the Bar menu and drag still need the checklist below.
+It restarts the shell with this checkout, fails if the plugin logs anything, and screenshots the Dock, the Start menu and the settings window in each colour scheme. It edits the plugin's entry in `shell.json` for the run and restores it on exit. Look at the screenshots: the script only knows the plugin loaded quietly. It cannot click, drag or hover. `scripts/pointer.sh` can (`move X Y`, `left`, `right`, `shot FILE`), given `ydotool` and a writable `/dev/uinput` (`docs/hyprland-notes.md` "Moving the pointer"); use it for Previews, the Item menu and the Bar menu. Drag, and anything it could not reach, still needs the checklist below.
 
 ### Retaking screenshots
 
