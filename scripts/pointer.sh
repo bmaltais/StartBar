@@ -4,6 +4,8 @@
 # (docs/hyprland-notes.md "Moving the pointer").
 #   scripts/pointer.sh move X Y     move there with real motion (a hover fires)
 #   scripts/pointer.sh left|right   click
+#   scripts/pointer.sh key CODE:1 CODE:0 ...   keys, only while a throwaway window
+#                                   (class startbar-screenshot or spare-test) has focus
 #   scripts/pointer.sh shot FILE    screenshot DP-1
 # A Preview needs the pointer to rest on its Item for ~400 ms, then to move onto
 # the thumbnail: sleep between the calls and shoot to see what is up.
@@ -24,6 +26,14 @@ case "${1:-}" in
     ;;
   left) ydotool click 0xC0 >/dev/null ;;
   right) ydotool click 0xC1 >/dev/null ;;
+  key)
+    shift
+    focused=$(hyprctl -j activewindow | jq -r '.class // ""')
+    case $focused in
+      startbar-screenshot|spare-test) ydotool key "$@" ;;
+      *) echo "pointer: refusing to send keys to '$focused': focus a throwaway window first" >&2; exit 1 ;;
+    esac
+    ;;
   shot) grim -o DP-1 "$2" ;;
-  *) echo "usage: $0 move X Y | left | right | shot FILE" >&2; exit 2 ;;
+  *) echo "usage: $0 move X Y | left | right | key CODE:1 CODE:0 ... | shot FILE" >&2; exit 2 ;;
 esac

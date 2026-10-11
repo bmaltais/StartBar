@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test",
     "lint:qml": "node scripts/qmllint-check.js",
-    "check": "node --test && omarchy plugin validate . && node scripts/qmllint-check.js",
-    "smoke": "scripts/smoke.sh"
+    "check": "node --test && omarchy plugin validate . && node scripts/qmllint-check.js && scripts/lint-sh.sh",
+    "smoke": "scripts/smoke.sh",
+    "lint:sh": "scripts/lint-sh.sh"
   }
 }

@@ -22,8 +22,9 @@
 # the file byte for byte on exit, however the script ends.
 #
 # It cannot click, drag or hover: a warped pointer does not produce the motion
-# Qt's hover needs. Previews, the Item menu, the Bar menu and drag still need
-# a real mouse (CONTRIBUTING.md, "Manual verification checklist").
+# Qt's hover needs. scripts/pointer.sh can, with real motion, for Previews and
+# the menus; drag still needs a real mouse (CONTRIBUTING.md, "Manual
+# verification checklist").
 set -euo pipefail
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
