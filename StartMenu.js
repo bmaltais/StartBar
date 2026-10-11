@@ -640,8 +640,16 @@ function overlayRows(overlay, ctx) {
   ];
 }
 
+// The argv that opens a Place. A path that starts with "-" would be read by
+// xdg-open as an option, so it is made relative.
+function openCommand(path) {
+  var p = String(path === undefined || path === null ? "" : path);
+  return ["xdg-open", p.charAt(0) === "-" ? "./" + p : p];
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
+    openCommand: openCommand,
     PINNED_COLUMNS: PINNED_COLUMNS,
     RECENT_COLUMNS: RECENT_COLUMNS,
     HOVER_OPEN_DELAY_MS: HOVER_OPEN_DELAY_MS,

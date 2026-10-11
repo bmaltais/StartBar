@@ -24,8 +24,9 @@ var SCRIPT = "name=$1; dirs=(); "
   + "IFS=: read -ra bases <<< \"${XDG_DATA_HOME:-$HOME/.local/share}:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}\"; "
   + "for b in \"${bases[@]}\"; do "
   + "[ -d \"$b/icons\" ] && dirs+=(\"$b/icons\"); [ -d \"$b/pixmaps\" ] && dirs+=(\"$b/pixmaps\"); done; "
-  + "[ ${#dirs[@]} -gt 0 ] && find -L \"${dirs[@]}\" -type f \\( -name \"$name.png\" -o -name \"$name.svg\" \\) 2>/dev/null; true";
+  + "[ ${#dirs[@]} -gt 0 ] && timeout 5 find -L \"${dirs[@]}\" -type f \\( -name \"$name.png\" -o -name \"$name.svg\" \\) 2>/dev/null | head -n 200; true";
 
+// At most 200 lines, and the search gives up after 5 seconds.
 // The argv that prints every file named `name`.png or .svg in the icon
 // directories, one per line; null for a name it cannot search for.
 function searchCommand(name) {

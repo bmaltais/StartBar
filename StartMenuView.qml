@@ -124,7 +124,7 @@ Item {
     case "launch": startMenu.launchRequested(effect.app.entry); break
     case "apply": startMenu.settings.apply(effect.intent); break
     case "run": Quickshell.execDetached(["bash", "-lc", effect.command]); break
-    case "open": Quickshell.execDetached(["xdg-open", effect.path]); break
+    case "open": Quickshell.execDetached(StartMenu.openCommand(effect.path)); break
     case "togglePin": startMenu.togglePinRequested(effect.appId, effect.pinned); break
     }
   }

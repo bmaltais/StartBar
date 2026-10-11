@@ -228,10 +228,10 @@ Item {
         var info = toplevel.lastIpcObject || {}
         windows.push({
           id: address,
-          class: info.class || "",
+          class: DockModel.clipText(info.class),
           workspace: toplevel.workspace ? toplevel.workspace.name : String((info.workspace && info.workspace.name) || ""),
           openedAt: dockState.openedAtByAddress[address],
-          title: toplevel.title || info.title || "",
+          title: DockModel.clipText(toplevel.title || info.title),
           active: !!toplevel.activated,
           attention: !!toplevel.urgent,
           fullscreen: info.fullscreen || 0,
