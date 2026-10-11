@@ -404,6 +404,20 @@ Item {
     return window.class ? DesktopEntries.heuristicLookup(window.class) || null : null
   }
 
+  // App icons, for the Dock and the Start menu (IconResolver.qml): Qt's
+  // lookup, then a search of the icon directories when Qt has cached a miss.
+  IconResolver { id: iconResolver }
+  property alias icons: iconResolver
+
+  function iconSource(name) {
+    return root.icons.source(name)
+  }
+
+  // The Letter Tile's letter for an App with no icon: its name's first letter.
+  function appLetter(app) {
+    return app && app.name ? app.name.charAt(0).toUpperCase() : ""
+  }
+
   // A Pin resolves its own App directly by the id it was pinned under
   // (CONTEXT.md "Pin"), independent of any Window — unlike resolveApp,
   // which only ever has a window class to go on. A falsy return here is
@@ -1452,7 +1466,7 @@ Item {
           sourceSize.height: height * Screen.devicePixelRatio
           source: startButton.iconSpec.kind === "path"
             ? "file://" + startButton.iconSpec.value
-            : (startButton.iconSpec.kind === "icon" ? Quickshell.iconPath(startButton.iconSpec.value, true) : "")
+            : (startButton.iconSpec.kind === "icon" ? root.iconSource(startButton.iconSpec.value) : "")
         }
 
         // The MouseArea below takes hover away from the bar's own handler
@@ -1740,24 +1754,26 @@ Item {
               height: dockRow.iconSize
 
               Image {
-                visible: dockItem.modelData.app !== null
+                visible: source.toString() !== ""
                 anchors.fill: parent
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
                 sourceSize.width: width * Screen.devicePixelRatio
                 sourceSize.height: height * Screen.devicePixelRatio
-                source: dockItem.modelData.app ? Quickshell.iconPath(dockItem.modelData.app.icon, true) : ""
+                source: dockItem.modelData.app ? root.iconSource(dockItem.modelData.app.icon) : ""
               }
 
+              // The Letter Tile: no App, or an App whose icon file is not
+              // found (yet).
               Rectangle {
-                visible: dockItem.modelData.app === null
+                visible: dockItem.modelData.app === null || root.iconSource(dockItem.modelData.app.icon) === ""
                 anchors.fill: parent
                 radius: Style.cornerRadius
                 color: root.colMuted
 
                 Text {
                   anchors.centerIn: parent
-                  text: dockItem.modelData.letter || ""
+                  text: dockItem.modelData.letter || root.appLetter(dockItem.modelData.app)
                   color: root.colForeground
                   font.family: Style.font.family
                   font.pixelSize: Style.font.icon
@@ -1963,7 +1979,7 @@ Item {
         Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
         Image {
-          visible: dragGhost.item && dragGhost.item.app !== null
+          visible: source.toString() !== ""
           anchors.fill: parent
           anchors.leftMargin: dockRow.pad / 2
           anchors.rightMargin: dockRow.pad / 2
@@ -1971,18 +1987,18 @@ Item {
           asynchronous: true
           sourceSize.width: width * Screen.devicePixelRatio
           sourceSize.height: height * Screen.devicePixelRatio
-          source: dragGhost.item && dragGhost.item.app ? Quickshell.iconPath(dragGhost.item.app.icon, true) : ""
+          source: dragGhost.item && dragGhost.item.app ? root.iconSource(dragGhost.item.app.icon) : ""
         }
 
         Rectangle {
-          visible: dragGhost.item && dragGhost.item.app === null
+          visible: dragGhost.item && (dragGhost.item.app === null || root.iconSource(dragGhost.item.app.icon) === "")
           anchors.fill: parent
           radius: Style.cornerRadius
           color: root.colMuted
 
           Text {
             anchors.centerIn: parent
-            text: (dragGhost.item && dragGhost.item.letter) || ""
+            text: (dragGhost.item && (dragGhost.item.letter || root.appLetter(dragGhost.item.app))) || ""
             color: root.colForeground
             font.family: Style.font.family
             font.pixelSize: Style.font.icon
@@ -2407,6 +2423,7 @@ Item {
         panelHeight: panel.height
         buttonX: startButton.x
         buttonHovered: startMouse.containsMouse
+        icons: root.icons
 
         onLaunchRequested: function (entry) { root.launchApp(entry) }
         onTogglePinRequested: function (appId, pinned) { root.togglePin(appId, pinned) }

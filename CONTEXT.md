@@ -45,7 +45,7 @@ The state of a Window that has asked for the user's attention. Its Window Item i
 _Avoid_: urgent, alert, bounce
 
 **Letter Tile**:
-The fallback shown for a Window whose App cannot be identified: the first letter of the window class in a themed square.
+The fallback shown for a Window whose App cannot be identified: the first letter of the window class in a themed square. Also shown, with the first letter of the App's name, while an App's icon file is not found.
 _Avoid_: placeholder, generic icon, missing icon
 
 **Launch Order**:

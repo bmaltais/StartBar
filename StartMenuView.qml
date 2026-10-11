@@ -44,6 +44,7 @@ Item {
   required property real panelHeight
   required property real buttonX       // the Start button's x, for left-aligned icons
   required property bool buttonHovered // the pointer is on the Start button
+  required property var icons          // IconResolver: icons.source(name) is an Image source
   signal launchRequested(var entry)    // launch this desktop entry
   signal togglePinRequested(string appId, bool pinned) // Pin/Unpin on the Dock
   signal dockHoldRequested(bool held)  // keep the Dock Revealed while the menu is up
@@ -470,7 +471,7 @@ Item {
               asynchronous: true
               sourceSize.width: width * Screen.devicePixelRatio
               sourceSize.height: height * Screen.devicePixelRatio
-              source: Quickshell.iconPath(placeRow.modelData.icon, true)
+              source: startMenu.icons.source(placeRow.modelData.icon)
             }
 
             Text {
@@ -539,7 +540,7 @@ Item {
             asynchronous: true
             sourceSize.width: width * Screen.devicePixelRatio
             sourceSize.height: height * Screen.devicePixelRatio
-            source: resultRow.modelData.icon ? Quickshell.iconPath(resultRow.modelData.icon, true) : ""
+            source: resultRow.modelData.icon ? startMenu.icons.source(resultRow.modelData.icon) : ""
           }
 
           Text {
@@ -670,7 +671,7 @@ Item {
             asynchronous: true
             sourceSize.width: width * Screen.devicePixelRatio
             sourceSize.height: height * Screen.devicePixelRatio
-            source: allRow.modelData.icon ? Quickshell.iconPath(allRow.modelData.icon, true) : ""
+            source: allRow.modelData.icon ? startMenu.icons.source(allRow.modelData.icon) : ""
           }
 
           Column {
@@ -890,7 +891,7 @@ Item {
               asynchronous: true
               sourceSize.width: width * Screen.devicePixelRatio
               sourceSize.height: height * Screen.devicePixelRatio
-              source: pinnedTile.modelData.icon ? Quickshell.iconPath(pinnedTile.modelData.icon, true) : ""
+              source: pinnedTile.modelData.icon ? startMenu.icons.source(pinnedTile.modelData.icon) : ""
             }
 
             Text {
@@ -1020,7 +1021,7 @@ Item {
             asynchronous: true
             sourceSize.width: width * Screen.devicePixelRatio
             sourceSize.height: height * Screen.devicePixelRatio
-            source: pinGhost.app && pinGhost.app.icon ? Quickshell.iconPath(pinGhost.app.icon, true) : ""
+            source: pinGhost.app && pinGhost.app.icon ? startMenu.icons.source(pinGhost.app.icon) : ""
           }
         }
 
@@ -1075,7 +1076,7 @@ Item {
               asynchronous: true
               sourceSize.width: width * Screen.devicePixelRatio
               sourceSize.height: height * Screen.devicePixelRatio
-              source: recentTile.modelData.icon ? Quickshell.iconPath(recentTile.modelData.icon, true) : ""
+              source: recentTile.modelData.icon ? startMenu.icons.source(recentTile.modelData.icon) : ""
             }
 
             Column {
