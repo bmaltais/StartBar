@@ -57,6 +57,9 @@ StartMenuView.qml	unqualified	avatarMask
 StartMenuView.qml	unqualified	home
 StartMenuView.qml	unqualified	overlayColumn
 StartMenuView.qml	unqualified	pinGhost
+StartMenuView.qml	unqualified	pinGhostSettle
+StartMenuView.qml	unqualified	pinHoldTimer
+StartMenuView.qml	unqualified	pinProbe
 StartMenuView.qml	unqualified	pinnedGrid
 StartMenuView.qml	unqualified	recommendedGrid
 StartMenuView.qml	unqualified	resultList

@@ -269,17 +269,48 @@ function effectivePlaces(startPlaces, userDirsText, home) {
   return places;
 }
 
-// Drag to reorder a pinned app. `point` is the ghost's centre in the grid's
-// own coordinates ({ x, y }); `grid` is { width, height, cellWidth,
+// Drag to reorder a pinned app. `point` is the pointer's position in the
+// grid's own coordinates ({ x, y }); `grid` is { width, height, cellWidth,
 // cellHeight, contentY } with contentY the scroll offset. Returns the slot
-// under it, clamped to the pins shown, or -1 outside the grid.
+// under it, held to the pins shown (past an edge it names the nearest slot,
+// as the Dock's ends do), or -1 once it is a cell or more beyond the grid.
 function pinSlotAt(point, grid, count, columns) {
   var cols = columns > 0 ? columns : PINNED_COLUMNS;
   if (!point || !grid || !(count > 0)) return -1;
-  if (point.x < 0 || point.x >= grid.width || point.y < 0 || point.y >= grid.height) return -1;
-  var column = Math.floor(point.x / grid.cellWidth);
-  var row = Math.floor((point.y + (grid.contentY || 0)) / grid.cellHeight);
+  if (point.x < -grid.cellWidth || point.x >= grid.width + grid.cellWidth
+    || point.y < -grid.cellHeight || point.y >= grid.height + grid.cellHeight) return -1;
+  var column = Math.max(0, Math.min(cols - 1, Math.floor(point.x / grid.cellWidth)));
+  var row = Math.max(0, Math.floor((point.y + (grid.contentY || 0)) / grid.cellHeight));
   return Math.max(0, Math.min(count - 1, row * cols + column));
+}
+
+// Where the dragged tile is drawn, for its top-left `topLeft` in the grid's
+// coordinates: held to the cells that hold a pin, so it stops at the first and
+// last slot however far the pointer goes on.
+function clampPinGhost(topLeft, grid, count, columns) {
+  var cols = columns > 0 ? columns : PINNED_COLUMNS;
+  var scroll = grid.contentY || 0;
+  var lastRow = Math.max(0, Math.ceil(count / cols) - 1);
+  var lastCol = Math.max(0, count - 1 - lastRow * cols);
+  var y = Math.max(0, Math.min(topLeft.y + scroll, lastRow * grid.cellHeight));
+  var maxCol = y + grid.cellHeight / 2 >= lastRow * grid.cellHeight ? lastCol : cols - 1;
+  return { x: Math.max(0, Math.min(topLeft.x, maxCol * grid.cellWidth)), y: y - scroll };
+}
+
+// How far the tile at `index` is drawn from its own cell while a drag is on:
+// one slot toward the dragged tile's vacated one for each tile it has passed.
+function pinTileShift(drag, index, grid, columns) {
+  var cols = columns > 0 ? columns : PINNED_COLUMNS;
+  var none = { x: 0, y: 0 };
+  if (drag.id === "" || drag.slot < 0 || index === drag.from) return none;
+  var to = -1;
+  if (drag.from < drag.slot && index > drag.from && index <= drag.slot) to = index - 1;
+  else if (drag.slot < drag.from && index >= drag.slot && index < drag.from) to = index + 1;
+  if (to < 0) return none;
+  return {
+    x: ((to % cols) - (index % cols)) * grid.cellWidth,
+    y: (Math.floor(to / cols) - Math.floor(index / cols)) * grid.cellHeight,
+  };
 }
 
 // On release: the new saved order, or null if nothing changes. The grid
@@ -341,7 +372,7 @@ function initial() {
     nav: NO_NAV,
     resultIndex: 0,
     allIndex: -1,
-    drag: { id: "", slot: -1 },
+    drag: { id: "", from: -1, slot: -1 },
   };
 }
 
@@ -468,17 +499,24 @@ function onKey(state, key, ctx) {
   return out(s, {}, effects, false);
 }
 
+// The dragged app starts on its own slot, i.e. "no move".
+function onPinDragStart(state, id, ctx) {
+  var from = -1;
+  for (var i = 0; i < ctx.pinned.length; i++) if (ctx.pinned[i].id === id) from = i;
+  return out(patch(state, { drag: { id: id, from: from, slot: from } }));
+}
+
 function onPinDragMove(state, point, grid, ctx) {
   if (state.drag.id === "") return out(state);
   var slot = pinSlotAt(point, grid, ctx.pinned.length, PINNED_COLUMNS);
-  return out(patch(state, { drag: { id: state.drag.id, slot: slot } }));
+  return out(patch(state, { drag: { id: state.drag.id, from: state.drag.from, slot: slot } }));
 }
 
 // On release: the new saved order, mapped back by app id (the grid skips pins
 // whose app is gone), or nothing if the order is unchanged.
 function onPinDragEnd(state, ctx) {
   var drag = state.drag;
-  var next = patch(state, { drag: { id: "", slot: -1 } });
+  var next = patch(state, { drag: { id: "", from: -1, slot: -1 } });
   if (drag.id === "") return out(state);
   var shown = ctx.pinned.map(function (app) { return app.id; });
   var order = reorderedPins(ctx.startPinIds, shown, drag.id, drag.slot);
@@ -566,7 +604,7 @@ function transition(state, event, ctx) {
       return closeMenu(state, [{ type: "open", path: event.path }]);
 
     case "pinDragStart":
-      return out(patch(state, { drag: { id: event.id, slot: -1 } }));
+      return onPinDragStart(state, event.id, ctx);
 
     case "pinDragMove":
       return onPinDragMove(state, event.point, event.grid, ctx);
@@ -617,5 +655,7 @@ if (typeof module !== "undefined" && module.exports) {
     overlayRows: overlayRows,
     effectivePlaces: effectivePlaces,
     parseFullName: parseFullName,
+    clampPinGhost: clampPinGhost,
+    pinTileShift: pinTileShift,
   };
 }

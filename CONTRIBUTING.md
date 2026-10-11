@@ -192,7 +192,7 @@ These need `"autoHide": true`. With it off the Dock is always visible.
 - [ ] All apps lists A-Z; Up/Down walk it; a letter heading opens the jump grid and a letter jumps to its first App.
 - [ ] Escape backs out one layer at a time: overlay menu, jump grid, search text, All apps, then the menu.
 - [ ] Right-click an App: Pin to / Unpin from Start and Dock leave the menu open; Open launches it.
-- [ ] Dragging a Start Pin to another slot reorders it and the order survives a restart; a plain click still launches.
+- [ ] Dragging a Start Pin works like the Dock's drag (shrinks on press, bigger when lifted, the tiles in between step aside, stops at the first and last pin), across rows too; the order survives a restart; a plain click still launches; dropping well outside the grid changes nothing.
 - [ ] Places opens Home, Documents and Downloads in the file manager.
 - [ ] The footer shows the account name and a `~/.face` picture in a circle; it offers Lock and Sign out, and the power button Sleep, Restart and Shut down (try Lock first).
 - [ ] Keyboard focus returns to the previous window when the menu closes.
