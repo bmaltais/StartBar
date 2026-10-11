@@ -48,6 +48,19 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 npm test
 ```
 
+### Where things are in `Service.qml`
+
+It is one long file. Search for these names:
+
+| Name | What it is |
+| --- | --- |
+| `focusWindow`, `focusWindowAndWarp`, `raiseFloating`, `runWindowAction`, `closeWindow` | What a click or a menu row asks Hyprland to do |
+| `peekWindow`, `peekRestore`, `peekCommit` | Peek: the scripts that show a Window and put things back |
+| `previewState`, `previewPopup` | When a Preview shows, and the Preview itself with its thumbnails |
+| `contextMenu` | The Item menu, and the Preview menu (`previewWindowId`) |
+| `barMenu` | The Bar menu |
+| `dockRow` | The Items, drag and drop |
+
 ### Checks
 
 ```sh
