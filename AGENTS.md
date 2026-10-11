@@ -4,7 +4,7 @@ A Windows 11-style taskbar with a Start menu, as a plugin for the Omarchy shell 
 
 ## Checking changes
 
-- Editing `Service.qml` or `StartMenuView.qml`: the shell does not reload on save. Run `npm run smoke` (it restarts the live shell and fails on any StartBar QML error in the journal) before saying the change works. `CONTRIBUTING.md` has the rest of the loop.
+- Editing `Service.qml` or `StartMenuView.qml`: the shell does not reload on save. Run `npm run smoke` before saying the change works: it restarts the live shell with this checkout, fails on anything the plugin logs, and screenshots the Dock, Start menu and settings window in each colour scheme. Read the screenshots. It cannot hover or click, so say what you could not try. `CONTRIBUTING.md` has the rest of the loop.
 - Calling Hyprland (`hyprctl dispatch`, `hl.dsp.*`): read `docs/hyprland-notes.md` first, and try new calls on a spare window, not the user's.
 
 ## Agent skills
@@ -26,7 +26,6 @@ Single-context: `CONTEXT.md` at the root, ADRs under `docs/adr/`. See `docs/agen
 ## Checks
 
 - Before committing: `npm run check` (tests, manifest, new QML warnings). The pre-commit hook runs it once `git config core.hooksPath .githooks` is set.
-- After changing `Service.qml` or `StartMenuView.qml`: `scripts/smoke.sh` restarts the shell with this checkout, fails on anything the plugin logs, and screenshots the Dock, Start menu and settings window in each colour scheme. Read the screenshots.
 
 ## Releasing
 
