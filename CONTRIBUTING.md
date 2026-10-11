@@ -128,6 +128,8 @@ These need `"autoHide": true`. With it off the Dock is always visible.
 - [ ] With `showWorkspaceBadge` on, every Window Item shows its workspace; a special-workspace Window shows the workspace's name.
 - [ ] A Window requesting Attention gets the urgent-colour tint until focused, and the Dock does not reveal itself for it.
 - [ ] Hovering a Window Item shows its Preview: a live thumbnail, the title and a close button.
+- [ ] Right-clicking a thumbnail in a Preview opens a menu with its bottom-left corner at the pointer, with that Window's state rows and Close Window; the Preview stays up while it is open, and the rows act on that Window even if it is not focused. In a group, try it on each thumbnail.
+- [ ] A floating Window hidden behind another floating Window (a full-size floating terminal, say): hovering its Preview peeks it to the front, and clicking the Preview or its Item brings it to the front and makes it the focused Window.
 - [ ] Clicking a Preview focuses the Window and, with `previewWarpPointer`, moves the pointer to its middle.
 - [ ] Sweeping across Items next to a busy browser shows no flicker.
 - [ ] With `showPreviews` off, hovering a Window Item shows a tooltip with its title and workspace. A Pin with no Windows always shows a tooltip with the App's name.
