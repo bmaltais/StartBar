@@ -3,11 +3,11 @@
 // a JS import inside the shell and via `require` under Node for the test
 // suite.
 //
-// Three small state machines that used to be smeared across QObjects, Timers
-// and popup handlers in Service.qml: whether the Dock is Revealed, whether a
-// hover preview is up, and what a drag decides. Each takes an event and
-// returns the next state; Service.qml keeps the state, arms the timers the
-// result names and paints.
+// Two small state machines that used to be smeared across QObjects, Timers
+// and popup handlers in Service.qml: whether the Dock is Revealed, and what a
+// drag decides. Each takes an event and returns the next state; Service.qml
+// keeps the state, arms the timers the result names and paints. The hover
+// Preview, Peek and the Preview menu are in DockPreview.js.
 //
 // A transition returns `{ state, timers }`. `timers` maps a timer name to
 // "start" (restart it) or "stop"; a timer not named is left alone.
@@ -16,10 +16,12 @@
 //
 // Revealed once any of the flags below has held for the reveal delay, and
 // Hidden again once none has for the hide delay. `menu` holds the Dock up for
-// a whole context-menu visit and `drag` for a whole drag, independent of
-// hover, since the pointer leaves both the strip and the Dock then.
+// a whole Item or Preview menu visit, `barMenu` for the Bar menu's, `startMenu`
+// for the Start menu's and `drag` for a whole drag, independent of hover,
+// since the pointer leaves both the strip and the Dock then. Each holder has
+// its own flag, so one closing never drops another's hold.
 
-var REVEAL_FLAGS = ["strip", "dock", "bar", "start", "preview", "menu", "drag"];
+var REVEAL_FLAGS = ["strip", "dock", "bar", "start", "preview", "menu", "barMenu", "startMenu", "drag"];
 
 function initialReveal() {
   var flags = {};
@@ -54,49 +56,6 @@ function revealTimerFired(state) {
 
 function hideTimerFired(state) {
   return { state: { flags: state.flags, revealed: false }, timers: {} };
-}
-
-// --- Hover preview ----------------------------------------------------------
-//
-// `hovered` is the Item under the pointer, `shown` the one the popup is up
-// for (null while closed). The popup opens after the open delay, closes after
-// the leave delay, and moving to a neighbouring Item while it is up closes it
-// at once and opens that Item's after the open delay.
-
-function initialPreview() {
-  return { hovered: null, shown: null };
-}
-
-// `enabled` is whether this Item can have a preview at all
-// (previews on, a Window Item); `dragging` suppresses it during a drag.
-function previewHoverStart(state, item, enabled, dragging) {
-  if (dragging || !enabled) return { state: state, timers: {} };
-  // Hovering the shown Item again keeps it; any other Item closes the popup
-  // first, so its own opens afresh (and slides up) after the open delay.
-  if (state.shown && state.shown.key === item.key) return { state: { hovered: item, shown: item }, timers: { leave: "stop" } };
-  return { state: { hovered: item, shown: null }, timers: { leave: "stop", open: "start" } };
-}
-
-function previewHoverEnd(state) {
-  return { state: state, timers: { open: "stop", leave: "start" } };
-}
-
-// The pointer entered (true) or left (false) the popup itself.
-function previewPopupHover(state, hovered) {
-  return { state: state, timers: { leave: hovered ? "stop" : "start" } };
-}
-
-function previewOpenFired(state) {
-  if (!state.hovered) return { state: state, timers: {} };
-  return { state: { hovered: state.hovered, shown: state.hovered }, timers: {} };
-}
-
-function previewLeaveFired(state) {
-  return { state: { hovered: state.hovered, shown: null }, timers: {} };
-}
-
-function previewDismiss(state) {
-  return { state: { hovered: state.hovered, shown: null }, timers: { open: "stop", leave: "stop" } };
 }
 
 // --- Drag -------------------------------------------------------------------
@@ -175,13 +134,6 @@ if (typeof module !== "undefined" && module.exports) {
     setRevealFlag: setRevealFlag,
     revealTimerFired: revealTimerFired,
     hideTimerFired: hideTimerFired,
-    initialPreview: initialPreview,
-    previewHoverStart: previewHoverStart,
-    previewHoverEnd: previewHoverEnd,
-    previewPopupHover: previewPopupHover,
-    previewOpenFired: previewOpenFired,
-    previewLeaveFired: previewLeaveFired,
-    previewDismiss: previewDismiss,
     initialDrag: initialDrag,
     dragActive: dragActive,
     dragStart: dragStart,
