@@ -18,6 +18,7 @@ Service.qml	unqualified	choiceEditor
 Service.qml	unqualified	choices
 Service.qml	unqualified	contextMenu
 Service.qml	unqualified	dockItem
+Service.qml	unqualified	dockItemKeys
 Service.qml	unqualified	dockRow
 Service.qml	unqualified	dockSettings
 Service.qml	unqualified	dockState
@@ -39,6 +40,7 @@ Service.qml	unqualified	revealState
 Service.qml	unqualified	root
 Service.qml	unqualified	settingsColumn
 Service.qml	unqualified	settingsWindow
+Service.qml	unqualified	settle
 Service.qml	unqualified	sliderEditor
 Service.qml	unqualified	startButton
 Service.qml	unqualified	stepperEditor
