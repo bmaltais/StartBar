@@ -678,6 +678,7 @@ Item {
         height: Style.space(52)
 
         Text {
+          textFormat: Text.PlainText
           anchors.left: parent.left
           anchors.leftMargin: Style.spacing.lg
           anchors.verticalCenter: parent.verticalCenter
@@ -698,6 +699,7 @@ Item {
           color: closeSettingsMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
 
           Text {
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             text: "✕"
             color: Color.popups.text
@@ -741,6 +743,7 @@ Item {
               width: settingsColumn.width
 
               Text {
+                textFormat: Text.PlainText
                 topPadding: Style.spacing.md
                 bottomPadding: Style.spacing.xs
                 text: groupBlock.modelData.title
@@ -781,6 +784,7 @@ Item {
                     width: fieldRow.stacked ? parent.width : parent.width - editorLoader.width - Style.spacing.md
 
                     Text {
+                      textFormat: Text.PlainText
                       width: parent.width
                       elide: Text.ElideRight
                       text: fieldRow.field.label
@@ -790,6 +794,7 @@ Item {
                     }
 
                     Text {
+                      textFormat: Text.PlainText
                       visible: !!fieldRow.field.hint
                       width: parent.width
                       wrapMode: Text.WordWrap
@@ -847,6 +852,7 @@ Item {
         height: Style.space(52)
 
         Text {
+          textFormat: Text.PlainText
           anchors.left: parent.left
           anchors.leftMargin: Style.spacing.lg
           anchors.verticalCenter: parent.verticalCenter
@@ -868,6 +874,7 @@ Item {
             : (resetMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08))
 
           Text {
+            textFormat: Text.PlainText
             id: resetLabel
             anchors.centerIn: parent
             text: settingsWindow.confirmingReset ? "Click again to reset everything" : "Reset to defaults"
@@ -954,6 +961,7 @@ Item {
             color: choice.selected ? Color.accent : (choiceMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08))
 
             Text {
+              textFormat: Text.PlainText
               id: choiceLabel
               anchors.centerIn: parent
               text: choice.modelData.label
@@ -994,11 +1002,12 @@ Item {
           height: width
           radius: Style.cornerRadius
           color: minusMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
-          Text { anchors.centerIn: parent; text: "−"; color: Color.popups.text; font.pixelSize: Style.font.body }
+          Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "−"; color: Color.popups.text; font.pixelSize: Style.font.body }
           MouseArea { id: minusMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: stepper.step(-1) }
         }
 
         Text {
+          textFormat: Text.PlainText
           anchors.verticalCenter: undefined
           width: Style.space(66)
           height: Style.space(28)
@@ -1015,7 +1024,7 @@ Item {
           height: width
           radius: Style.cornerRadius
           color: plusMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
-          Text { anchors.centerIn: parent; text: "+"; color: Color.popups.text; font.pixelSize: Style.font.body }
+          Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "+"; color: Color.popups.text; font.pixelSize: Style.font.body }
           MouseArea { id: plusMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: stepper.step(1) }
         }
       }
@@ -1083,6 +1092,7 @@ Item {
         }
 
         Text {
+          textFormat: Text.PlainText
           width: Style.space(40)
           height: Style.space(24)
           verticalAlignment: Text.AlignVCenter
@@ -1159,6 +1169,7 @@ Item {
         }
 
         Text {
+          textFormat: Text.PlainText
           visible: listBox.isDefault
           text: "Default: Home and your Documents, Downloads, Pictures, Music and Videos folders"
           color: Util.alpha(Color.popups.text, 0.7)
@@ -1201,7 +1212,7 @@ Item {
               height: width
               radius: Style.cornerRadius
               color: removeMouse.containsMouse ? Util.alpha(Color.urgent, 0.5) : "transparent"
-              Text { anchors.centerIn: parent; text: "✕"; color: Color.popups.text; font.pixelSize: Style.font.caption }
+              Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "✕"; color: Color.popups.text; font.pixelSize: Style.font.caption }
               MouseArea { id: removeMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: listBox.removeAt(placeEntry.index) }
             }
           }
@@ -1216,6 +1227,7 @@ Item {
             radius: Style.cornerRadius
             color: addMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
             Text {
+              textFormat: Text.PlainText
               id: addLabel
               anchors.centerIn: parent
               text: listBox.isDefault ? "Customize" : "Add folder"
@@ -1242,6 +1254,7 @@ Item {
             radius: Style.cornerRadius
             color: useDefaultMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
             Text {
+              textFormat: Text.PlainText
               id: useDefaultLabel
               anchors.centerIn: parent
               text: "Use defaults"
@@ -1505,6 +1518,7 @@ Item {
         anchors.bottomMargin: panel.shown ? (root.taskbar.barHeight - height) / 2 : -height
 
         Text {
+          textFormat: Text.PlainText
           id: clockLabel
           horizontalAlignment: Text.AlignRight
           color: root.colForeground
@@ -1766,6 +1780,7 @@ Item {
                 color: root.colMuted
 
                 Text {
+                  textFormat: Text.PlainText
                   anchors.centerIn: parent
                   text: dockItem.modelData.letter || root.appLetter(dockItem.modelData.app)
                   color: root.colForeground
@@ -1789,6 +1804,7 @@ Item {
                 height: Style.font.caption + Style.spacing.xxs * 2
 
                 Text {
+                  textFormat: Text.PlainText
                   id: badgeText
                   anchors.centerIn: parent
                   text: dockItem.modelData.badge || ""
@@ -1991,6 +2007,7 @@ Item {
           color: root.colMuted
 
           Text {
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             text: (dragGhost.item && (dragGhost.item.letter || root.appLetter(dragGhost.item.app))) || ""
             color: root.colForeground
@@ -2294,6 +2311,7 @@ Item {
                     spacing: Style.spacing.xs
 
                     Text {
+                      textFormat: Text.PlainText
                       width: parent.width - closeButton.width - parent.spacing
                       anchors.verticalCenter: parent.verticalCenter
                       elide: Text.ElideRight
@@ -2311,6 +2329,7 @@ Item {
                       color: closeMouse.containsMouse ? Util.alpha(Color.urgent, 0.5) : "transparent"
 
                       Text {
+                        textFormat: Text.PlainText
                         anchors.centerIn: parent
                         text: "\u2715"
                         color: previewPopup.textColor
@@ -2523,6 +2542,7 @@ Item {
                   color: barRowMouse.containsMouse ? Style.hoverFillFor(root.colForeground, previewPopup.accentColor) : "transparent"
 
                   Text {
+                    textFormat: Text.PlainText
                     anchors.left: parent.left
                     anchors.leftMargin: Style.spacing.controlPaddingX
                     anchors.verticalCenter: parent.verticalCenter
@@ -2533,6 +2553,7 @@ Item {
                   }
 
                   Text {
+                    textFormat: Text.PlainText
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
@@ -2825,6 +2846,7 @@ Item {
                     : "transparent"
 
                   Text {
+                    textFormat: Text.PlainText
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter

@@ -390,6 +390,7 @@ Item {
       // from the Nerd Font Omarchy already uses for its own icons, so it
       // matches the rest of the desktop.
       Text {
+        textFormat: Text.PlainText
         id: searchGlyph
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left
@@ -401,6 +402,7 @@ Item {
       }
 
       Text {
+        textFormat: Text.PlainText
         visible: searchInput.text.length === 0
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: searchGlyph.right
@@ -474,6 +476,7 @@ Item {
             }
 
             Text {
+              textFormat: Text.PlainText
               anchors.left: placeIcon.right
               anchors.leftMargin: Style.spacing.md
               anchors.right: parent.right
@@ -543,6 +546,7 @@ Item {
           }
 
           Text {
+            textFormat: Text.PlainText
             anchors.left: resultIcon.right
             anchors.leftMargin: Style.spacing.md
             anchors.right: parent.right
@@ -587,6 +591,7 @@ Item {
           height: Style.space(36)
 
           Text {
+            textFormat: Text.PlainText
             anchors.left: parent.left
             anchors.leftMargin: Style.spacing.lg
             anchors.verticalCenter: parent.verticalCenter
@@ -609,6 +614,7 @@ Item {
           height: Style.space(28) + Style.spacing.md
 
           Text {
+            textFormat: Text.PlainText
             anchors.left: parent.left
             anchors.leftMargin: Style.spacing.sm
             anchors.verticalCenter: allBackButton.verticalCenter
@@ -631,6 +637,7 @@ Item {
             border.color: Util.alpha(startMenu.colText, 0.15)
 
             Text {
+              textFormat: Text.PlainText
               id: backLabel
               anchors.centerIn: parent
               text: "‹  Back"
@@ -681,6 +688,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
 
             Text {
+              textFormat: Text.PlainText
               width: parent.width
               elide: Text.ElideRight
               text: allRow.modelData.name
@@ -690,6 +698,7 @@ Item {
             }
 
             Text {
+              textFormat: Text.PlainText
               visible: text.length > 0
               width: parent.width
               elide: Text.ElideRight
@@ -725,6 +734,7 @@ Item {
         MouseArea { anchors.fill: parent; onClicked: startMenu.send({ type: "letters", open: false }) }
 
         Text {
+          textFormat: Text.PlainText
           anchors.top: parent.top
           anchors.topMargin: Style.spacing.md
           anchors.horizontalCenter: parent.horizontalCenter
@@ -755,6 +765,7 @@ Item {
                 : (letterCell.present ? Util.alpha(startMenu.colText, 0.08) : "transparent")
 
               Text {
+                textFormat: Text.PlainText
                 anchors.centerIn: parent
                 text: letterCell.modelData
                 color: letterCell.present ? startMenu.colAccent : Util.alpha(startMenu.colText, 0.25)
@@ -792,6 +803,7 @@ Item {
         }
 
         Text {
+          textFormat: Text.PlainText
           id: pinnedTitle
           anchors.verticalCenter: homeHeader.verticalCenter
           anchors.left: parent.left
@@ -815,6 +827,7 @@ Item {
           border.color: Util.alpha(startMenu.colText, 0.15)
 
           Text {
+            textFormat: Text.PlainText
             id: allAppsLabel
             anchors.centerIn: parent
             text: "All apps  ›"
@@ -894,6 +907,7 @@ Item {
             }
 
             Text {
+              textFormat: Text.PlainText
               anchors.top: pinnedIcon.bottom
               anchors.topMargin: Style.spacing.xs
               anchors.left: parent.left
@@ -969,6 +983,7 @@ Item {
           }
 
           Text {
+            textFormat: Text.PlainText
             visible: startMenu.pinnedApps.length === 0
             anchors.centerIn: parent
             text: "Right-click an app in All apps to pin it here"
@@ -1025,6 +1040,7 @@ Item {
         }
 
         Text {
+          textFormat: Text.PlainText
           id: recommendedTitle
           anchors.bottom: recommendedGrid.top
           anchors.bottomMargin: Style.spacing.md
@@ -1086,6 +1102,7 @@ Item {
               anchors.verticalCenter: parent.verticalCenter
 
               Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 elide: Text.ElideRight
                 text: recentTile.modelData.name
@@ -1097,6 +1114,7 @@ Item {
               // The desktop entry's generic name ("Web Browser"), the
               // counterpart of Windows' "Welcome to Windows" line.
               Text {
+                textFormat: Text.PlainText
                 visible: text.length > 0
                 width: parent.width
                 elide: Text.ElideRight
@@ -1121,6 +1139,7 @@ Item {
           }
 
           Text {
+            textFormat: Text.PlainText
             visible: startMenu.recentApps.length === 0
             anchors.left: parent.left
             anchors.leftMargin: Style.spacing.sm
@@ -1182,6 +1201,7 @@ Item {
         color: startMenu.colAccent
 
         Text {
+          textFormat: Text.PlainText
           anchors.centerIn: parent
           text: startMenu.accountName.charAt(0).toUpperCase()
           color: startMenu.colOnAccent
@@ -1225,6 +1245,7 @@ Item {
       }
 
       Text {
+        textFormat: Text.PlainText
         id: userNameText
         anchors.left: avatar.right
         anchors.leftMargin: Style.spacing.md
@@ -1246,6 +1267,7 @@ Item {
         color: powerMouse.containsMouse || startMenu.overlayKind === "power" ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
 
         Text {
+          textFormat: Text.PlainText
           anchors.centerIn: parent
           text: "⏻"
           color: startMenu.colText
@@ -1306,6 +1328,7 @@ Item {
             color: overlayMouse.containsMouse ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
 
             Text {
+              textFormat: Text.PlainText
               anchors.left: parent.left
               anchors.leftMargin: Style.spacing.controlPaddingX
               anchors.verticalCenter: parent.verticalCenter
