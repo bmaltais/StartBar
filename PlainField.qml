@@ -26,6 +26,7 @@ Item {
   clip: true
 
   Text {
+    textFormat: Text.PlainText
     id: typed
     anchors.verticalCenter: parent.verticalCenter
     // Scroll so the end (the caret) stays in view.
