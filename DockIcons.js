@@ -8,7 +8,8 @@
 // the shell runs) stays "" until the shell restarts, and QML cannot clear the
 // cache. So on a miss the Dock looks for the file itself: searchCommand builds
 // the command that lists candidates, pickBest chooses one, and Service.qml
-// only runs the command and hands the path to the Image.
+// only runs the command and hands the path to the Image (IconResolver.qml,
+// shared by the Dock and the Start menu).
 
 // An Icon= value that is not a plain theme name (a path, or glob characters)
 // is left to Qt: it is passed to `find -name`.

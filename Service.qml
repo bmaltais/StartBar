@@ -19,7 +19,6 @@ import "StartMenu.js" as StartMenu
 import "DockInteraction.js" as DockInteraction
 import "DockPreview.js" as DockPreview
 import "DockHyprland.js" as DockHyprland
-import "DockIcons.js" as DockIcons
 
 Item {
   id: root
@@ -405,85 +404,19 @@ Item {
     return window.class ? DesktopEntries.heuristicLookup(window.class) || null : null
   }
 
-  // An icon Qt cannot find. Quickshell.iconPath(name, true) remembers a miss
-  // until the shell restarts, so an icon installed after its App's first
-  // lookup (a package installed while the shell runs) would stay blank. On a
-  // miss the Dock searches the icon directories itself (DockIcons.js) and
-  // uses the file it finds; until then, or if there is none, the Item shows
-  // its Letter Tile. `iconFiles` is name -> path and is reassigned, never
-  // edited in place, so bindings that read it update.
-  property var iconFiles: ({})
-  property var iconTries: ({})
-  property var iconLast: ({})
-  property var iconQueue: []
-  property string iconSearching: ""
+  // App icons, for the Dock and the Start menu (IconResolver.qml): Qt's
+  // lookup, then a search of the icon directories when Qt has cached a miss.
+  IconResolver { id: iconResolver }
+  property alias icons: iconResolver
+
+  function iconSource(name) {
+    return root.icons.source(name)
+  }
 
   // The Letter Tile's letter for an App with no icon: its name's first letter.
   function appLetter(app) {
     return app && app.name ? app.name.charAt(0).toUpperCase() : ""
   }
-
-  function dockIconSource(name) {
-    if (!name) return ""
-    root.iconRetryTick // re-ask when the retry timer fires
-    var found = Quickshell.iconPath(name, true)
-    if (found) return found
-    var file = root.iconFiles[name]
-    if (file) return "file://" + file
-    root.iconSearch(name)
-    return ""
-  }
-
-  function iconSearch(name) {
-    if (!DockIcons.shouldSearch(root.iconTries[name], root.iconLast[name], Date.now())) return
-    if (root.iconSearching === name || root.iconQueue.indexOf(name) >= 0) return
-    if (!DockIcons.searchCommand(name)) return
-    root.iconQueue.push(name)
-    Qt.callLater(root.iconNext)
-  }
-
-  function iconNext() {
-    if (iconRunner.running || root.iconQueue.length === 0) return
-    root.iconSearching = root.iconQueue.shift()
-    var tries = Object.assign({}, root.iconTries)
-    tries[root.iconSearching] = (tries[root.iconSearching] || 0) + 1
-    root.iconTries = tries
-    var last = Object.assign({}, root.iconLast)
-    last[root.iconSearching] = Date.now()
-    root.iconLast = last
-    iconRunner.command = DockIcons.searchCommand(root.iconSearching)
-    iconRunner.running = true
-  }
-
-  Process {
-    id: iconRunner
-    stdout: StdioCollector {
-      onStreamFinished: {
-        var file = DockIcons.pickBest(text)
-        var name = root.iconSearching
-        if (file) {
-          var files = Object.assign({}, root.iconFiles)
-          files[name] = file
-          root.iconFiles = files
-        } else if (root.iconTries[name] < DockIcons.MAX_TRIES) {
-          iconRetry.restart()
-        }
-      }
-    }
-    onExited: {
-      root.iconSearching = ""
-      root.iconNext()
-    }
-  }
-
-  // Nothing found yet: look again shortly (the install may still be running).
-  // Reading the Dock's own binding re-asks for every name still missing.
-  Timer {
-    id: iconRetry
-    interval: DockIcons.RETRY_MS + 250
-    onTriggered: root.iconRetryTick = root.iconRetryTick + 1
-  }
-  property int iconRetryTick: 0
 
   // A Pin resolves its own App directly by the id it was pinned under
   // (CONTEXT.md "Pin"), independent of any Window — unlike resolveApp,
@@ -1533,7 +1466,7 @@ Item {
           sourceSize.height: height * Screen.devicePixelRatio
           source: startButton.iconSpec.kind === "path"
             ? "file://" + startButton.iconSpec.value
-            : (startButton.iconSpec.kind === "icon" ? Quickshell.iconPath(startButton.iconSpec.value, true) : "")
+            : (startButton.iconSpec.kind === "icon" ? root.iconSource(startButton.iconSpec.value) : "")
         }
 
         // The MouseArea below takes hover away from the bar's own handler
@@ -1827,13 +1760,13 @@ Item {
                 asynchronous: true
                 sourceSize.width: width * Screen.devicePixelRatio
                 sourceSize.height: height * Screen.devicePixelRatio
-                source: dockItem.modelData.app ? root.dockIconSource(dockItem.modelData.app.icon) : ""
+                source: dockItem.modelData.app ? root.iconSource(dockItem.modelData.app.icon) : ""
               }
 
               // The Letter Tile: no App, or an App whose icon file is not
               // found (yet).
               Rectangle {
-                visible: dockItem.modelData.app === null || root.dockIconSource(dockItem.modelData.app.icon) === ""
+                visible: dockItem.modelData.app === null || root.iconSource(dockItem.modelData.app.icon) === ""
                 anchors.fill: parent
                 radius: Style.cornerRadius
                 color: root.colMuted
@@ -2054,11 +1987,11 @@ Item {
           asynchronous: true
           sourceSize.width: width * Screen.devicePixelRatio
           sourceSize.height: height * Screen.devicePixelRatio
-          source: dragGhost.item && dragGhost.item.app ? root.dockIconSource(dragGhost.item.app.icon) : ""
+          source: dragGhost.item && dragGhost.item.app ? root.iconSource(dragGhost.item.app.icon) : ""
         }
 
         Rectangle {
-          visible: dragGhost.item && (dragGhost.item.app === null || root.dockIconSource(dragGhost.item.app.icon) === "")
+          visible: dragGhost.item && (dragGhost.item.app === null || root.iconSource(dragGhost.item.app.icon) === "")
           anchors.fill: parent
           radius: Style.cornerRadius
           color: root.colMuted
@@ -2490,6 +2423,7 @@ Item {
         panelHeight: panel.height
         buttonX: startButton.x
         buttonHovered: startMouse.containsMouse
+        icons: root.icons
 
         onLaunchRequested: function (entry) { root.launchApp(entry) }
         onTogglePinRequested: function (appId, pinned) { root.togglePin(appId, pinned) }
