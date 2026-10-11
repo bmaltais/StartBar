@@ -17,6 +17,7 @@ import "DockModel.js" as DockModel
 import "DockConfig.js" as DockConfig
 import "StartMenu.js" as StartMenu
 import "DockInteraction.js" as DockInteraction
+import "DockPreview.js" as DockPreview
 
 Item {
   id: root
@@ -529,8 +530,7 @@ Item {
   // show it, and leaving puts things back. The first peek saves the
   // focused Window and each monitor's workspace in a state file; peekRestore
   // replays it, peekCommit (a click picked the Window) throws it away.
-  // `peeking` is the in-QML truth, so a restore never runs after a commit.
-  property bool peeking: false
+  // DockPreview.js decides when each is asked for.
   readonly property string peekNoWarps: "orig=false; hyprctl -j getoption cursor:no_warps | grep -q '\"bool\": true' && orig=true; "
     + "hyprctl eval 'hl.config({ cursor = { no_warps = true } })' >/dev/null; "
   readonly property string peekWarpsBack: "hyprctl eval \"hl.config({ cursor = { no_warps = $orig } })\" >/dev/null"
@@ -559,7 +559,6 @@ Item {
   function peekWindow(address) {
     var normalized = normalizedAddress(address)
     if (!normalized) return
-    root.peeking = true
     var script = "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek.lock\"; flock 9\n"
       + "undo() {\n"
       + "  echo \"$rest\" | while read -r kind a b; do\n"
@@ -604,10 +603,6 @@ Item {
   }
 
   function peekRestore() {
-    // Unconditional: the script does nothing without a state file, and a
-    // restore skipped because `peeking` was stale would leave the peeked
-    // window showing.
-    root.peeking = false
     var script = "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek.lock\"; flock 9\n"
       + "undo() {\n"
       + "  echo \"$rest\" | while read -r kind a b; do\n"
@@ -636,7 +631,6 @@ Item {
   }
 
   function peekCommit() {
-    root.peeking = false
     root.peekRun("exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek.lock\"; flock 9; rm -f " + root.peekState)
   }
 
@@ -1434,7 +1428,8 @@ Item {
         property var model: DockInteraction.initialReveal()
         readonly property bool revealed: revealState.model.revealed
 
-        // `name` is one of strip, dock, bar, start, preview, menu, drag.
+        // `name` is one of strip, dock, bar, start, preview, menu, barMenu,
+        // startMenu, drag.
         function set(name, value) {
           revealState.apply(DockInteraction.setRevealFlag(revealState.model, name, value))
         }
@@ -2039,9 +2034,11 @@ Item {
       }
 
       // Hover previews (showPreviews): a live thumbnail of the
-      // hovered Window with its title and a close button. previewState holds
-      // which Item is shown and the open/leave timers; hovering the popup
-      // itself keeps it (and the bar, via revealState "preview") up.
+      // hovered Window with its title and a close button. The rules are in
+      // DockPreview.js (the Preview, Peek, the Preview menu holding it up);
+      // previewState keeps its state, arms the timers it names and carries out
+      // the effects. Hovering the popup itself keeps it (and the bar, via
+      // revealState "preview") up.
       QtObject {
         id: previewState
 
@@ -2049,7 +2046,7 @@ Item {
         // time so the popup never depends on the delegate staying alive.
         property real anchorX: 0
         property real anchorY: 0
-        property var model: DockInteraction.initialPreview()
+        property var model: DockPreview.initial()
         readonly property var hoveredItem: previewState.model.hovered
         readonly property var shownItem: previewState.model.shown
         readonly property bool showing: shownItem !== null
@@ -2058,49 +2055,92 @@ Item {
           return root.taskbar.showPreviews && item.kind === "window"
         }
 
-        function apply(result) {
+        function send(event) {
+          var result = DockPreview.transition(previewState.model, event,
+            { previewPeek: root.taskbar.previewPeek, warp: root.taskbar.previewWarpPointer })
+          // The state first: it can flip the popup's visibility, whose
+          // handler sends its own event and reads the state as it now is.
           previewState.model = result.state
-          if (result.timers.open === "stop") previewOpenTimer.stop()
-          else if (result.timers.open === "start") previewOpenTimer.restart()
-          if (result.timers.leave === "stop") previewLeaveTimer.stop()
-          else if (result.timers.leave === "start") previewLeaveTimer.restart()
+          previewState.arm(result.timers)
+          for (var i = 0; i < result.effects.length; i++) previewState.perform(result.effects[i])
+        }
+
+        function arm(timers) {
+          if (timers.open === "stop") previewOpenTimer.stop()
+          else if (timers.open === "start") previewOpenTimer.restart()
+          if (timers.leave === "stop") previewLeaveTimer.stop()
+          else if (timers.leave === "start") previewLeaveTimer.restart()
+          if (timers.peek === "stop") peekTimer.stop()
+          else if (timers.peek === "start") peekTimer.restart()
+          if (timers.peekRestore === "stop") peekRestoreTimer.stop()
+          else if (timers.peekRestore === "start") peekRestoreTimer.restart()
+        }
+
+        function perform(effect) {
+          switch (effect.type) {
+          case "peek": root.peekWindow(effect.id); break
+          case "restore": root.peekRestore(); break
+          case "commit": root.peekCommit(); break
+          case "focus":
+            if (effect.warp) root.focusWindowAndWarp(effect.id)
+            else root.focusWindow(effect.id)
+            break
+          }
         }
 
         function hoverStart(delegate) {
           // Moving on to an icon takes over from a hover-opened Start menu at
           // once, instead of both showing until the menu's leave timer fires.
           startMenu.send({ type: "itemHovered" })
-          if (root.dragInProgress || !enabledFor(delegate.modelData)) return
-          var point = delegate.mapToItem(panel.contentItem, delegate.width / 2, 0)
-          previewState.anchorX = point.x
-          previewState.anchorY = point.y
-          previewState.apply(DockInteraction.previewHoverStart(previewState.model, delegate.modelData, true, false))
+          var enabled = enabledFor(delegate.modelData)
+          // The anchor only moves for an Item that can have a Preview: a Pin
+          // hovered while another Item's is up must not drag that one along.
+          if (enabled && !root.dragInProgress) {
+            var point = delegate.mapToItem(panel.contentItem, delegate.width / 2, 0)
+            previewState.anchorX = point.x
+            previewState.anchorY = point.y
+          }
+          previewState.send({ type: "hoverStart", item: delegate.modelData, enabled: enabled, dragging: root.dragInProgress })
         }
 
         function hoverEnd() {
-          previewState.apply(DockInteraction.previewHoverEnd(previewState.model))
+          previewState.send({ type: "hoverEnd" })
         }
 
         function popupHover(hovered) {
-          previewState.apply(DockInteraction.previewPopupHover(previewState.model, hovered))
+          previewState.send({ type: "previewHover", hovered: hovered })
         }
 
         function dismiss() {
-          previewState.apply(DockInteraction.previewDismiss(previewState.model))
+          previewState.send({ type: "dismiss" })
         }
       }
 
       Timer {
         id: previewOpenTimer
         interval: 350
-        onTriggered: previewState.apply(DockInteraction.previewOpenFired(previewState.model))
+        onTriggered: previewState.send({ type: "openFired" })
       }
 
       Timer {
         id: previewLeaveTimer
         interval: 250
-        // A Preview's own menu keeps it up: the pointer is on the menu, not it.
-        onTriggered: if (!(contextMenu.visible && contextMenu.forPreview)) previewState.apply(DockInteraction.previewLeaveFired(previewState.model))
+        onTriggered: previewState.send({ type: "leaveFired" })
+      }
+
+      // Peek, debounced so sweeping the pointer along the thumbnails
+      // doesn't flash every window in turn, and so passing between two
+      // cells doesn't restore in between.
+      Timer {
+        id: peekTimer
+        interval: 150
+        onTriggered: previewState.send({ type: "peekFired" })
+      }
+
+      Timer {
+        id: peekRestoreTimer
+        interval: 200
+        onTriggered: previewState.send({ type: "peekRestoreFired" })
       }
 
       // Keep the popup anchored if the hovered Item's position changes while
@@ -2121,20 +2161,7 @@ Item {
       PopupWindow {
         id: previewPopup
 
-        readonly property var liveItem: {
-          var shown = previewState.shownItem
-          if (!shown) return null
-          var ids = {}
-          var shownWindows = shown.windows || [shown.window]
-          for (var i = 0; i < shownWindows.length; i++) ids[shownWindows[i].id] = true
-          for (var j = 0; j < dockState.items.length; j++) {
-            var item = dockState.items[j]
-            if (item.kind !== "window") continue
-            var windows = item.windows || [item.window]
-            for (var k = 0; k < windows.length; k++) if (ids[windows[k].id]) return item
-          }
-          return null
-        }
+        readonly property var liveItem: DockPreview.liveItem(previewState.shownItem, dockState.items)
         readonly property var liveWindows: liveItem ? (liveItem.windows || [liveItem.window]) : []
         // The thumbnail cells are keyed by Window id and only rebuilt when
         // the set of Windows changes. A peek moves focus, which rebuilds
@@ -2142,11 +2169,7 @@ Item {
         // the one under the pointer would be destroyed, its hover would
         // end and the peek would be undone at once.
         property var windowIds: []
-        onLiveWindowsChanged: {
-          var ids = []
-          for (var i = 0; i < liveWindows.length; i++) ids.push(liveWindows[i].id)
-          if (JSON.stringify(ids) !== JSON.stringify(windowIds)) windowIds = ids
-        }
+        onLiveWindowsChanged: windowIds = DockPreview.windowIds(windowIds, liveWindows)
 
         function windowFor(id) {
           for (var i = 0; i < liveWindows.length; i++) if (liveWindows[i].id === id) return liveWindows[i]
@@ -2164,61 +2187,17 @@ Item {
 
         // The delegates below can't see `root`, so they act through these.
         function focusPicked(window) {
-          peekTimer.stop()
-          root.peekCommit()
-          previewState.dismiss()
-          if (root.taskbar.previewWarpPointer) root.focusWindowAndWarp(window.id)
-          else root.focusWindow(window.id)
+          previewState.send({ type: "thumbPicked", window: window })
         }
 
-        // Peek, debounced so sweeping the pointer along the thumbnails
-        // doesn't flash every window in turn, and so passing between two
-        // cells doesn't restore in between.
-        // Qt can report the next cell's enter before the previous cell's
-        // leave, so a leave only counts if it is from the cell we think the
-        // pointer is on; a stale one must not cancel the new cell's peek.
-        property var peekTarget: null
-        // The Window the peek currently shows, for openMenu.
-        property string peekedId: ""
         function peekHover(window, hovered) {
-          if (!root.taskbar.previewPeek || !window) return
-          if (contextMenu.visible && contextMenu.forPreview) return
-          if (hovered) {
-            peekRestoreTimer.stop()
-            peekTarget = window
-            peekTimer.restart()
-          } else if (peekTarget && peekTarget.id === window.id) {
-            peekTarget = null
-            peekTimer.stop()
-            peekRestoreTimer.restart()
-          }
-        }
-
-        Timer {
-          id: peekTimer
-          interval: 150
-          onTriggered: if (previewPopup.peekTarget) {
-            previewPopup.peekedId = previewPopup.peekTarget.id
-            root.peekWindow(previewPopup.peekTarget.id)
-          }
-        }
-
-        Timer {
-          id: peekRestoreTimer
-          interval: 200
-          onTriggered: root.peekRestore()
+          previewState.send({ type: "thumbHover", window: window, hovered: hovered })
         }
 
         // Right click on a thumbnail: that Window's menu, above the thumbnail.
-        // The peek is left as it is while the menu is open: putting it back
-        // changes focus and workspace, and that closes the menu (and shows
-        // the Dock jiggling). The Window's own state rows are the same
-        // peeked or not. Only a peek of some other Window is put back first.
+        // What happens to a peek meanwhile is DockPreview.js's "thumbMenu".
         function openMenu(cell, pointX, pointY) {
-          peekTimer.stop()
-          peekTarget = null
-          peekRestoreTimer.stop()
-          if (root.peeking && peekedId !== cell.modelData) root.peekRestore()
+          previewState.send({ type: "thumbMenu", windowId: cell.modelData })
           contextMenu.close()
           contextMenu.previewCell = cell
           contextMenu.previewPointX = pointX
@@ -2243,11 +2222,7 @@ Item {
           previewSlideAnim.stop()
           if (visible && root.taskbar.previewSlide) previewSlideAnim.start()
           else slide = 1
-          if (!previewPopup.visible) {
-            previewPopup.peekTarget = null
-            peekTimer.stop()
-            root.peekRestore()
-          }
+          if (!previewPopup.visible) previewState.send({ type: "previewClosed" })
         }
         onImplicitWidthChanged: if (visible) previewPopup.anchor.updateAnchor()
 
@@ -2478,7 +2453,7 @@ Item {
 
         onLaunchRequested: function (entry) { root.launchApp(entry) }
         onTogglePinRequested: function (appId, pinned) { root.togglePin(appId, pinned) }
-        onDockHoldRequested: function (held) { revealState.set("menu", held) }
+        onDockHoldRequested: function (held) { revealState.set("startMenu", held) }
       }
 
 
@@ -2532,7 +2507,7 @@ Item {
         implicitWidth: rowWidth
         implicitHeight: barMenuColumn.implicitHeight + Style.spacing.xxs * 2
 
-        onVisibleChanged: revealState.set("menu", barMenu.visible)
+        onVisibleChanged: revealState.set("barMenu", barMenu.visible)
         onClosed: barMenu.close()
 
         Rectangle {
@@ -2680,7 +2655,7 @@ Item {
                 group: 1,
                 // Choosing a state row keeps the peeked Window focused, as a
                 // click on the thumbnail does, instead of the peek being put back.
-                trigger: (function (id) { return function () { root.peekCommit(); root.runWindowAction(id, win.id) } })(winStates[s].id),
+                trigger: (function (id) { return function () { previewState.send({ type: "menuRowChosen" }); root.runWindowAction(id, win.id) } })(winStates[s].id),
               })
             }
             previewRows.push({
@@ -2771,8 +2746,7 @@ Item {
           revealState.set("menu", contextMenu.visible)
           contextMenu.enteredMenu = false
           menuLeaveTimer.stop()
-          // The Preview was held up while its menu was open; let it go.
-          if (!contextMenu.visible && contextMenu.forPreview) previewLeaveTimer.restart()
+          previewState.send({ type: "menuVisible", visible: contextMenu.visible, forPreview: contextMenu.forPreview })
         }
 
         onHoveringMenuChanged: {

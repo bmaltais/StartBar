@@ -44,64 +44,19 @@ test("menu and drag hold the Dock up with no hover at all", () => {
   assert.deepEqual(DI.setRevealFlag(s, "drag", false).timers, { reveal: "stop", hide: "start" });
 });
 
+test("each holder of the Dock keeps its own hold: one closing does not drop another's", () => {
+  let s = DI.setRevealFlag(DI.initialReveal(), "barMenu", true).state;
+  s = DI.setRevealFlag(s, "startMenu", true).state;
+  s = DI.setRevealFlag(s, "startMenu", false).state;
+  assert.equal(DI.isHeld(s), true);
+  assert.deepEqual(DI.setRevealFlag(s, "barMenu", false).timers, { reveal: "stop", hide: "start" });
+});
+
 test("setting a flag to its current value, or an unknown flag, changes nothing", () => {
   const s = DI.initialReveal();
   assert.deepEqual(DI.setRevealFlag(s, "strip", false).timers, {});
   assert.deepEqual(DI.setRevealFlag(s, "nope", true).timers, {});
   assert.equal(DI.isHeld(DI.setRevealFlag(s, "nope", true).state), false);
-});
-
-const a = { key: "window:a" };
-const b = { key: "window:b" };
-
-test("a preview opens after the open delay, not before", () => {
-  const r = DI.previewHoverStart(DI.initialPreview(), a, true, false);
-  assert.deepEqual(r.timers, { leave: "stop", open: "start" });
-  assert.equal(r.state.shown, null);
-  assert.equal(DI.previewOpenFired(r.state).state.shown, a);
-});
-
-test("moving to a neighbour while shown closes it and opens the neighbour's after the open delay", () => {
-  let s = DI.previewOpenFired(DI.previewHoverStart(DI.initialPreview(), a, true, false).state).state;
-  const r = DI.previewHoverStart(s, b, true, false);
-  assert.equal(r.state.shown, null);
-  assert.equal(r.state.hovered, b);
-  assert.deepEqual(r.timers, { leave: "stop", open: "start" });
-  assert.equal(DI.previewOpenFired(r.state).state.shown, b);
-});
-
-test("re-entering the shown Item keeps its preview up", () => {
-  const s = DI.previewOpenFired(DI.previewHoverStart(DI.initialPreview(), a, true, false).state).state;
-  const r = DI.previewHoverStart(s, a, true, false);
-  assert.equal(r.state.shown, a);
-  assert.deepEqual(r.timers, { leave: "stop" });
-});
-
-test("leaving cancels a pending open and arms the leave timer", () => {
-  const s = DI.previewHoverStart(DI.initialPreview(), a, true, false).state;
-  const r = DI.previewHoverEnd(s);
-  assert.deepEqual(r.timers, { open: "stop", leave: "start" });
-  assert.equal(DI.previewLeaveFired(DI.previewOpenFired(s).state).state.shown, null);
-});
-
-test("hovering the popup keeps it up; leaving it re-arms the leave timer", () => {
-  const s = DI.initialPreview();
-  assert.deepEqual(DI.previewPopupHover(s, true).timers, { leave: "stop" });
-  assert.deepEqual(DI.previewPopupHover(s, false).timers, { leave: "start" });
-});
-
-test("no preview while dragging or for a disabled Item", () => {
-  const s = DI.initialPreview();
-  assert.deepEqual(DI.previewHoverStart(s, a, true, true), { state: s, timers: {} });
-  assert.deepEqual(DI.previewHoverStart(s, a, false, false), { state: s, timers: {} });
-});
-
-test("an open timer firing with nothing hovered shows nothing; dismiss closes and stops both", () => {
-  assert.equal(DI.previewOpenFired(DI.initialPreview()).state.shown, null);
-  const s = DI.previewOpenFired(DI.previewHoverStart(DI.initialPreview(), a, true, false).state).state;
-  const r = DI.previewDismiss(s);
-  assert.equal(r.state.shown, null);
-  assert.deepEqual(r.timers, { open: "stop", leave: "stop" });
 });
 
 const row = { x: 100, y: 500, width: 400, height: 60 };
