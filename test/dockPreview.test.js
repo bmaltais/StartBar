@@ -58,9 +58,9 @@ test("leaving cancels a pending open and arms the leave timer", () => {
   assert.equal(DP.transition(r.state, { type: "leaveFired" }, ctx).state.shown, null);
 });
 
-test("hovering the popup keeps it up; leaving it re-arms the leave timer", () => {
-  assert.deepEqual(DP.transition(DP.initial(), { type: "popupHover", hovered: true }, ctx).timers, { leave: "stop" });
-  assert.deepEqual(DP.transition(DP.initial(), { type: "popupHover", hovered: false }, ctx).timers, { leave: "start" });
+test("hovering the Preview itself keeps it up; leaving it re-arms the leave timer", () => {
+  assert.deepEqual(DP.transition(DP.initial(), { type: "previewHover", hovered: true }, ctx).timers, { leave: "stop" });
+  assert.deepEqual(DP.transition(DP.initial(), { type: "previewHover", hovered: false }, ctx).timers, { leave: "start" });
 });
 
 test("no Preview while dragging, or for an Item that cannot have one", () => {
@@ -97,6 +97,16 @@ test("an Item menu neither holds the Preview nor arms the leave timer", () => {
   const open = run([hover(a), { type: "openFired" }, { type: "menuVisible", visible: true, forPreview: false }]).state;
   assert.equal(DP.transition(open, { type: "leaveFired" }, ctx).state.shown, null);
   assert.deepEqual(DP.transition(open, { type: "menuVisible", visible: false, forPreview: false }, ctx).timers, {});
+});
+
+test("an Item menu opened over a Preview menu, with no close between, does not hold the Preview up for good", () => {
+  const s = run([
+    hover(a), { type: "openFired" },
+    { type: "menuVisible", visible: true, forPreview: true },
+    { type: "menuVisible", visible: true, forPreview: false },
+  ]).state;
+  assert.equal(DP.transition(s, { type: "leaveFired" }, ctx).state.shown, null);
+  assert.equal(DP.transition(s, { type: "thumbHover", window: { id: "0x1" }, hovered: true }, ctx).timers.peek, "start");
 });
 
 test("re-opening the Preview menu on another thumbnail (close, then open) still holds the Preview", () => {
@@ -171,28 +181,28 @@ test("picking a thumbnail commits the peek, then focuses, then closes the Previe
   assert.deepEqual(r.timers, { peek: "stop", open: "stop", leave: "stop" });
 });
 
-test("the popup closing after a pick does not restore what the pick just committed", () => {
+test("the Preview closing after a pick does not restore what the pick just committed", () => {
   const s = run([hover(a), { type: "openFired" }, peekHover(w1, true), { type: "peekFired" }, { type: "thumbPicked", window: w1 }]).state;
-  assert.deepEqual(DP.transition(s, { type: "popupClosed" }, ctx).effects, []);
+  assert.deepEqual(DP.transition(s, { type: "previewClosed" }, ctx).effects, []);
 });
 
-test("the popup closing mid-peek restores", () => {
+test("the Preview closing mid-peek restores", () => {
   const s = run([hover(a), { type: "openFired" }, peekHover(w1, true), { type: "peekFired" }]).state;
-  const r = DP.transition(s, { type: "popupClosed" }, ctx);
+  const r = DP.transition(s, { type: "previewClosed" }, ctx);
   assert.deepEqual(r.effects, [{ type: "restore" }]);
   assert.equal(r.state.peeking, false);
   assert.equal(r.state.peekTarget, null);
   assert.deepEqual(r.timers, { peek: "stop", peekRestore: "stop" });
 });
 
-test("the popup closing with nothing peeked starts no restore, even with Peek on", () => {
-  assert.deepEqual(DP.transition(shown(a), { type: "popupClosed" }, ctx).effects, []);
+test("the Preview closing with nothing peeked starts no restore, even with Peek on", () => {
+  assert.deepEqual(DP.transition(shown(a), { type: "previewClosed" }, ctx).effects, []);
 });
 
 test("a peek still gets put back after Peek is turned off mid-hover", () => {
   const s = run([hover(a), { type: "openFired" }, peekHover(w1, true), { type: "peekFired" }]).state;
   const off = { previewPeek: false, warp: false };
-  assert.deepEqual(DP.transition(s, { type: "popupClosed" }, off).effects, [{ type: "restore" }]);
+  assert.deepEqual(DP.transition(s, { type: "previewClosed" }, off).effects, [{ type: "restore" }]);
 });
 
 // --- Right click on a thumbnail --------------------------------------------

@@ -23,10 +23,10 @@
 //
 // EVENTS (`type` plus fields):
 //   hoverStart {item, enabled, dragging}, hoverEnd     an Item under the pointer
-//   popupHover {hovered}                               the pointer is on the popup
+//   previewHover {hovered}                             the pointer is on the Preview
 //   openFired, leaveFired                              the Preview's timers
 //   dismiss                                            drop the Preview now
-//   popupClosed                                        the popup went away
+//   previewClosed                                      the Preview went away
 //   thumbHover {window, hovered}, peekFired, peekRestoreFired
 //   thumbPicked {window}                               a click on a thumbnail
 //   thumbMenu {windowId}                               right click on a thumbnail
@@ -74,7 +74,7 @@ function transition(state, event, ctx) {
   case "hoverStart":
     if (event.dragging || !event.enabled) return unchanged(state);
     // Hovering the shown Item again keeps it; any other Item closes the
-    // popup first, so its own opens afresh (and slides up) after the open
+    // Preview first, so its own opens afresh (and slides up) after the open
     // delay.
     if (state.shown && state.shown.key === event.item.key) {
       return result(patch(state, { hovered: event.item, shown: event.item }), { leave: "stop" });
@@ -84,7 +84,7 @@ function transition(state, event, ctx) {
   case "hoverEnd":
     return result(state, { open: "stop", leave: "start" });
 
-  case "popupHover":
+  case "previewHover":
     return result(state, { leave: event.hovered ? "stop" : "start" });
 
   case "openFired":
@@ -99,7 +99,7 @@ function transition(state, event, ctx) {
   case "dismiss":
     return result(patch(state, { shown: null }), { open: "stop", leave: "stop" });
 
-  case "popupClosed":
+  case "previewClosed":
     // The effect is decided from what was actually peeked, so a click that
     // has just committed is not followed by a restore, and Peek turned off
     // mid-hover still puts the peek back.
@@ -141,9 +141,13 @@ function transition(state, event, ctx) {
     return result(patch(state, { peekTarget: null }), { peek: "stop", peekRestore: "stop" });
 
   case "menuVisible":
-    if (!event.forPreview) return unchanged(state);
+    // Every open or close of the Dock's menu is heard, whichever menu it is,
+    // so a Preview menu that was replaced by an Item menu without a close in
+    // between cannot leave the Preview held up for good.
+    var holds = !!event.visible && !!event.forPreview;
     // The Preview was held up while its menu was open; let it go.
-    return result(patch(state, { menuOpen: !!event.visible }), event.visible ? {} : { leave: "start" });
+    var released = !event.visible && !!event.forPreview;
+    return result(patch(state, { menuOpen: holds }), released ? { leave: "start" } : {});
 
   case "menuRowChosen":
     // Choosing a state row keeps the peeked Window focused, as a click on
@@ -161,7 +165,7 @@ function windowsOf(item) {
 
 // The shown Item as the Dock has it now, matched by Window id since a Group
 // Item's key changes as Windows come and go, so a Window closed from the
-// popup drops out of it at once and the popup closes with the last one.
+// Preview drops out of it at once and the Preview closes with the last one.
 function liveItem(shown, items) {
   if (!shown) return null;
   var ids = {};

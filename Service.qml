@@ -2108,7 +2108,7 @@ Item {
         }
 
         function popupHover(hovered) {
-          previewState.send({ type: "popupHover", hovered: hovered })
+          previewState.send({ type: "previewHover", hovered: hovered })
         }
 
         function dismiss() {
@@ -2222,7 +2222,7 @@ Item {
           previewSlideAnim.stop()
           if (visible && root.taskbar.previewSlide) previewSlideAnim.start()
           else slide = 1
-          if (!previewPopup.visible) previewState.send({ type: "popupClosed" })
+          if (!previewPopup.visible) previewState.send({ type: "previewClosed" })
         }
         onImplicitWidthChanged: if (visible) previewPopup.anchor.updateAnchor()
 
