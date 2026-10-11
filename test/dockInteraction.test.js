@@ -61,10 +61,19 @@ test("a preview opens after the open delay, not before", () => {
   assert.equal(DI.previewOpenFired(r.state).state.shown, a);
 });
 
-test("moving to a neighbour while shown swaps in place with no open delay", () => {
+test("moving to a neighbour while shown closes it and opens the neighbour's after the open delay", () => {
   let s = DI.previewOpenFired(DI.previewHoverStart(DI.initialPreview(), a, true, false).state).state;
   const r = DI.previewHoverStart(s, b, true, false);
-  assert.equal(r.state.shown, b);
+  assert.equal(r.state.shown, null);
+  assert.equal(r.state.hovered, b);
+  assert.deepEqual(r.timers, { leave: "stop", open: "start" });
+  assert.equal(DI.previewOpenFired(r.state).state.shown, b);
+});
+
+test("re-entering the shown Item keeps its preview up", () => {
+  const s = DI.previewOpenFired(DI.previewHoverStart(DI.initialPreview(), a, true, false).state).state;
+  const r = DI.previewHoverStart(s, a, true, false);
+  assert.equal(r.state.shown, a);
   assert.deepEqual(r.timers, { leave: "stop" });
 });
 

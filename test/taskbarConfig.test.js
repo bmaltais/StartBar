@@ -39,6 +39,7 @@ test("bar defaults: always visible, left-aligned, theme colours, built-in Start 
     showPreviews: true,
     previewWarpPointer: true,
     previewPeek: true,
+    previewSlide: true,
     showWorkspaceBadge: false,
     groupWindows: true,
     startHoverOpen: false,
