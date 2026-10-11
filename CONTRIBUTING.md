@@ -42,6 +42,7 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 | `DockModel.js` | Which Items the Dock shows and in what order: Launch Order, Pins, Placed |
 | `DockConfig.js` | Settings: defaults, the effective view of the config entry, and every change to it |
 | `DockInteraction.js` | Reveal and hide (one hold per holder: strip, dock, menus, Start menu, drag), and where a dragged Item lands |
+| `DockHyprland.js` | How to ask Hyprland for each thing the Dock wants: focus, raise, close, Window-state rows, Peek. Returns the command; tests run `bash -n` over every script |
 | `DockPreview.js` | The hover Preview, Peek and the Preview menu: when a Preview shows and goes, what is peeked, kept or put back, and that the Preview's menu holds it up |
 | `StartMenu.js` | The Start menu: opening and closing, Hover mode, search, selection, Escape, Start Pin reorder |
 
@@ -55,8 +56,8 @@ It is one long file. Search for these names:
 
 | Name | What it is |
 | --- | --- |
-| `focusWindow`, `focusWindowAndWarp`, `raiseFloating`, `runWindowAction`, `closeWindow` | What a click or a menu row asks Hyprland to do |
-| `peekWindow`, `peekRestore`, `peekCommit` | Peek: the scripts that show a Window and put things back (`DockPreview.js` decides when) |
+| `focusWindow`, `focusWindowAndWarp`, `runWindowAction`, `closeWindow` | Run what `DockHyprland.js` builds for a click or a menu row |
+| `peekWindow`, `peekRestore`, `peekCommit` | Peek: run the scripts (`DockHyprland.js`) that show a Window and put things back (`DockPreview.js` decides when) |
 | `previewState`, `previewPopup` | The state, timers and effects of `DockPreview.js`, and the Preview itself with its thumbnails |
 | `contextMenu` | The Item menu, and the Preview menu (`previewWindowId`) |
 | `barMenu` | The Bar menu |

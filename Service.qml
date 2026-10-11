@@ -18,6 +18,7 @@ import "DockConfig.js" as DockConfig
 import "StartMenu.js" as StartMenu
 import "DockInteraction.js" as DockInteraction
 import "DockPreview.js" as DockPreview
+import "DockHyprland.js" as DockHyprland
 
 Item {
   id: root
@@ -384,54 +385,16 @@ Item {
     return appId ? DesktopEntries.byId(appId) || null : null
   }
 
-  // HyprlandToplevel.address comes back as bare hex ("56538020a4f0"),
-  // unlike hyprctl's own "0x"-prefixed address strings — normalize before
-  // handing it to a dispatch's "address:0x.." window selector.
-  function normalizedAddress(address) {
-    if (typeof address !== "string") return null
-    var hex = address.indexOf("0x") === 0 ? address.slice(2) : address
-    return /^[0-9a-fA-F]+$/.test(hex) ? "0x" + hex : null
-  }
-
-  // Focusing a floating Window doesn't raise it: one under another floating
-  // Window (the Voxtype settings behind a full-size floating terminal) is
-  // focused but stays hidden. So a click raises a floating Window after
-  // focusing it. A shell function: `raise ADDRESS`. Tiled Windows are left
-  // alone.
-  readonly property string raiseFloating: "raise() { hyprctl -j clients | jq -e --arg a \"$1\" '.[] | select(.address == $a and .floating)' >/dev/null "
-    + "&& hyprctl dispatch \"hl.dsp.window.alter_zorder({ mode = \\\"top\\\", window = \\\"address:$1\\\" })\" >/dev/null; }; "
-
-  // A click on a hover preview can also bring the pointer along
-  // (previewWarpPointer): after focusing, the pointer is moved to the middle
-  // of the Window, read from `hyprctl -j clients`, which also covers a
-  // Window on another workspace or monitor once focus has switched to it.
+  // Everything that asks Hyprland for something is built in DockHyprland.js,
+  // which returns the command to run; these only run it.
   function focusWindowAndWarp(address) {
-    var normalized = normalizedAddress(address)
-    if (!normalized) return
-    var script = "addr=\"$1\"; "
-      + root.raiseFloating
-      + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\" >/dev/null; "
-      + "raise \"$addr\"; "
-      + "sleep 0.1; "
-      + "pos=$(hyprctl -j clients | jq -r --arg a \"$addr\" '.[] | select(.address == $a) | \"\\(.at[0] + (.size[0] / 2) | floor) \\(.at[1] + (.size[1] / 2) | floor)\"'); "
-      + "[ -n \"$pos\" ] && hyprctl dispatch \"hl.dsp.cursor.move({ x = ${pos% *}, y = ${pos#* } })\" >/dev/null"
-    Quickshell.execDetached(["bash", "-lc", script, "bash", normalized])
+    var command = DockHyprland.focusWindowAndWarp(address)
+    if (command) Quickshell.execDetached(command)
   }
 
   function focusWindow(address) {
-    var normalized = normalizedAddress(address)
-    if (!normalized) return
-    // Toggle cursor:no_warps around the dispatch so clicking a Dock Item
-    // never yanks the pointer off the Dock to the centre of the newly
-    // focused Window.
-    var script = "addr=\"$1\"; "
-      + "orig=false; hyprctl -j getoption cursor:no_warps | grep -q '\"bool\": true' && orig=true; "
-      + "hyprctl eval 'hl.config({ cursor = { no_warps = true } })' >/dev/null; "
-      + root.raiseFloating
-      + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\"; "
-      + "raise \"$addr\"; "
-      + "hyprctl eval \"hl.config({ cursor = { no_warps = $orig } })\" >/dev/null"
-    Quickshell.execDetached(["bash", "-lc", script, "bash", normalized])
+    var command = DockHyprland.focusWindow(address)
+    if (command) Quickshell.execDetached(command)
   }
 
   // Left click on a Pin with no Windows launches its App (docs/SPEC.md
@@ -443,35 +406,17 @@ Item {
     app.execute()
   }
 
-  // A Window-state row of the context menu (DockModel.windowActions maps
-  // the ids): one hyprctl dispatch aimed at the Window by address, whether
-  // or not it is the focused one. The dispatch string is passed as an
-  // argument, so there is nothing to shell-escape.
+  // A Window-state row of the context menu (DockModel.windowActions has the
+  // ids and labels, DockHyprland.windowAction the dispatch).
   function runWindowAction(id, address) {
-    var normalized = normalizedAddress(address)
-    if (!normalized) return
-    var target = "window = \"address:" + normalized + "\""
-    var dispatch = {
-      maximize: "hl.dsp.window.fullscreen({ mode = \"maximized\", " + target + " })",
-      fullscreen: "hl.dsp.window.fullscreen({ mode = \"fullscreen\", " + target + " })",
-      float: "hl.dsp.window.float({ action = \"toggle\", " + target + " })",
-      center: "hl.dsp.window.center({ " + target + " })",
-      pin: "hl.dsp.window.pin({ " + target + " })",
-      scratchpad: "hl.dsp.window.move({ workspace = \"special:scratchpad\", follow = false, " + target + " })",
-    }[id]
-    if (!dispatch) return
-    Quickshell.execDetached(["bash", "-lc", "hyprctl dispatch \"$1\"", "bash", dispatch])
+    var command = DockHyprland.windowAction(id, address)
+    if (command) Quickshell.execDetached(command)
   }
 
-  // Close Window (docs/SPEC.md "Input", the context menu): the same
-  // dispatch convention as focusWindow, minus the cursor no-warp dance
-  // that dispatch needs but this one doesn't.
+  // Close Window (docs/SPEC.md "Input", the context menu).
   function closeWindow(address) {
-    var normalized = normalizedAddress(address)
-    if (!normalized) return
-    Quickshell.execDetached(["bash", "-lc",
-      "hyprctl dispatch \"hl.dsp.window.close({ window = \\\"address:$1\\\" })\"",
-      "bash", normalized])
+    var command = DockHyprland.closeWindow(address)
+    if (command) Quickshell.execDetached(command)
   }
 
   // Pin/Unpin (docs/SPEC.md "Input", the context menu): DockConfig.applyIntent
@@ -530,12 +475,8 @@ Item {
   // show it, and leaving puts things back. The first peek saves the
   // focused Window and each monitor's workspace in a state file; peekRestore
   // replays it, peekCommit (a click picked the Window) throws it away.
-  // DockPreview.js decides when each is asked for.
-  readonly property string peekNoWarps: "orig=false; hyprctl -j getoption cursor:no_warps | grep -q '\"bool\": true' && orig=true; "
-    + "hyprctl eval 'hl.config({ cursor = { no_warps = true } })' >/dev/null; "
-  readonly property string peekWarpsBack: "hyprctl eval \"hl.config({ cursor = { no_warps = $orig } })\" >/dev/null"
-  readonly property string peekState: "\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek\""
-
+  // DockPreview.js decides when each is asked for, DockHyprland.js builds them.
+  //
   // Peek scripts run one at a time, in the order asked for (a plain
   // execDetached per script let a restore overtake a peek).
   property var peekQueue: []
@@ -545,8 +486,8 @@ Item {
     onExited: root.peekNext()
   }
 
-  function peekRun(script, arg) {
-    root.peekQueue.push(arg === undefined ? ["bash", "-lc", script, "bash"] : ["bash", "-lc", script, "bash", arg])
+  function peekRun(command) {
+    root.peekQueue.push(command)
     if (!peekRunner.running) root.peekNext()
   }
 
@@ -557,81 +498,16 @@ Item {
   }
 
   function peekWindow(address) {
-    var normalized = normalizedAddress(address)
-    if (!normalized) return
-    var script = "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek.lock\"; flock 9\n"
-      + "undo() {\n"
-      + "  echo \"$rest\" | while read -r kind a b; do\n"
-      + "    [ \"$kind\" = f ] || continue\n"
-      + "    cur=$(hyprctl -j clients | jq -r --arg a \"$a\" '.[] | select(.address == $a) | .fullscreen')\n"
-      + "    [ \"$cur\" = 0 ] || continue\n"
-      + "    mode=maximized; [ \"$b\" = 2 ] && mode=fullscreen\n"
-      + "    hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$mode\\\", action = \\\"set\\\", window = \\\"address:$a\\\" })\" >/dev/null\n"
-      + "  done\n"
-      + "  echo \"$rest\" | while read -r kind name ws; do\n"
-      + "    [ \"$kind\" = m ] || continue\n"
-      + "    cur=$(hyprctl -j monitors | jq -r --arg n \"$name\" '.[] | select(.name == $n) | .activeWorkspace.id')\n"
-      + "    if [ \"$cur\" != \"$ws\" ]; then\n"
-      + "      hyprctl dispatch \"hl.dsp.focus({ monitor = \\\"$name\\\" })\" >/dev/null\n"
-      + "      hyprctl dispatch \"hl.dsp.focus({ workspace = \\\"$ws\\\" })\" >/dev/null\n"
-      + "    fi\n"
-      + "  done\n"
-      + "}\n"
-      + "addr=\"$1\"; state=\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek\"\n"
-      + root.peekNoWarps
-      + "if [ -f \"$state\" ]; then\n"
-      + "  # Moving on from an earlier peek: put its changes back first, keeping the\n"
-      + "  # saved original state, so only this window's peek is in effect.\n"
-      + "  rest=$(tail -n +2 \"$state\")\n"
-      + "  undo\n"
-      + "else\n"
-      + "  {\n"
-      + "    hyprctl -j activewindow | jq -r '.address // \"\"'\n"
-      + "    hyprctl -j monitors | jq -r '.[] | \"m \\(.name) \\(.activeWorkspace.id)\"'\n"
-      + "    hyprctl -j clients | jq -r '.[] | select(.fullscreen != 0) | \"f \\(.address) \\(.fullscreen)\"'\n"
-      + "  } > \"$state\"\n"
-      + "fi\n"
-      + "hyprctl -j clients | jq -r --arg a \"$addr\" '. as $c | ($c[] | select(.address == $a) | .workspace.id) as $w | $c[] | select(.workspace.id == $w and .fullscreen != 0 and .address != $a) | \"\\(.address) \\(.fullscreen)\"' | while read -r other fs; do\n"
-      + "  mode=maximized; [ \"$fs\" = 2 ] && mode=fullscreen\n"
-      + "  hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$mode\\\", action = \\\"unset\\\", window = \\\"address:$other\\\" })\" >/dev/null\n"
-      + "done\n"
-      + root.raiseFloating
-      + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\" >/dev/null\n"
-      + "raise \"$addr\"\n"
-      + root.peekWarpsBack
-    root.peekRun(script, normalized)
+    var command = DockHyprland.peekWindow(address)
+    if (command) root.peekRun(command)
   }
 
   function peekRestore() {
-    var script = "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek.lock\"; flock 9\n"
-      + "undo() {\n"
-      + "  echo \"$rest\" | while read -r kind a b; do\n"
-      + "    [ \"$kind\" = f ] || continue\n"
-      + "    cur=$(hyprctl -j clients | jq -r --arg a \"$a\" '.[] | select(.address == $a) | .fullscreen')\n"
-      + "    [ \"$cur\" = 0 ] || continue\n"
-      + "    mode=maximized; [ \"$b\" = 2 ] && mode=fullscreen\n"
-      + "    hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$mode\\\", action = \\\"set\\\", window = \\\"address:$a\\\" })\" >/dev/null\n"
-      + "  done\n"
-      + "  echo \"$rest\" | while read -r kind name ws; do\n"
-      + "    [ \"$kind\" = m ] || continue\n"
-      + "    cur=$(hyprctl -j monitors | jq -r --arg n \"$name\" '.[] | select(.name == $n) | .activeWorkspace.id')\n"
-      + "    if [ \"$cur\" != \"$ws\" ]; then\n"
-      + "      hyprctl dispatch \"hl.dsp.focus({ monitor = \\\"$name\\\" })\" >/dev/null\n"
-      + "      hyprctl dispatch \"hl.dsp.focus({ workspace = \\\"$ws\\\" })\" >/dev/null\n"
-      + "    fi\n"
-      + "  done\n"
-      + "}\n"
-      + "state=\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek\"; [ -f \"$state\" ] || exit 0\n"
-      + "prev=$(head -n1 \"$state\"); rest=$(tail -n +2 \"$state\"); rm -f \"$state\"\n"
-      + root.peekNoWarps
-      + "undo\n"
-      + "[ -n \"$prev\" ] && hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$prev\\\" })\" >/dev/null\n"
-      + root.peekWarpsBack
-    root.peekRun(script)
+    root.peekRun(DockHyprland.peekRestore())
   }
 
   function peekCommit() {
-    root.peekRun("exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek.lock\"; flock 9; rm -f " + root.peekState)
+    root.peekRun(DockHyprland.peekCommit())
   }
 
   // Previews off: a click on a Group Item focuses the Window after the
