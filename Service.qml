@@ -1110,17 +1110,14 @@ Item {
         border.width: input.activeFocus ? 1 : 0
         border.color: Color.accent
 
-        TextInput {
+        PlainField {
           id: input
           anchors.fill: parent
           anchors.leftMargin: Style.spacing.md
           anchors.rightMargin: Style.spacing.md
-          verticalAlignment: TextInput.AlignVCenter
-          clip: true
-          selectByMouse: true
           color: Color.popups.text
-          font.family: Style.font.family
-          font.pixelSize: Style.font.body
+          fontFamily: Style.font.family
+          fontPixelSize: Style.font.body
           text: textBox.value === undefined || textBox.value === null ? "" : String(textBox.value)
           onEditingFinished: {
             if (input.text !== String(textBox.value)) textBox.commit(input.text)
@@ -1186,17 +1183,14 @@ Item {
               border.width: placeInput.activeFocus ? 1 : 0
               border.color: Color.accent
 
-              TextInput {
+              PlainField {
                 id: placeInput
                 anchors.fill: parent
                 anchors.leftMargin: Style.spacing.md
                 anchors.rightMargin: Style.spacing.md
-                verticalAlignment: TextInput.AlignVCenter
-                clip: true
-                selectByMouse: true
                 color: Color.popups.text
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
+                fontFamily: Style.font.family
+                fontPixelSize: Style.font.body
                 text: placeEntry.modelData
                 onEditingFinished: if (placeInput.text !== placeEntry.modelData) listBox.replaceAt(placeEntry.index, placeInput.text)
               }

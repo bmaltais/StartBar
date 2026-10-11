@@ -45,6 +45,7 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 | `DockHyprland.js` | How to ask Hyprland for each thing the Dock wants: focus, raise, close, Window-state rows, Peek. Returns the command; tests run `bash -n` over every script |
 | `DockIcons.js` | Finding an App's icon file when Qt's lookup has missed: the command that searches the icon directories, which file is best, and when to search again |
 | `IconResolver.qml` | The QML side of `DockIcons.js`, one instance shared by the Dock and the Start menu: `source(name)` is Qt's icon path, else a found file, else "" while it searches |
+| `PlainText.js` | What a plain text field does with a key or a paste (`PlainField.qml` draws it): typing, Backspace, Ctrl+U, and the bounded `wl-paste` command |
 | `DockPreview.js` | The hover Preview, Peek and the Preview menu: when a Preview shows and goes, what is peeked, kept or put back, and that the Preview's menu holds it up |
 | `StartMenu.js` | The Start menu: opening and closing, Hover mode, search, selection, Escape, Start Pin reorder |
 
