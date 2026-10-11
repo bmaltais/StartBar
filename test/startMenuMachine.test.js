@@ -545,3 +545,11 @@ test("a drag move with no drag in progress does nothing", () => {
   const result = S.transition(Object.assign(S.initial(), { open: true }), { type: "pinDragMove", point: { x: 1, y: 1 }, grid: GRID }, ctxFor());
   assert.deepEqual(result.state.drag, { id: "", from: -1, slot: -1 });
 });
+
+test("openCommand never lets a Place be read as an xdg-open option", () => {
+  const { openCommand } = require("../StartMenu.js");
+  assert.deepEqual(openCommand("/home/me/Documents"), ["xdg-open", "/home/me/Documents"]);
+  assert.deepEqual(openCommand("--manual"), ["xdg-open", "./--manual"]);
+  assert.deepEqual(openCommand("-x"), ["xdg-open", "./-x"]);
+  assert.deepEqual(openCommand(undefined), ["xdg-open", ""]);
+});

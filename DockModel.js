@@ -379,8 +379,20 @@ function movedPlacements(items, placements, key, index) {
   return result;
 }
 
+// Any app can set its window's title and class to anything, however long, and
+// the Dock lays them out in tooltips and Previews: cap what it takes in.
+var MAX_WINDOW_TEXT = 256;
+
+function clipText(text, max) {
+  var s = typeof text === "string" ? text : "";
+  var limit = max === undefined ? MAX_WINDOW_TEXT : max;
+  return s.length > limit ? s.slice(0, limit) : s;
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
+    MAX_WINDOW_TEXT: MAX_WINDOW_TEXT,
+    clipText: clipText,
     buildDockItems: buildDockItems,
     windowActions: windowActions,
     movedPlacements: movedPlacements,

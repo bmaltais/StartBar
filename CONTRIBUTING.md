@@ -49,7 +49,7 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 | `DockPreview.js` | The hover Preview, Peek and the Preview menu: when a Preview shows and goes, what is peeked, kept or put back, and that the Preview's menu holds it up |
 | `StartMenu.js` | The Start menu: opening and closing, Hover mode, search, selection, Escape, Start Pin reorder |
 
-Every `Text` in the QML says `textFormat: Text.PlainText`: Qt's default renders anything that looks like HTML, and rich text loads `<img>` files synchronously, so a window title or a pasted string could hang the shell. `test/textFormat.test.js` fails on one that doesn't.
+Every `Text` in the QML says `textFormat: Text.PlainText`: Qt's default renders anything that looks like HTML, and rich text loads `<img>` files synchronously, so a window title or a pasted string could hang the shell. `test/textFormat.test.js` fails on one that doesn't. [docs/SECURITY.md](docs/SECURITY.md) lists every place outside data reaches the plugin and what bounds it; add a row when you add one.
 
 ```sh
 npm test

@@ -675,3 +675,13 @@ test("a drop keeps the Placed position of a Pin currently hidden behind its App'
   assert.deepEqual(next.find((p) => p.key === "pin:gone"), { key: "pin:gone", index: 4 });
   assert.deepEqual(next.find((p) => p.key === "pin:b"), { key: "pin:b", index: 0 });
 });
+
+test("clipText caps a window's title or class and copes with non-strings", () => {
+  const { clipText, MAX_WINDOW_TEXT } = require("../DockModel.js");
+  assert.equal(clipText("short"), "short");
+  assert.equal(clipText("x".repeat(MAX_WINDOW_TEXT + 500)).length, MAX_WINDOW_TEXT);
+  assert.equal(clipText("abcdef", 3), "abc");
+  assert.equal(clipText(undefined), "");
+  assert.equal(clipText(null), "");
+  assert.equal(clipText(42), "");
+});
