@@ -411,78 +411,24 @@ Item {
         font.pixelSize: Style.font.body
       }
 
-      // The search field draws its own text and takes the keys itself instead
-      // of being a TextInput: a native TextInput reads the clipboard whenever
-      // it changes (to know whether Paste is on), with no size limit, which
-      // lets a hostile clipboard owner stall the shell. So there is no
-      // clipboard, no caret movement or selection and no IME composition:
-      // typing, Backspace and Ctrl+U (clear) are all it does.
-      Item {
+      // PlainField, not a TextInput, so Qt never reads the clipboard for it
+      // (PlainText.js). Using the keyboard means you want the menu:
+      // StartMenu.js ends hover mode on any key, then says whether it took
+      // this one (otherwise the key goes into the box).
+      PlainField {
         id: searchInput
         anchors.fill: parent
         anchors.leftMargin: searchGlyph.x + searchGlyph.width + Style.spacing.md
         anchors.rightMargin: Style.spacing.md
-        clip: true
         focus: true
-
-        readonly property int maxLength: 256
-        property string text: ""
+        maxLength: 256
+        color: startMenu.colText
+        fontFamily: Style.font.family
+        fontPixelSize: Style.font.body
+        interceptKey: function (event) {
+          return startMenu.send({ type: "key", key: startMenu.keyName(event.key) })
+        }
         onTextChanged: startMenu.send({ type: "queryChanged", text: searchInput.text })
-
-        Text {
-          id: typed
-          anchors.verticalCenter: parent.verticalCenter
-          // Scroll so the end (the caret) stays in view.
-          x: Math.min(0, searchInput.width - width - searchCaret.width)
-          text: searchInput.text
-          color: startMenu.colText
-          font.family: Style.font.family
-          font.pixelSize: Style.font.body
-        }
-
-        Rectangle {
-          id: searchCaret
-          visible: searchInput.activeFocus && caretBlink.on
-          anchors.verticalCenter: parent.verticalCenter
-          x: typed.x + typed.width
-          width: 1
-          height: Style.font.body + 4
-          color: startMenu.colText
-        }
-
-        Timer {
-          id: caretBlink
-          property bool on: true
-          interval: 530
-          running: searchInput.activeFocus
-          repeat: true
-          onTriggered: caretBlink.on = !caretBlink.on
-          onRunningChanged: caretBlink.on = true
-        }
-
-        // Using the keyboard means you want the menu: StartMenu.js ends
-        // hover mode on any key, then says whether it took this one
-        // (otherwise the key goes into the box).
-        Keys.onPressed: function (event) {
-          if (startMenu.send({ type: "key", key: startMenu.keyName(event.key) })) {
-            event.accepted = true
-            return
-          }
-          caretBlink.on = true
-          var ctrl = (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) !== 0
-          if (event.key === Qt.Key_Backspace) {
-            if (ctrl) searchInput.text = ""
-            else searchInput.text = searchInput.text.slice(0, -1)
-            event.accepted = true
-          } else if (event.key === Qt.Key_U && (event.modifiers & Qt.ControlModifier)) {
-            searchInput.text = ""
-            event.accepted = true
-          } else if (!ctrl && event.text.length > 0 && event.text.charCodeAt(0) >= 32 && event.text.charCodeAt(0) !== 127) {
-            if (searchInput.text.length < searchInput.maxLength)
-              searchInput.text = (searchInput.text + event.text).slice(0, searchInput.maxLength)
-            event.accepted = true
-          }
-        }
       }
     }
 
