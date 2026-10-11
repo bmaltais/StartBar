@@ -392,6 +392,14 @@ Item {
     return /^[0-9a-fA-F]+$/.test(hex) ? "0x" + hex : null
   }
 
+  // Focusing a floating Window doesn't raise it: one under another floating
+  // Window (the Voxtype settings behind a full-size floating terminal) is
+  // focused but stays hidden. So a click raises a floating Window after
+  // focusing it. A shell function: `raise ADDRESS`. Tiled Windows are left
+  // alone.
+  readonly property string raiseFloating: "raise() { hyprctl -j clients | jq -e --arg a \"$1\" '.[] | select(.address == $a and .floating)' >/dev/null "
+    + "&& hyprctl dispatch \"hl.dsp.window.alter_zorder({ mode = \\\"top\\\", window = \\\"address:$1\\\" })\" >/dev/null; }; "
+
   // A click on a hover preview can also bring the pointer along
   // (previewWarpPointer): after focusing, the pointer is moved to the middle
   // of the Window, read from `hyprctl -j clients`, which also covers a
@@ -400,7 +408,9 @@ Item {
     var normalized = normalizedAddress(address)
     if (!normalized) return
     var script = "addr=\"$1\"; "
+      + root.raiseFloating
       + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\" >/dev/null; "
+      + "raise \"$addr\"; "
       + "sleep 0.1; "
       + "pos=$(hyprctl -j clients | jq -r --arg a \"$addr\" '.[] | select(.address == $a) | \"\\(.at[0] + (.size[0] / 2) | floor) \\(.at[1] + (.size[1] / 2) | floor)\"'); "
       + "[ -n \"$pos\" ] && hyprctl dispatch \"hl.dsp.cursor.move({ x = ${pos% *}, y = ${pos#* } })\" >/dev/null"
@@ -416,7 +426,9 @@ Item {
     var script = "addr=\"$1\"; "
       + "orig=false; hyprctl -j getoption cursor:no_warps | grep -q '\"bool\": true' && orig=true; "
       + "hyprctl eval 'hl.config({ cursor = { no_warps = true } })' >/dev/null; "
+      + root.raiseFloating
       + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\"; "
+      + "raise \"$addr\"; "
       + "hyprctl eval \"hl.config({ cursor = { no_warps = $orig } })\" >/dev/null"
     Quickshell.execDetached(["bash", "-lc", script, "bash", normalized])
   }
@@ -584,7 +596,9 @@ Item {
       + "  mode=maximized; [ \"$fs\" = 2 ] && mode=fullscreen\n"
       + "  hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$mode\\\", action = \\\"unset\\\", window = \\\"address:$other\\\" })\" >/dev/null\n"
       + "done\n"
+      + root.raiseFloating
       + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\" >/dev/null\n"
+      + "raise \"$addr\"\n"
       + root.peekWarpsBack
     root.peekRun(script, normalized)
   }
@@ -1877,6 +1891,8 @@ Item {
                   if (mouse.button === Qt.RightButton) {
                     // Drop any hover preview first, so the menu never shows over it.
                     previewState.dismiss()
+                    contextMenu.previewCell = null
+                    contextMenu.previewWindowId = ""
                     contextMenu.anchorItem = dockItem
                     contextMenu.menuItem = dockItem.modelData
                     contextMenu.visible = true
@@ -2083,7 +2099,8 @@ Item {
       Timer {
         id: previewLeaveTimer
         interval: 250
-        onTriggered: previewState.apply(DockInteraction.previewLeaveFired(previewState.model))
+        // A Preview's own menu keeps it up: the pointer is on the menu, not it.
+        onTriggered: if (!(contextMenu.visible && contextMenu.forPreview)) previewState.apply(DockInteraction.previewLeaveFired(previewState.model))
       }
 
       // Keep the popup anchored if the hovered Item's position changes while
@@ -2161,8 +2178,11 @@ Item {
         // leave, so a leave only counts if it is from the cell we think the
         // pointer is on; a stale one must not cancel the new cell's peek.
         property var peekTarget: null
+        // The Window the peek currently shows, for openMenu.
+        property string peekedId: ""
         function peekHover(window, hovered) {
           if (!root.taskbar.previewPeek || !window) return
+          if (contextMenu.visible && contextMenu.forPreview) return
           if (hovered) {
             peekRestoreTimer.stop()
             peekTarget = window
@@ -2177,13 +2197,36 @@ Item {
         Timer {
           id: peekTimer
           interval: 150
-          onTriggered: if (previewPopup.peekTarget) root.peekWindow(previewPopup.peekTarget.id)
+          onTriggered: if (previewPopup.peekTarget) {
+            previewPopup.peekedId = previewPopup.peekTarget.id
+            root.peekWindow(previewPopup.peekTarget.id)
+          }
         }
 
         Timer {
           id: peekRestoreTimer
           interval: 200
           onTriggered: root.peekRestore()
+        }
+
+        // Right click on a thumbnail: that Window's menu, above the thumbnail.
+        // The peek is left as it is while the menu is open: putting it back
+        // changes focus and workspace, and that closes the menu (and shows
+        // the Dock jiggling). The Window's own state rows are the same
+        // peeked or not. Only a peek of some other Window is put back first.
+        function openMenu(cell, pointX, pointY) {
+          peekTimer.stop()
+          peekTarget = null
+          peekRestoreTimer.stop()
+          if (root.peeking && peekedId !== cell.modelData) root.peekRestore()
+          contextMenu.close()
+          contextMenu.previewCell = cell
+          contextMenu.previewPointX = pointX
+          contextMenu.previewPointY = pointY
+          contextMenu.previewWindowId = cell.modelData
+          contextMenu.anchorItem = null
+          contextMenu.menuItem = null
+          contextMenu.visible = true
         }
 
         function closePicked(window) {
@@ -2285,6 +2328,17 @@ Item {
                   HoverHandler {
                     id: cellHover
                     onHoveredChanged: previewPopup.peekHover(cell.win, hovered)
+                  }
+
+                  // Right click anywhere on the cell: this Window's menu. Left
+                  // clicks fall through to the thumbnail and close button.
+                  MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.RightButton
+                    onClicked: function (mouse) {
+                      var at = mapToItem(previewPopup.contentItem, mouse.x, mouse.y)
+                      previewPopup.openMenu(cell, previewAnchor.rect.x + at.x, previewAnchor.rect.y + at.y)
+                    }
                   }
 
                 Column {
@@ -2581,7 +2635,19 @@ Item {
 
         property var anchorItem: null
         property var menuItem: null
-        readonly property var anchorWindow: contextMenu.anchorItem ? contextMenu.anchorItem.QsWindow.window : null
+        // Set when opened from a Preview thumbnail (docs/SPEC.md "Input"):
+        // the menu is then for that one Window and sits above the thumbnail.
+        // It is anchored to the panel, not the Preview popup, using the
+        // thumbnail's place worked out in panel coordinates.
+        property var previewCell: null
+        property string previewWindowId: ""
+        // Where the pointer was, in panel coordinates: the menu's bottom-left
+        // corner goes there, as in Windows 11.
+        property real previewPointX: 0
+        property real previewPointY: 0
+        readonly property bool forPreview: contextMenu.previewWindowId !== ""
+        readonly property var anchorWindow: contextMenu.forPreview ? panel
+          : (contextMenu.anchorItem ? contextMenu.anchorItem.QsWindow.window : null)
         readonly property int menuMargin: Style.spacing.xs
         // Sized to its longest row, since app actions ("New Private Window")
         // and window rows ("Move to scratchpad") vary; see barMenu.rowWidth.
@@ -2601,6 +2667,30 @@ Item {
         // and Close Window. DockModel.menuFor supplies each row's enabled
         // state from the Item alone.
         readonly property var rows: {
+          if (contextMenu.forPreview) {
+            // Live, so a state that changes while the menu is open (or a
+            // peek being put back) is reflected in the labels.
+            var win = previewPopup.windowFor(contextMenu.previewWindowId)
+            var previewRows = []
+            var winStates = DockModel.windowActions(win)
+            for (var s = 0; s < winStates.length; s++) {
+              previewRows.push({
+                label: winStates[s].label,
+                enabled: true,
+                group: 1,
+                // Choosing a state row keeps the peeked Window focused, as a
+                // click on the thumbnail does, instead of the peek being put back.
+                trigger: (function (id) { return function () { root.peekCommit(); root.runWindowAction(id, win.id) } })(winStates[s].id),
+              })
+            }
+            previewRows.push({
+              label: "Close Window",
+              enabled: true,
+              group: 2,
+              trigger: function () { root.closeWindow(win.id) },
+            })
+            return previewRows
+          }
           var item = contextMenu.menuItem
           if (!item) return []
           var menu = DockModel.menuFor(item)
@@ -2681,6 +2771,8 @@ Item {
           revealState.set("menu", contextMenu.visible)
           contextMenu.enteredMenu = false
           menuLeaveTimer.stop()
+          // The Preview was held up while its menu was open; let it go.
+          if (!contextMenu.visible && contextMenu.forPreview) previewLeaveTimer.restart()
         }
 
         onHoveringMenuChanged: {
@@ -2716,6 +2808,13 @@ Item {
           rect.height: 1
 
           onAnchoring: {
+            if (contextMenu.forPreview) {
+              var px = Math.max(contextMenu.menuMargin,
+                Math.min(contextMenu.previewPointX, panel.width - contextMenu.implicitWidth - contextMenu.menuMargin))
+              menuAnchor.rect.x = Math.round(px)
+              menuAnchor.rect.y = Math.round(Math.max(contextMenu.menuMargin, contextMenu.previewPointY - contextMenu.implicitHeight))
+              return
+            }
             if (!contextMenu.anchorItem || !contextMenu.anchorWindow) return
             var target = contextMenu.anchorItem
             var popupWidth = contextMenu.implicitWidth
