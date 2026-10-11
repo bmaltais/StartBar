@@ -4,7 +4,7 @@
 // the tests check the text and run `bash -n` over every script.
 //
 // Every function returns the argv to run (`["bash", "-lc", script, "bash",
-// arg]`), or null when there is nothing to run, and Service.qml only runs it.
+// arg]`), or null when given an address or id it cannot use, and Service.qml only runs it.
 // An address is passed as an argument, never spliced into the script.
 
 // HyprlandToplevel.address comes back as bare hex ("56538020a4f0"), unlike
@@ -16,7 +16,7 @@ function normalizedAddress(address) {
   return /^[0-9a-fA-F]+$/.test(hex) ? "0x" + hex : null;
 }
 
-function bash(script, arg) {
+function argv(script, arg) {
   return arg === undefined ? ["bash", "-lc", script, "bash"] : ["bash", "-lc", script, "bash", arg];
 }
 
@@ -69,7 +69,7 @@ function focusWindow(address) {
     + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\"; "
     + "raise \"$addr\"; "
     + WARPS_BACK;
-  return bash(script, normalized);
+  return argv(script, normalized);
 }
 
 // A click on a hover Preview can also bring the pointer along
@@ -86,13 +86,13 @@ function focusWindowAndWarp(address) {
     + "sleep 0.1; "
     + "pos=$(hyprctl -j clients | jq -r --arg a \"$addr\" '.[] | select(.address == $a) | \"\\(.at[0] + (.size[0] / 2) | floor) \\(.at[1] + (.size[1] / 2) | floor)\"'); "
     + "[ -n \"$pos\" ] && hyprctl dispatch \"hl.dsp.cursor.move({ x = ${pos% *}, y = ${pos#* } })\" >/dev/null";
-  return bash(script, normalized);
+  return argv(script, normalized);
 }
 
 function closeWindow(address) {
   var normalized = normalizedAddress(address);
   if (!normalized) return null;
-  return bash("hyprctl dispatch \"hl.dsp.window.close({ window = \\\"address:$1\\\" })\"", normalized);
+  return argv("hyprctl dispatch \"hl.dsp.window.close({ window = \\\"address:$1\\\" })\"", normalized);
 }
 
 // The dispatch behind each Window-state row of the context menu. The ids and
@@ -113,7 +113,7 @@ function windowAction(id, address) {
   if (!normalized) return null;
   var make = Object.prototype.hasOwnProperty.call(WINDOW_ACTIONS, id) ? WINDOW_ACTIONS[id] : null;
   if (!make) return null;
-  return bash("hyprctl dispatch \"$1\"", make("window = \"address:" + normalized + "\""));
+  return argv("hyprctl dispatch \"$1\"", make("window = \"address:" + normalized + "\""));
 }
 
 // Peek: hovering a Preview thumbnail focuses its Window to show it. The first
@@ -146,7 +146,7 @@ function peekWindow(address) {
     + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\" >/dev/null\n"
     + "raise \"$addr\"\n"
     + WARPS_BACK;
-  return bash(script, normalized);
+  return argv(script, normalized);
 }
 
 // Put everything a peek changed back, then forget the saved state.
@@ -159,12 +159,12 @@ function peekRestore() {
     + "undo\n"
     + "[ -n \"$prev\" ] && hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$prev\\\" })\" >/dev/null\n"
     + WARPS_BACK;
-  return bash(script);
+  return argv(script);
 }
 
 // A click picked the peeked Window: keep how it looks and drop the saved state.
 function peekCommit() {
-  return bash(PEEK_LOCK.replace("\n", "; ") + "rm -f " + PEEK_STATE);
+  return argv(PEEK_LOCK.replace("\n", "; ") + "rm -f " + PEEK_STATE);
 }
 
 if (typeof module !== "undefined" && module.exports) {
