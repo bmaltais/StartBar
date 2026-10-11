@@ -78,6 +78,12 @@ scripts/smoke.sh            # --monitor NAME, --type, --out DIR, --no-restart
 
 It restarts the shell with this checkout, fails if the plugin logs anything, and screenshots the Dock, the Start menu and the settings window in each colour scheme. It edits the plugin's entry in `shell.json` for the run and restores it on exit. Look at the screenshots: the script only knows the plugin loaded quietly. It cannot click, drag or hover, so Previews, the Item menu, the Bar menu and drag still need the checklist below.
 
+### Retaking screenshots
+
+The README images are in `screenshots/`. Retake one only when its subject changed: a new row in the settings window changes `settings.png`; a new look for the Dock or Start menu changes `taskbar.png` and the `start-menu*.png` and `search.png` files.
+
+`settings.png` is the settings window cropped out of the smoke run's `settings-window.png`: `magick <smoke dir>/settings-window.png -crop 640x760+640+160 +repage screenshots/settings.png`. The smoke run shows the Dark scheme at full opacity; the other files need the state they show (a hover preview, the right-click menu), set up by hand.
+
 Releasing is described in [docs/agents/release.md](docs/agents/release.md).
 
 ## Manual verification checklist
