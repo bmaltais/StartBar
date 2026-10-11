@@ -60,8 +60,8 @@ function hideTimerFired(state) {
 //
 // `hovered` is the Item under the pointer, `shown` the one the popup is up
 // for (null while closed). The popup opens after the open delay, closes after
-// the leave delay, and moving to a neighbouring Item while it is up swaps the
-// shown Item in place.
+// the leave delay, and moving to a neighbouring Item while it is up closes it
+// at once and opens that Item's after the open delay.
 
 function initialPreview() {
   return { hovered: null, shown: null };
@@ -71,7 +71,9 @@ function initialPreview() {
 // (previews on, a Window Item); `dragging` suppresses it during a drag.
 function previewHoverStart(state, item, enabled, dragging) {
   if (dragging || !enabled) return { state: state, timers: {} };
-  if (state.shown) return { state: { hovered: item, shown: item }, timers: { leave: "stop" } };
+  // Hovering the shown Item again keeps it; any other Item closes the popup
+  // first, so its own opens afresh (and slides up) after the open delay.
+  if (state.shown && state.shown.key === item.key) return { state: { hovered: item, shown: item }, timers: { leave: "stop" } };
   return { state: { hovered: item, shown: null }, timers: { leave: "stop", open: "start" } };
 }
 

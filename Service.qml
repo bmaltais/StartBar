@@ -1875,6 +1875,8 @@ Item {
                 onClicked: function (mouse) {
                   if (dockItem.wasDragged) return
                   if (mouse.button === Qt.RightButton) {
+                    // Drop any hover preview first, so the menu never shows over it.
+                    previewState.dismiss()
                     contextMenu.anchorItem = dockItem
                     contextMenu.menuItem = dockItem.modelData
                     contextMenu.visible = true
@@ -2084,8 +2086,8 @@ Item {
         onTriggered: previewState.apply(DockInteraction.previewLeaveFired(previewState.model))
       }
 
-      // Moving from one Item to its neighbour while a preview is up swaps
-      // the shown Window in place; the popup has to be re-anchored to follow.
+      // Keep the popup anchored if the hovered Item's position changes while
+      // it is up (e.g. the row reflows).
       Connections {
         target: previewState
         function onAnchorXChanged() {
@@ -2195,6 +2197,9 @@ Item {
 
         onVisibleChanged: {
           revealState.set("preview", previewPopup.visible)
+          previewSlideAnim.stop()
+          if (visible && root.taskbar.previewSlide) previewSlideAnim.start()
+          else slide = 1
           if (!previewPopup.visible) {
             previewPopup.peekTarget = null
             peekTimer.stop()
@@ -2220,145 +2225,166 @@ Item {
           }
         }
 
-        Rectangle {
+        // 0 → 1 as the popup slides up into place; snaps to 1 when off.
+        property real slide: 1
+        NumberAnimation {
+          id: previewSlideAnim
+          target: previewPopup
+          property: "slide"
+          from: 0
+          to: 1
+          duration: 220
+          easing.type: Easing.OutCubic
+        }
+
+        // Clips the card to the popup's own box, so it rises out from the
+        // Dock's edge instead of fading in mid-air.
+        Item {
           anchors.fill: parent
-          radius: Style.cornerRadius
-          color: root.colPopupBackground
-          border.width: Style.normalBorderWidth
-          border.color: root.colPopupBorder
+          clip: true
 
-          HoverHandler {
-            onHoveredChanged: previewState.popupHover(hovered)
-          }
+          Rectangle {
+            width: parent.width
+            height: parent.height
+            radius: Style.cornerRadius
+            color: root.colPopupBackground
+            border.width: Style.normalBorderWidth
+            border.color: root.colPopupBorder
+            y: (1 - previewPopup.slide) * height
 
-          Row {
-            id: previewRow
-            anchors.fill: parent
-            anchors.margins: Style.spacing.sm
-            spacing: Style.spacing.xs
+            HoverHandler {
+              onHoveredChanged: previewState.popupHover(hovered)
+            }
 
-            Repeater {
-              model: previewPopup.windowIds
+            Row {
+              id: previewRow
+              anchors.fill: parent
+              anchors.margins: Style.spacing.sm
+              spacing: Style.spacing.xs
 
-              // One Window's cell: a tinted background under the pointer, so
-              // it is clear which thumbnail a click will pick.
-              Item {
-                id: cell
-                required property var modelData
-                readonly property var win: previewPopup.windowFor(cell.modelData)
-                readonly property var toplevel: dockState.toplevelByAddress[cell.modelData] || null
-                readonly property int pad: Style.spacing.xs
-                implicitWidth: cellColumn.implicitWidth + pad * 2
-                implicitHeight: cellColumn.implicitHeight + pad * 2
+              Repeater {
+                model: previewPopup.windowIds
 
-                Rectangle {
-                  anchors.fill: parent
-                  radius: Style.cornerRadius
-                  color: cellHover.hovered ? Style.selectedFill : "transparent"
-                }
-
-                HoverHandler {
-                  id: cellHover
-                  onHoveredChanged: previewPopup.peekHover(cell.win, hovered)
-                }
-
-              Column {
-                id: cellColumn
-                x: cell.pad
-                y: cell.pad
-                spacing: Style.spacing.xs
-
-                Row {
-                  width: previewPopup.thumbWidth
-                  spacing: Style.spacing.xs
-
-                  Text {
-                    width: parent.width - closeButton.width - parent.spacing
-                    anchors.verticalCenter: parent.verticalCenter
-                    elide: Text.ElideRight
-                    color: previewPopup.textColor
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.caption
-                    text: dockState.titles[cell.modelData] || cell.win.title || cell.win.class || ""
-                  }
+                // One Window's cell: a tinted background under the pointer, so
+                // it is clear which thumbnail a click will pick.
+                Item {
+                  id: cell
+                  required property var modelData
+                  readonly property var win: previewPopup.windowFor(cell.modelData)
+                  readonly property var toplevel: dockState.toplevelByAddress[cell.modelData] || null
+                  readonly property int pad: Style.spacing.xs
+                  implicitWidth: cellColumn.implicitWidth + pad * 2
+                  implicitHeight: cellColumn.implicitHeight + pad * 2
 
                   Rectangle {
-                    id: closeButton
-                    width: Style.space(20)
-                    height: width
+                    anchors.fill: parent
                     radius: Style.cornerRadius
-                    color: closeMouse.containsMouse ? Util.alpha(Color.urgent, 0.5) : "transparent"
+                    color: cellHover.hovered ? Style.selectedFill : "transparent"
+                  }
+
+                  HoverHandler {
+                    id: cellHover
+                    onHoveredChanged: previewPopup.peekHover(cell.win, hovered)
+                  }
+
+                Column {
+                  id: cellColumn
+                  x: cell.pad
+                  y: cell.pad
+                  spacing: Style.spacing.xs
+
+                  Row {
+                    width: previewPopup.thumbWidth
+                    spacing: Style.spacing.xs
 
                     Text {
-                      anchors.centerIn: parent
-                      text: "\u2715"
+                      width: parent.width - closeButton.width - parent.spacing
+                      anchors.verticalCenter: parent.verticalCenter
+                      elide: Text.ElideRight
                       color: previewPopup.textColor
+                      font.family: Style.font.family
                       font.pixelSize: Style.font.caption
+                      text: dockState.titles[cell.modelData] || cell.win.title || cell.win.class || ""
+                    }
+
+                    Rectangle {
+                      id: closeButton
+                      width: Style.space(20)
+                      height: width
+                      radius: Style.cornerRadius
+                      color: closeMouse.containsMouse ? Util.alpha(Color.urgent, 0.5) : "transparent"
+
+                      Text {
+                        anchors.centerIn: parent
+                        text: "\u2715"
+                        color: previewPopup.textColor
+                        font.pixelSize: Style.font.caption
+                      }
+
+                      MouseArea {
+                        id: closeMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                          // The last Window closing takes the popup with it
+                          // (liveItem goes null); otherwise it stays up so
+                          // the rest can still be picked.
+                          previewPopup.closePicked(cell.win)
+                        }
+                      }
+                    }
+                  }
+
+                  // The thumbnail: a fixed-size box (so a Window that resizes or
+                  // changes shape never resizes the popup), holding a live capture
+                  // scaled to the Window's own aspect ratio. Live capture can
+                  // blank for a frame when the Window's content changes a lot (a
+                  // busy browser); the ShaderEffectSource underneath keeps the
+                  // last frame the capture actually had, so that frame shows
+                  // through instead of a flicker. Left-clicking the thumbnail
+                  // focuses the Window, like its Item. In a group, the Active
+                  // Window's thumbnail is outlined.
+                  Item {
+                    width: previewPopup.thumbWidth
+                    height: previewPopup.thumbHeight
+
+                    ShaderEffectSource {
+                      anchors.centerIn: parent
+                      width: capture.width
+                      height: capture.height
+                      sourceItem: capture
+                      live: capture.hasContent
+                      hideSource: false
+                    }
+
+                    ScreencopyView {
+                      id: capture
+                      anchors.centerIn: parent
+                      constraintSize: Qt.size(previewPopup.thumbWidth, previewPopup.thumbHeight)
+                      captureSource: previewPopup.visible ? cell.toplevel && cell.toplevel.wayland : null
+                      live: true
+                    }
+
+                    Rectangle {
+                      visible: previewPopup.windowIds.length > 1 && !!cell.win.active
+                      anchors.fill: parent
+                      color: "transparent"
+                      radius: Style.cornerRadius
+                      border.width: Style.selectedBorderWidth
+                      border.color: previewPopup.accentColor
                     }
 
                     MouseArea {
-                      id: closeMouse
                       anchors.fill: parent
-                      hoverEnabled: true
                       cursorShape: Qt.PointingHandCursor
                       onClicked: {
-                        // The last Window closing takes the popup with it
-                        // (liveItem goes null); otherwise it stays up so
-                        // the rest can still be picked.
-                        previewPopup.closePicked(cell.win)
+                        previewPopup.focusPicked(cell.win)
                       }
                     }
                   }
                 }
-
-                // The thumbnail: a fixed-size box (so a Window that resizes or
-                // changes shape never resizes the popup), holding a live capture
-                // scaled to the Window's own aspect ratio. Live capture can
-                // blank for a frame when the Window's content changes a lot (a
-                // busy browser); the ShaderEffectSource underneath keeps the
-                // last frame the capture actually had, so that frame shows
-                // through instead of a flicker. Left-clicking the thumbnail
-                // focuses the Window, like its Item. In a group, the Active
-                // Window's thumbnail is outlined.
-                Item {
-                  width: previewPopup.thumbWidth
-                  height: previewPopup.thumbHeight
-
-                  ShaderEffectSource {
-                    anchors.centerIn: parent
-                    width: capture.width
-                    height: capture.height
-                    sourceItem: capture
-                    live: capture.hasContent
-                    hideSource: false
-                  }
-
-                  ScreencopyView {
-                    id: capture
-                    anchors.centerIn: parent
-                    constraintSize: Qt.size(previewPopup.thumbWidth, previewPopup.thumbHeight)
-                    captureSource: previewPopup.visible ? cell.toplevel && cell.toplevel.wayland : null
-                    live: true
-                  }
-
-                  Rectangle {
-                    visible: previewPopup.windowIds.length > 1 && !!cell.win.active
-                    anchors.fill: parent
-                    color: "transparent"
-                    radius: Style.cornerRadius
-                    border.width: Style.selectedBorderWidth
-                    border.color: previewPopup.accentColor
-                  }
-
-                  MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                      previewPopup.focusPicked(cell.win)
-                    }
-                  }
                 }
-              }
               }
             }
           }

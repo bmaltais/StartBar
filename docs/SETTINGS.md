@@ -42,6 +42,7 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 | `startIcon` | `grid` | `grid` (drawn in QML), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path |
 | `showClock` | `false` | Clock at the right end |
 | `showPreviews` | `true` | Hover thumbnails with a close button |
+| `previewSlide` | `true` | The hover preview rises out of the Dock edge when it appears; it still disappears at once |
 | `previewPeek` | `true` | Hovering a preview thumbnail focuses that window to show it (switching workspace if needed); a maximized or full-screen window covering it is un-maximized for the peek; moving away restores the focus, workspaces and maximized state; clicking keeps it |
 | `previewWarpPointer` | `true` | Clicking a preview also moves the pointer to the middle of that window |
 
