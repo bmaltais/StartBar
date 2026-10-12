@@ -344,13 +344,22 @@ Item {
   x: Math.round(Math.max(startMenu.menuMargin, Math.min(startMenu.anchorX, startMenu.panelWidth - startMenu.fullWidth - startMenu.menuMargin)))
   y: Math.round(Math.max(startMenu.menuMargin, startMenu.panelHeight - startMenu.taskbar.barHeight - startMenu.fullHeight - startMenu.menuMargin))
 
+  RectangularShadow {
+    visible: startMenu.open
+    anchors.fill: card
+    radius: card.radius
+    blur: Style.space(14)
+    offset.y: Style.space(4)
+    color: Qt.rgba(0, 0, 0, 0.6)
+  }
+
   Rectangle {
     id: card
     anchors.fill: parent
     radius: Math.max(Style.cornerRadius, Style.space(8))
     color: startMenu.colBackground
     border.width: Style.normalBorderWidth
-    border.color: startMenu.colBorder
+    border.color: Util.alpha(startMenu.colText, 0.12)
     clip: true
 
     HoverHandler {
@@ -1299,11 +1308,11 @@ Item {
       z: 30
       visible: startMenu.overlayKind !== ""
       width: Style.space(190)
-      height: overlayColumn.implicitHeight + Style.spacing.xxs * 2
-      radius: Style.cornerRadius
+      height: overlayColumn.implicitHeight + Style.space(4) * 2
+      radius: Math.max(Style.cornerRadius, Style.space(8))
       color: startMenu.colBackground
       border.width: Style.normalBorderWidth
-      border.color: startMenu.colBorder
+      border.color: Util.alpha(startMenu.colText, 0.12)
       readonly property bool system: startMenu.overlayKind === "power" || startMenu.overlayKind === "user"
       x: startMenu.overlayKind === "power" ? card.width - width - Style.spacing.md
         : (startMenu.overlayKind === "user" ? Style.spacing.md : (startMenu.overlay ? startMenu.overlay.x : 0))
@@ -1314,7 +1323,7 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.margins: Style.spacing.xxs
+        anchors.margins: Style.space(4)
 
         Repeater {
           model: StartMenu.overlayRows(startMenu.overlay, startMenu.context)
@@ -1323,14 +1332,14 @@ Item {
             id: overlayRow
             required property var modelData
             width: overlayColumn.width
-            height: Style.spacing.popupRowHeight
-            radius: Style.cornerRadius
-            color: overlayMouse.containsMouse ? Style.hoverFillFor(startMenu.colForeground, startMenu.colAccent) : "transparent"
+            height: Style.space(32)
+            radius: Math.max(Style.cornerRadius, Style.space(4))
+            color: overlayMouse.containsMouse ? Util.alpha(startMenu.colText, 0.08) : "transparent"
 
             Text {
               textFormat: Text.PlainText
               anchors.left: parent.left
-              anchors.leftMargin: Style.spacing.controlPaddingX
+              anchors.leftMargin: Style.space(12)
               anchors.verticalCenter: parent.verticalCenter
               text: overlayRow.modelData.label
               color: startMenu.colText
