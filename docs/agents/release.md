@@ -14,6 +14,8 @@ Work accumulates on `release/<version>` (for example `release/1.2.0`). Branch fr
 
 A branch that needs a PR that is still open can be based on it and opened against it; say so in the PR body. When that PR is squash-merged its commits are rewritten, so rebase the dependent branch with `git rebase --onto origin/release/<version> <old base>` and retarget the PR at `release/<version>`.
 
+The open release branch is the highest `release/<version>` on origin whose `v<version>` tag does not exist; `scripts/open-release.sh` prints it. When every release branch is tagged, it says so: start the next one from `main` (step 7) before opening the PR.
+
 Name the branch `release/<version>`, never `v<version>`: a branch and a tag with the same name make `git push origin v1.2.0` ambiguous.
 
 ## Steps
