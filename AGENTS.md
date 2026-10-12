@@ -29,4 +29,4 @@ Single-context: `CONTEXT.md` at the root, ADRs under `docs/adr/`. See `docs/agen
 
 ## Releasing
 
-Merging to `main` ships to every user. Read `docs/agents/release.md` before opening a PR (it targets `release/<version>`, never `main`), merging, tagging or publishing, and when a `release/<version>` branch is in question.
+Merging to `main` ships to every user. Read `docs/agents/release.md` before opening a PR (it targets the open `release/<version>`, which `scripts/open-release.sh` names, never `main`), merging, tagging or publishing, and when a `release/<version>` branch is in question.

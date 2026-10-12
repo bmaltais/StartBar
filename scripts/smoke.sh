@@ -56,7 +56,10 @@ id=$(jq -r .id "$repo/manifest.json")
 installed=$HOME/.config/omarchy/plugins/$id
 if [[ $(readlink -f "$installed" 2>/dev/null) != "$repo" ]]; then
   echo "smoke: $installed does not point at this checkout, so the shell would not load it." >&2
-  echo "       See CONTRIBUTING.md, \"Development install\"." >&2
+  if [[ -L $installed && ! -e $installed ]]; then
+    echo "       It is a dangling link to $(readlink "$installed")." >&2
+  fi
+  echo "       To point it here: ln -sfn \"$repo\" \"$installed\"  (CONTRIBUTING.md, \"Development install\")" >&2
   exit 2
 fi
 if ! jq -e --arg id "$id" '.plugins[]? | select(.id == $id)' "$config" >/dev/null; then

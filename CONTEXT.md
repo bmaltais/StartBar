@@ -87,7 +87,7 @@ An App the user keeps in the Start menu's Pinned grid. Start Pins are a separate
 _Avoid_: Pin (a Pin lives in the Dock), favourite, tile
 
 **Recommended**:
-The Apps most recently launched from the Start menu.
+The Apps most recently launched, from the Start menu or any other way (a window of the App opening is what counts).
 _Avoid_: recents, history, frequent
 
 **Places**:

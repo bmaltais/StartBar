@@ -7,6 +7,7 @@
 // The rules themselves live in the JS modules imported below.
 import QtQuick
 import QtQml.Models
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -72,6 +73,21 @@ Item {
   readonly property color colPopupBackground: scheme ? scheme.background : Color.popups.background
   readonly property color colPopupText: scheme ? scheme.foreground : Color.popups.text
   readonly property color colPopupBorder: scheme ? scheme.border : Color.popups.border
+
+  // How every menu and window the plugin raises looks, after Windows 11:
+  // rounded corners (never sharper than the Start menu's), a hairline edge in
+  // the text colour instead of the theme's accent line, a quiet hover fill.
+  // Style.cornerRadius follows Hyprland's rounding, often 0.
+  readonly property int menuRadius: Math.max(Style.cornerRadius, Style.space(8))
+  readonly property int menuRowRadius: Math.max(Style.cornerRadius, Style.space(4))
+  readonly property int menuPad: Style.space(4)
+  readonly property int menuRowHeight: Style.space(32)
+  // A popup window is only as big as it is drawn, so its shadow needs room
+  // of its own: the popups are this much larger on every side and the menu
+  // is drawn inset, with the anchor moved out by the same amount.
+  readonly property int menuShadow: Style.space(14)
+  readonly property color colHairline: Util.alpha(colPopupText, 0.12)
+  readonly property color colRowHover: Util.alpha(colPopupText, 0.08)
 
   // Settings and Pins (docs/SPEC.md "Configuration"): read from the Dock's
   // own entry in the shell config's plugins[] array and written back
@@ -178,6 +194,10 @@ Item {
 
     property var openedAtByAddress: ({})
     property int nextOpenedAt: 0
+    // When a Window with no class yet was first seen, and whether any is
+    // being held back from the Dock for it (see refresh()).
+    property var firstSeenByAddress: ({})
+    property bool holding: false
     // A Placed Window Item's own position (CONTEXT.md "Placed"; DockModel.js
     // comment on `placements`): kept only here, in memory, keyed by Window
     // address exactly like openedAtByAddress, and pruned the same way on
@@ -213,6 +233,7 @@ Item {
       var seenAddresses = {}
       var windows = []
       var handles = {}
+      var held = false
 
       for (var i = 0; i < toplevels.length; i++) {
         var toplevel = toplevels[i]
@@ -226,6 +247,21 @@ Item {
         }
 
         var info = toplevel.lastIpcObject || {}
+        // A Window's class arrives a moment after the Window does. Until it
+        // does, its App is unknown, and the Window would show as a blank
+        // Letter Tile and then jump into its App's group, so it is held back
+        // (for a few seconds at most: a Window may really have no class).
+        if (!info.class) {
+          var firstSeen = dockState.firstSeenByAddress[address]
+          if (firstSeen === undefined) {
+            firstSeen = Date.now()
+            dockState.firstSeenByAddress[address] = firstSeen
+          }
+          if (Date.now() - firstSeen < root.classWaitMs) {
+            held = true
+            continue
+          }
+        }
         windows.push({
           id: address,
           class: DockModel.clipText(info.class),
@@ -245,6 +281,12 @@ Item {
         if (seenAddresses[key]) keptOpenedAt[key] = dockState.openedAtByAddress[key]
       }
       dockState.openedAtByAddress = keptOpenedAt
+      var keptFirstSeen = {}
+      for (var seenKey in dockState.firstSeenByAddress) {
+        if (seenAddresses[seenKey]) keptFirstSeen[seenKey] = dockState.firstSeenByAddress[seenKey]
+      }
+      dockState.firstSeenByAddress = keptFirstSeen
+      dockState.holding = held
       dockState.toplevelByAddress = handles
 
       var titles = {}
@@ -306,7 +348,17 @@ Item {
 
   Connections {
     target: Hyprland
-    function onRawEvent(event) { dockState.refresh() }
+    function onRawEvent(event) {
+      // An App started any other way (Super+Space, a Pin, a terminal) is
+      // still a recently launched App: openwindow data is
+      // "address,workspace,class,title".
+      if (event.name === "openwindow") {
+        var cls = String(event.data).split(",")[2]
+        var app = cls ? root.resolveApp({ class: cls }) : null
+        if (app && app.id) dockSettings.apply({ type: "pushRecentApp", appId: app.id })
+      }
+      dockState.refresh()
+    }
   }
 
   // DesktopEntries scans .desktop files asynchronously in the background,
@@ -393,12 +445,17 @@ Item {
     running: true
 
     onTriggered: {
-      var unresolved = dockState.items.some(function (it) {
+      var unresolved = dockState.holding || dockState.items.some(function (it) {
         return it.kind === "window" && !it.app && !it.letter
       })
       if (unresolved) Hyprland.refreshToplevels()
+      // The wait for a class ends by the clock, not by an event.
+      if (dockState.holding) dockState.refresh()
     }
   }
+
+  // How long a new Window may go without a class before it is shown anyway.
+  readonly property int classWaitMs: 3000
 
   function resolveApp(window) {
     return window.class ? DesktopEntries.heuristicLookup(window.class) || null : null
@@ -503,10 +560,14 @@ Item {
     dockSettings.apply({ type: "unpinAppFromDrag", appId: appId })
   }
 
-  // A Pin's tooltip (docs/SPEC.md "What the Dock shows": "a 'missing'
-  // tooltip"): the App's own name once resolved, its bare Pin id if the
-  // App resolved but has none, or an explicit missing note once its App
-  // is no longer installed.
+  // A Pin whose App is installed shows no tooltip, as in Windows: its icon
+  // says what it is. Only a missing one explains itself.
+  function pinHasNoTooltip(item) {
+    return item.kind === "pin" && !item.missing
+  }
+
+  // A missing Pin's tooltip (docs/SPEC.md "What the Dock shows": "a
+  // 'missing' tooltip"): its bare Pin id and an explicit missing note.
   function pinTooltipText(item) {
     if (item.missing) return item.appId + " (missing)"
     return (item.app && item.app.name) || item.appId
@@ -617,6 +678,17 @@ Item {
     // For a Super-key binding: `omarchy-shell io.github.bmaltais.startbar startMenu`.
     function startMenu(): void { root.startMenuRequested(root.focusedScreenName(), "toggle") }
     function closeStartMenu(): void { root.startMenuRequested(root.focusedScreenName(), "close") }
+    // Where the Dock's Items and any open menu are on the focused monitor, as
+    // JSON (see `layout` in the panel). For the scripts that drive the pointer.
+    function layout(): string {
+      var name = root.focusedScreenName()
+      for (var i = 0; i < panels.instances.length; i++) {
+        if (panels.instances[i].screen && panels.instances[i].screen.name === name) {
+          return JSON.stringify(panels.instances[i].layout())
+        }
+      }
+      return "{}"
+    }
   }
 
   FileView {
@@ -639,8 +711,8 @@ Item {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
     exclusionMode: ExclusionMode.Ignore
 
-    implicitWidth: Style.space(640)
-    implicitHeight: Math.min(Style.space(760), (root.settingsScreen ? root.settingsScreen.height : 900) - Style.space(80))
+    implicitWidth: Style.space(640) + root.menuShadow * 2
+    implicitHeight: Math.min(Style.space(760), (root.settingsScreen ? root.settingsScreen.height : 900) - Style.space(80)) + root.menuShadow * 2
 
     onVisibleChanged: if (!visible) settingsWindow.confirmingReset = false
 
@@ -660,12 +732,22 @@ Item {
       onTriggered: settingsWindow.confirmingReset = false
     }
 
+    RectangularShadow {
+      anchors.fill: settingsFrame
+      radius: settingsFrame.radius
+      blur: root.menuShadow
+      offset.y: Style.space(4)
+      color: Qt.rgba(0, 0, 0, 0.6)
+    }
+
     Rectangle {
+      id: settingsFrame
       anchors.fill: parent
-      radius: Style.cornerRadius
-      color: Color.popups.background
+      anchors.margins: root.menuShadow
+      radius: root.menuRadius
+      color: root.colPopupBackground
       border.width: Style.normalBorderWidth
-      border.color: Color.popups.border
+      border.color: root.colHairline
       focus: true
       Keys.onEscapePressed: settingsWindow.visible = false
 
@@ -683,7 +765,7 @@ Item {
           anchors.leftMargin: Style.spacing.lg
           anchors.verticalCenter: parent.verticalCenter
           text: "Taskbar settings"
-          color: Color.popups.text
+          color: root.colPopupText
           font.family: Style.font.family
           font.pixelSize: Style.font.body + 3
           font.bold: true
@@ -695,14 +777,14 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           width: Style.space(30)
           height: width
-          radius: Style.cornerRadius
-          color: closeSettingsMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+          radius: root.menuRowRadius
+          color: closeSettingsMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : "transparent"
 
           Text {
             textFormat: Text.PlainText
             anchors.centerIn: parent
             text: "✕"
-            color: Color.popups.text
+            color: root.colPopupText
             font.pixelSize: Style.font.body
           }
 
@@ -747,7 +829,7 @@ Item {
                 topPadding: Style.spacing.md
                 bottomPadding: Style.spacing.xs
                 text: groupBlock.modelData.title
-                color: Color.accent
+                color: root.colPopupText
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body
                 font.bold: true
@@ -773,7 +855,7 @@ Item {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     height: 1
-                    color: Util.alpha(Color.popups.border, 0.5)
+                    color: Util.alpha(root.colHairline, 0.5)
                   }
 
                   Column {
@@ -788,7 +870,7 @@ Item {
                       width: parent.width
                       elide: Text.ElideRight
                       text: fieldRow.field.label
-                      color: Color.popups.text
+                      color: root.colPopupText
                       font.family: Style.font.family
                       font.pixelSize: Style.font.body
                     }
@@ -799,7 +881,7 @@ Item {
                       width: parent.width
                       wrapMode: Text.WordWrap
                       text: fieldRow.field.hint || ""
-                      color: Util.alpha(Color.popups.text, 0.55)
+                      color: Util.alpha(root.colPopupText, 0.55)
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption
                     }
@@ -857,7 +939,7 @@ Item {
           anchors.leftMargin: Style.spacing.lg
           anchors.verticalCenter: parent.verticalCenter
           text: "Changes apply instantly"
-          color: Util.alpha(Color.popups.text, 0.55)
+          color: Util.alpha(root.colPopupText, 0.55)
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }
@@ -868,17 +950,17 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           width: resetLabel.implicitWidth + Style.spacing.lg * 2
           height: Style.space(32)
-          radius: Style.cornerRadius
+          radius: root.menuRowRadius
           color: settingsWindow.confirmingReset
             ? Util.alpha(Color.urgent, 0.5)
-            : (resetMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08))
+            : (resetMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : Util.alpha(root.colPopupText, 0.08))
 
           Text {
             textFormat: Text.PlainText
             id: resetLabel
             anchors.centerIn: parent
             text: settingsWindow.confirmingReset ? "Click again to reset everything" : "Reset to defaults"
-            color: Color.popups.text
+            color: root.colPopupText
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -917,7 +999,7 @@ Item {
         width: implicitWidth
         height: implicitHeight
         radius: height / 2
-        color: sw.value ? Color.accent : Util.alpha(Color.popups.text, 0.25)
+        color: sw.value ? root.colAccent : Util.alpha(root.colPopupText, 0.25)
 
         Rectangle {
           width: parent.height - 6
@@ -925,7 +1007,7 @@ Item {
           radius: width / 2
           y: 3
           x: sw.value ? parent.width - width - 3 : 3
-          color: Color.popups.background
+          color: root.colPopupBackground
 
           Behavior on x { NumberAnimation { duration: 100 } }
         }
@@ -957,15 +1039,15 @@ Item {
             readonly property bool selected: choices.value === choice.modelData.value
             width: choiceLabel.implicitWidth + Style.spacing.lg * 2
             height: Style.space(28)
-            radius: Style.cornerRadius
-            color: choice.selected ? Color.accent : (choiceMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08))
+            radius: root.menuRowRadius
+            color: choice.selected ? root.colAccent : (choiceMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : Util.alpha(root.colPopupText, 0.08))
 
             Text {
               textFormat: Text.PlainText
               id: choiceLabel
               anchors.centerIn: parent
               text: choice.modelData.label
-              color: choice.selected ? Color.background : Color.popups.text
+              color: choice.selected ? root.colPopupBackground : root.colPopupText
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -1000,9 +1082,9 @@ Item {
         Rectangle {
           width: Style.space(28)
           height: width
-          radius: Style.cornerRadius
-          color: minusMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
-          Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "−"; color: Color.popups.text; font.pixelSize: Style.font.body }
+          radius: root.menuRowRadius
+          color: minusMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : Util.alpha(root.colPopupText, 0.08)
+          Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "−"; color: root.colPopupText; font.pixelSize: Style.font.body }
           MouseArea { id: minusMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: stepper.step(-1) }
         }
 
@@ -1014,7 +1096,7 @@ Item {
           horizontalAlignment: Text.AlignHCenter
           verticalAlignment: Text.AlignVCenter
           text: stepper.value + (stepper.field && stepper.field.unit ? " " + stepper.field.unit : "")
-          color: Color.popups.text
+          color: root.colPopupText
           font.family: Style.font.family
           font.pixelSize: Style.font.body
         }
@@ -1022,9 +1104,9 @@ Item {
         Rectangle {
           width: Style.space(28)
           height: width
-          radius: Style.cornerRadius
-          color: plusMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
-          Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "+"; color: Color.popups.text; font.pixelSize: Style.font.body }
+          radius: root.menuRowRadius
+          color: plusMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : Util.alpha(root.colPopupText, 0.08)
+          Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "+"; color: root.colPopupText; font.pixelSize: Style.font.body }
           MouseArea { id: plusMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: stepper.step(1) }
         }
       }
@@ -1053,13 +1135,13 @@ Item {
             width: parent.width
             height: 4
             radius: 2
-            color: Util.alpha(Color.popups.text, 0.25)
+            color: Util.alpha(root.colPopupText, 0.25)
 
             Rectangle {
               width: slider.field ? parent.width * (slider.shown - slider.field.min) / (slider.field.max - slider.field.min) : 0
               height: parent.height
               radius: 2
-              color: Color.accent
+              color: root.colAccent
             }
           }
 
@@ -1068,7 +1150,7 @@ Item {
             width: Style.space(14)
             height: width
             radius: width / 2
-            color: Color.accent
+            color: root.colAccent
             x: slider.field ? (track.width - width) * (slider.shown - slider.field.min) / (slider.field.max - slider.field.min) : 0
           }
 
@@ -1097,7 +1179,7 @@ Item {
           height: Style.space(24)
           verticalAlignment: Text.AlignVCenter
           text: Math.round(slider.shown * 100) + "%"
-          color: Color.popups.text
+          color: root.colPopupText
           font.family: Style.font.family
           font.pixelSize: Style.font.body
         }
@@ -1115,17 +1197,17 @@ Item {
         implicitHeight: Style.space(30)
         width: implicitWidth
         height: implicitHeight
-        radius: Style.cornerRadius
-        color: Util.alpha(Color.popups.text, 0.08)
+        radius: root.menuRowRadius
+        color: Util.alpha(root.colPopupText, 0.08)
         border.width: input.activeFocus ? 1 : 0
-        border.color: Color.accent
+        border.color: root.colAccent
 
         PlainField {
           id: input
           anchors.fill: parent
           anchors.leftMargin: Style.spacing.md
           anchors.rightMargin: Style.spacing.md
-          color: Color.popups.text
+          color: root.colPopupText
           fontFamily: Style.font.family
           fontPixelSize: Style.font.body
           text: textBox.value === undefined || textBox.value === null ? "" : String(textBox.value)
@@ -1172,7 +1254,7 @@ Item {
           textFormat: Text.PlainText
           visible: listBox.isDefault
           text: "Default: Home and your Documents, Downloads, Pictures, Music and Videos folders"
-          color: Util.alpha(Color.popups.text, 0.7)
+          color: Util.alpha(root.colPopupText, 0.7)
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }
@@ -1189,17 +1271,17 @@ Item {
             Rectangle {
               width: listBox.width - Style.space(34)
               height: Style.space(30)
-              radius: Style.cornerRadius
-              color: Util.alpha(Color.popups.text, 0.08)
+              radius: root.menuRowRadius
+              color: Util.alpha(root.colPopupText, 0.08)
               border.width: placeInput.activeFocus ? 1 : 0
-              border.color: Color.accent
+              border.color: root.colAccent
 
               PlainField {
                 id: placeInput
                 anchors.fill: parent
                 anchors.leftMargin: Style.spacing.md
                 anchors.rightMargin: Style.spacing.md
-                color: Color.popups.text
+                color: root.colPopupText
                 fontFamily: Style.font.family
                 fontPixelSize: Style.font.body
                 text: placeEntry.modelData
@@ -1210,9 +1292,9 @@ Item {
             Rectangle {
               width: Style.space(28)
               height: width
-              radius: Style.cornerRadius
+              radius: root.menuRowRadius
               color: removeMouse.containsMouse ? Util.alpha(Color.urgent, 0.5) : "transparent"
-              Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "✕"; color: Color.popups.text; font.pixelSize: Style.font.caption }
+              Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "✕"; color: root.colPopupText; font.pixelSize: Style.font.caption }
               MouseArea { id: removeMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: listBox.removeAt(placeEntry.index) }
             }
           }
@@ -1224,14 +1306,14 @@ Item {
           Rectangle {
             width: addLabel.implicitWidth + Style.spacing.lg * 2
             height: Style.space(28)
-            radius: Style.cornerRadius
-            color: addMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
+            radius: root.menuRowRadius
+            color: addMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : Util.alpha(root.colPopupText, 0.08)
             Text {
               textFormat: Text.PlainText
               id: addLabel
               anchors.centerIn: parent
               text: listBox.isDefault ? "Customize" : "Add folder"
-              color: Color.popups.text
+              color: root.colPopupText
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -1251,14 +1333,14 @@ Item {
             visible: !listBox.isDefault
             width: useDefaultLabel.implicitWidth + Style.spacing.lg * 2
             height: Style.space(28)
-            radius: Style.cornerRadius
-            color: useDefaultMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
+            radius: root.menuRowRadius
+            color: useDefaultMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : Util.alpha(root.colPopupText, 0.08)
             Text {
               textFormat: Text.PlainText
               id: useDefaultLabel
               anchors.centerIn: parent
               text: "Use defaults"
-              color: Color.popups.text
+              color: root.colPopupText
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -1276,6 +1358,7 @@ Item {
   }
 
   Variants {
+    id: panels
     model: Quickshell.screens
 
     PanelWindow {
@@ -1323,6 +1406,51 @@ Item {
       // Whether the Dock/bar is on screen: always, unless it auto-hides, in
       // which case it follows the Revealed state.
       readonly property bool shown: !root.autoHide || revealState.revealed
+
+      // Where everything is on this monitor, in pixels from its top-left
+      // corner, for `omarchy-shell <id> layout` (scripts/screenshots.sh and
+      // scripts/pointer.sh read it instead of finding things in a screenshot):
+      // { monitor, items: [{ key, kind, appId, count, x, y, width, height }],
+      //   menus: { item, bar, preview, start } } with a menu's rectangle when it is open.
+      // The panel covers the monitor less any bar reserved at an edge, so its
+      // own offset is the monitor's size less its own.
+      function layout() {
+        var ox = panel.screen.width - panel.width
+        var oy = panel.screen.height - panel.height
+        function rect(x, y, w, h) {
+          return { x: Math.round(x + ox), y: Math.round(y + oy), width: Math.round(w), height: Math.round(h) }
+        }
+        function ofItem(it) {
+          var p = it.mapToItem(null, 0, 0)
+          return rect(p.x, p.y, it.width, it.height)
+        }
+        // A popup window is as big as its menu plus the shadow's room all round.
+        function ofPopup(w) {
+          return w.visible ? rect(w.relativeX + root.menuShadow, w.relativeY + root.menuShadow,
+            w.implicitWidth - root.menuShadow * 2, w.implicitHeight - root.menuShadow * 2) : null
+        }
+        var items = []
+        for (var i = 0; i < repeater.count; i++) {
+          var it = repeater.itemAt(i)
+          if (!it || !it.modelData) continue
+          var r = ofItem(it)
+          r.key = it.key
+          r.kind = it.modelData.kind
+          r.appId = root.menuAppId(it.modelData) || ""
+          r.count = it.modelData.count || 1
+          items.push(r)
+        }
+        return {
+          monitor: panel.screen.name,
+          items: items,
+          menus: {
+            item: ofPopup(contextMenu),
+            bar: ofPopup(barMenu),
+            preview: ofPopup(previewPopup),
+            start: startMenu.visible ? rect(startMenu.x, startMenu.y, startMenu.width, startMenu.height) : null,
+          },
+        }
+      }
 
       // Full-width, above any bar reservation because it's anchored to
       // this panel's own bottom edge, which ExclusionMode.Normal already
@@ -1742,15 +1870,35 @@ Item {
             Repeater {
               model: Math.min(dockItem.modelData.count || 1, 3) - 1
 
-              Rectangle {
+              Item {
+                id: copy
                 required property int index
+                readonly property real shrink: 1 - (index + 1) * 0.12
                 z: -1 - index
-                x: icon.x + icon.width - Style.space(2) + (index + 1) * Style.space(3)
-                y: icon.y + icon.height * 0.15
-                width: Style.space(3)
-                height: icon.height * 0.7
-                radius: width / 2
-                color: Util.alpha(root.colForeground, 0.35 - index * 0.1)
+                width: icon.width * shrink
+                height: icon.height * shrink
+                x: icon.x + icon.width - width + (index + 1) * Style.space(4)
+                y: icon.y + (icon.height - height) / 2
+                opacity: 0.85 - index * 0.25
+
+                Image {
+                  visible: source.toString() !== ""
+                  anchors.fill: parent
+                  fillMode: Image.PreserveAspectFit
+                  asynchronous: true
+                  sourceSize.width: width * Screen.devicePixelRatio
+                  sourceSize.height: height * Screen.devicePixelRatio
+                  source: dockItem.modelData.app ? root.iconSource(dockItem.modelData.app.icon) : ""
+                }
+
+                // A Letter Tile Window has no icon to copy.
+                Rectangle {
+                  visible: dockItem.modelData.app === null
+                    || root.iconSource(dockItem.modelData.app.icon) === ""
+                  anchors.fill: parent
+                  radius: Style.cornerRadius
+                  color: root.colMuted
+                }
               }
             }
 
@@ -1774,7 +1922,8 @@ Item {
               // The Letter Tile: no App, or an App whose icon file is not
               // found (yet).
               Rectangle {
-                visible: dockItem.modelData.app === null || root.iconSource(dockItem.modelData.app.icon) === ""
+                visible: dockItem.modelData.app === null
+                  || (root.iconSource(dockItem.modelData.app.icon) === "" && !root.icons.pending(dockItem.modelData.app.icon))
                 anchors.fill: parent
                 radius: Style.cornerRadius
                 color: root.colMuted
@@ -1909,6 +2058,7 @@ Item {
               // revealState and can't keep the Dock revealed on its own.
               PanelToolTip {
                 visible: mouseArea.containsMouse && panel.shown && !previewState.enabledFor(dockItem.modelData)
+                  && !root.pinHasNoTooltip(dockItem.modelData)
                 text: dockItem.isPin
                   ? root.pinTooltipText(dockItem.modelData)
                   : root.windowTooltipText(dockItem.modelData)
@@ -2161,7 +2311,7 @@ Item {
         }
         readonly property int thumbWidth: {
           var n = Math.max(1, windowIds.length)
-          var room = panel.width - Style.spacing.xs * 2 - Style.spacing.sm * 2 - (Style.spacing.xs * 2 + Style.spacing.xs) * n
+          var room = panel.width - Style.spacing.xs * 2 - Style.spacing.sm * 2 - root.menuShadow * 2 - (Style.spacing.xs * 2 + Style.spacing.xs) * n
           return Math.max(Style.space(80), Math.min(Style.space(220), Math.floor(room / n)))
         }
         readonly property int thumbHeight: Math.round(thumbWidth * 124 / 220)
@@ -2198,8 +2348,12 @@ Item {
 
         visible: previewState.showing && liveItem !== null
         color: "transparent"
-        implicitWidth: previewRow.implicitWidth + Style.spacing.sm * 2
-        implicitHeight: previewRow.implicitHeight + Style.spacing.sm * 2
+        // Room for the card's shadow on every side (see root.menuShadow).
+        implicitWidth: previewRow.implicitWidth + Style.spacing.sm * 2 + root.menuShadow * 2
+        implicitHeight: previewRow.implicitHeight + Style.spacing.sm * 2 + root.menuShadow * 2
+        // Only the card takes the pointer, so the empty band that holds the
+        // shadow never gets between the pointer and the Dock's icons.
+        mask: Region { item: previewCard }
 
         onVisibleChanged: {
           revealState.set("preview", previewPopup.visible)
@@ -2223,7 +2377,7 @@ Item {
             var x = previewState.anchorX - previewPopup.implicitWidth / 2
             x = Math.max(Style.spacing.xs, Math.min(x, panel.width - previewPopup.implicitWidth - Style.spacing.xs))
             previewAnchor.rect.x = Math.round(x)
-            previewAnchor.rect.y = Math.round(Math.max(Style.spacing.xs, previewState.anchorY - previewPopup.implicitHeight - Style.spacing.xs))
+            previewAnchor.rect.y = Math.round(Math.max(Style.spacing.xs, previewState.anchorY - previewPopup.implicitHeight - Style.spacing.xs + root.menuShadow))
           }
         }
 
@@ -2245,14 +2399,25 @@ Item {
           anchors.fill: parent
           clip: true
 
+          RectangularShadow {
+            anchors.fill: previewCard
+            radius: previewCard.radius
+            blur: root.menuShadow
+            offset.y: Style.space(4)
+            spread: 0
+            color: Qt.rgba(0, 0, 0, 0.6)
+          }
+
           Rectangle {
-            width: parent.width
-            height: parent.height
-            radius: Style.cornerRadius
+            id: previewCard
+            x: root.menuShadow
+            width: parent.width - root.menuShadow * 2
+            height: parent.height - root.menuShadow * 2
+            radius: root.menuRadius
             color: root.colPopupBackground
             border.width: Style.normalBorderWidth
-            border.color: root.colPopupBorder
-            y: (1 - previewPopup.slide) * height
+            border.color: root.colHairline
+            y: root.menuShadow + (1 - previewPopup.slide) * (height + root.menuShadow)
 
             HoverHandler {
               onHoveredChanged: previewState.popupHover(hovered)
@@ -2459,7 +2624,7 @@ Item {
         // nothing is cut off however long a row's label is; never narrower
         // than a comfortable minimum.
         readonly property int rowWidth: Math.max(Style.space(190),
-          Math.ceil(barMenuMetrics.advanceWidth) + Style.space(22) + Style.spacing.controlPaddingX * 2 + Style.spacing.xxs * 2 + Style.space(12))
+          Math.ceil(barMenuMetrics.advanceWidth) + Style.space(22) + Style.space(12) * 2 + root.menuPad * 2 + Style.space(12))
 
         TextMetrics {
           id: barMenuMetrics
@@ -2488,28 +2653,39 @@ Item {
         anchor.onAnchoring: {
           var x = barMenu.pointX - barMenu.implicitWidth / 2
           anchor.rect.x = Math.round(Math.max(barMenu.menuMargin, Math.min(x, panel.width - barMenu.implicitWidth - barMenu.menuMargin)))
-          anchor.rect.y = Math.round(Math.max(barMenu.menuMargin, barMenu.frameTop - barMenu.implicitHeight - barMenu.menuMargin))
+          anchor.rect.y = Math.round(Math.max(barMenu.menuMargin, barMenu.frameTop - barMenu.implicitHeight - barMenu.menuMargin + root.menuShadow))
         }
 
-        implicitWidth: rowWidth
-        implicitHeight: barMenuColumn.implicitHeight + Style.spacing.xxs * 2
+        implicitWidth: rowWidth + root.menuShadow * 2
+        implicitHeight: barMenuColumn.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
 
         onVisibleChanged: revealState.set("barMenu", barMenu.visible)
         onClosed: barMenu.close()
 
+        RectangularShadow {
+          anchors.fill: barFrame
+          radius: barFrame.radius
+          blur: root.menuShadow
+          offset.y: Style.space(4)
+          spread: 0
+          color: Qt.rgba(0, 0, 0, 0.6)
+        }
+
         Rectangle {
+          id: barFrame
           anchors.fill: parent
-          radius: Style.cornerRadius
+          anchors.margins: root.menuShadow
+          radius: root.menuRadius
           color: root.colPopupBackground
           border.width: Style.normalBorderWidth
-          border.color: root.colPopupBorder
+          border.color: root.colHairline
 
           Column {
             id: barMenuColumn
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.margins: Style.spacing.xxs
+            anchors.margins: root.menuPad
 
             Repeater {
               model: barMenu.rows
@@ -2522,29 +2698,29 @@ Item {
                 readonly property bool newGroup: index > 0 && barMenu.rows[index - 1].group !== modelData.group
 
                 width: barMenuColumn.width
-                height: Style.spacing.popupRowHeight + (newGroup ? 5 : 0)
+                height: root.menuRowHeight + (newGroup ? root.menuPad * 2 + 1 : 0)
 
                 Rectangle {
                   visible: barRow.newGroup
                   anchors.top: parent.top
-                  anchors.topMargin: 2
+                  anchors.topMargin: root.menuPad
                   anchors.left: parent.left
                   anchors.right: parent.right
                   height: 1
-                  color: Util.alpha(root.colPopupBorder, 0.8)
+                  color: root.colHairline
                 }
 
                 Rectangle {
                   anchors.bottom: parent.bottom
                   width: parent.width
-                  height: Style.spacing.popupRowHeight
-                  radius: Style.cornerRadius
+                  height: root.menuRowHeight
+                  radius: root.menuRowRadius
                   color: barRowMouse.containsMouse ? Style.hoverFillFor(root.colForeground, previewPopup.accentColor) : "transparent"
 
                   Text {
                     textFormat: Text.PlainText
                     anchors.left: parent.left
-                    anchors.leftMargin: Style.spacing.controlPaddingX
+                    anchors.leftMargin: Style.space(12)
                     anchors.verticalCenter: parent.verticalCenter
                     text: barRow.modelData.checked ? "\u2713" : ""
                     color: previewPopup.textColor
@@ -2557,8 +2733,8 @@ Item {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Style.spacing.controlPaddingX + Style.space(22)
-                    anchors.rightMargin: Style.spacing.controlPaddingX
+                    anchors.leftMargin: Style.space(12) + Style.space(22)
+                    anchors.rightMargin: Style.space(12)
                     elide: Text.ElideRight
                     text: barRow.modelData.label
                     color: previewPopup.textColor
@@ -2616,7 +2792,8 @@ Item {
         // Sized to its longest row, since app actions ("New Private Window")
         // and window rows ("Move to scratchpad") vary; see barMenu.rowWidth.
         readonly property int rowWidth: Math.max(Style.space(160),
-          Math.ceil(contextMenuMetrics.advanceWidth) + Style.spacing.controlPaddingX * 2 + Style.spacing.xxs * 2 + Style.space(12))
+          Math.ceil(contextMenuMetrics.advanceWidth) + Style.space(12) * 2 + root.menuPad * 2 + Style.space(12)
+          + (contextMenu.rows.some(function (r) { return r.icon || r.glyph }) ? Style.space(24) : 0))
 
         TextMetrics {
           id: contextMenuMetrics
@@ -2648,7 +2825,8 @@ Item {
               })
             }
             previewRows.push({
-              label: "Close Window",
+              label: "Close window",
+              glyph: "\u{f0156}",
               enabled: true,
               group: 2,
               trigger: function () { root.closeWindow(win.id) },
@@ -2659,20 +2837,39 @@ Item {
           if (!item) return []
           var menu = DockModel.menuFor(item)
           var appId = root.menuAppId(item)
-          var list = [
-            {
-              label: menu.pinned ? "Unpin" : "Pin",
-              enabled: menu.canPin,
-              group: 0,
-              trigger: function () { root.togglePin(appId, menu.pinned) },
-            },
-            {
-              label: "New Window",
-              enabled: menu.canLaunch,
-              group: 0,
-              trigger: function () { root.launchApp(item.app) },
-            },
-          ]
+          // A Pin with no Windows, as in Windows 11: the App's own actions,
+          // then a row with its icon and name that starts it, then
+          // "Unpin from taskbar".
+          if (item.kind === "pin") {
+            var pinRows = []
+            var pinActions = item.app && item.app.actions ? item.app.actions : []
+            for (var a = 0; a < pinActions.length; a++) {
+              pinRows.push({
+                label: pinActions[a].name,
+                enabled: true,
+                group: 0,
+                trigger: (function (action) { return function () { action.execute() } })(pinActions[a]),
+              })
+            }
+            if (item.app) {
+              pinRows.push({
+                label: root.pinTooltipText(item),
+                icon: item.app.icon,
+                enabled: true,
+                group: 1,
+                trigger: function () { root.launchApp(item.app) },
+              })
+            }
+            pinRows.push({
+              label: "Unpin from taskbar",
+              glyph: "\u{f0404}",
+              enabled: true,
+              group: 1,
+              trigger: function () { root.togglePin(appId, true) },
+            })
+            return pinRows
+          }
+          var list = []
           var appActions = item.app && item.app.actions ? item.app.actions : []
           for (var i = 0; i < appActions.length; i++) {
             list.push({
@@ -2693,13 +2890,33 @@ Item {
               })
             }
           }
+          // As in Windows 11: the App's icon and name (starts another
+          // instance), then Pin to / Unpin from taskbar. A Letter Tile
+          // Window has no App, so it has neither.
+          if (item.app) {
+            list.push({
+              label: root.pinTooltipText(item),
+              icon: item.app.icon,
+              enabled: menu.canLaunch,
+              group: 2,
+              trigger: function () { root.launchApp(item.app) },
+            })
+            list.push({
+              label: menu.pinned ? "Unpin from taskbar" : "Pin to taskbar",
+              glyph: menu.pinned ? "\u{f0404}" : "\u{f0403}",
+              enabled: menu.canPin,
+              group: 2,
+              trigger: function () { root.togglePin(appId, menu.pinned) },
+            })
+          }
           // A Group Item's menu acts on the whole group: the window-state
           // rows are left out and Close closes every Window in it.
           var grouped = item.count > 1
           list.push({
-            label: grouped ? "Close all " + item.count + " windows" : "Close Window",
+            label: grouped ? "Close all windows" : "Close window",
+            glyph: "\u{f0156}",
             enabled: menu.canClose,
-            group: 2,
+            group: 3,
             trigger: function () {
               var windows = grouped ? item.windows : [item.window]
               for (var w = 0; w < windows.length; w++) root.closeWindow(windows[w].id)
@@ -2728,8 +2945,8 @@ Item {
 
         visible: false
         color: "transparent"
-        implicitWidth: contextMenu.rowWidth
-        implicitHeight: menuColumn.implicitHeight
+        implicitWidth: contextMenu.rowWidth + root.menuShadow * 2
+        implicitHeight: menuColumn.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
 
         onVisibleChanged: {
           revealState.set("menu", contextMenu.visible)
@@ -2774,8 +2991,8 @@ Item {
             if (contextMenu.forPreview) {
               var px = Math.max(contextMenu.menuMargin,
                 Math.min(contextMenu.previewPointX, panel.width - contextMenu.implicitWidth - contextMenu.menuMargin))
-              menuAnchor.rect.x = Math.round(px)
-              menuAnchor.rect.y = Math.round(Math.max(contextMenu.menuMargin, contextMenu.previewPointY - contextMenu.implicitHeight))
+              menuAnchor.rect.x = Math.round(px - root.menuShadow)
+              menuAnchor.rect.y = Math.round(Math.max(contextMenu.menuMargin, contextMenu.previewPointY - contextMenu.implicitHeight + root.menuShadow))
               return
             }
             if (!contextMenu.anchorItem || !contextMenu.anchorWindow) return
@@ -2783,7 +3000,7 @@ Item {
             var popupWidth = contextMenu.implicitWidth
             var popupHeight = contextMenu.implicitHeight
             var localX = target.width / 2 - popupWidth / 2
-            var localY = -popupHeight - contextMenu.menuMargin
+            var localY = -popupHeight - contextMenu.menuMargin + root.menuShadow
             var point = contextMenu.anchorWindow.contentItem.mapFromItem(target, localX, localY)
             point.x = Math.max(contextMenu.menuMargin, Math.min(point.x, contextMenu.anchorWindow.width - popupWidth - contextMenu.menuMargin))
             point.y = Math.max(contextMenu.menuMargin, point.y)
@@ -2792,12 +3009,23 @@ Item {
           }
         }
 
+        RectangularShadow {
+          anchors.fill: menuFrame
+          radius: menuFrame.radius
+          blur: root.menuShadow
+          offset.y: Style.space(4)
+          spread: 0
+          color: Qt.rgba(0, 0, 0, 0.6)
+        }
+
         Rectangle {
+          id: menuFrame
           anchors.fill: parent
-          radius: Style.cornerRadius
+          anchors.margins: root.menuShadow
+          radius: root.menuRadius
           color: root.colPopupBackground
           border.width: Style.normalBorderWidth
-          border.color: root.colPopupBorder
+          border.color: root.colHairline
 
           HoverHandler {
             id: menuHover
@@ -2808,7 +3036,7 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.margins: Style.spacing.xxs
+            anchors.margins: root.menuPad
 
             Repeater {
               model: contextMenu.rows
@@ -2821,37 +3049,68 @@ Item {
                 readonly property bool newGroup: index > 0 && contextMenu.rows[index - 1].group !== modelData.group
 
                 width: menuColumn.width
-                height: Style.spacing.popupRowHeight + (newGroup ? 5 : 0)
+                height: root.menuRowHeight + (newGroup ? root.menuPad * 2 + 1 : 0)
 
                 Rectangle {
                   visible: menuRow.newGroup
                   anchors.top: parent.top
-                  anchors.topMargin: 2
+                  anchors.topMargin: root.menuPad
                   anchors.left: parent.left
                   anchors.right: parent.right
                   height: 1
-                  color: Util.alpha(root.colPopupBorder, 0.8)
+                  color: root.colHairline
                 }
 
                 Rectangle {
                   id: menuRowBody
                   anchors.bottom: parent.bottom
                   width: parent.width
-                  height: Style.spacing.popupRowHeight
-                  radius: Style.cornerRadius
+                  height: root.menuRowHeight
+                  radius: root.menuRowRadius
                   // containsMouse, not a HoverHandler, to match Button.qml's
                   // own hover-fill convention.
                   color: menuRow.modelData.enabled && rowMouse.containsMouse
                     ? Style.hoverFillFor(root.colForeground, previewPopup.accentColor)
                     : "transparent"
 
+                  // The App's icon, or a glyph, for the rows that have one.
+                  Item {
+                    id: menuRowIcon
+                    visible: !!menuRow.modelData.icon || !!menuRow.modelData.glyph
+                    anchors.left: parent.left
+                    anchors.leftMargin: Style.space(12)
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Style.space(16)
+                    height: Style.space(16)
+
+                    Image {
+                      visible: !!menuRow.modelData.icon && source.toString() !== ""
+                      anchors.fill: parent
+                      fillMode: Image.PreserveAspectFit
+                      asynchronous: true
+                      sourceSize.width: width * Screen.devicePixelRatio
+                      sourceSize.height: height * Screen.devicePixelRatio
+                      source: menuRow.modelData.icon ? root.iconSource(menuRow.modelData.icon) : ""
+                    }
+
+                    Text {
+                      textFormat: Text.PlainText
+                      visible: !!menuRow.modelData.glyph
+                      anchors.centerIn: parent
+                      text: menuRow.modelData.glyph || ""
+                      color: previewPopup.textColor
+                      font.family: "JetBrainsMono Nerd Font"
+                      font.pixelSize: Style.space(14)
+                    }
+                  }
+
                   Text {
                     textFormat: Text.PlainText
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Style.spacing.controlPaddingX
-                    anchors.rightMargin: Style.spacing.controlPaddingX
+                    anchors.leftMargin: Style.space(12) + (menuRowIcon.visible ? Style.space(16) + Style.space(8) : 0)
+                    anchors.rightMargin: Style.space(12)
                     elide: Text.ElideRight
                     text: menuRow.modelData.label
                     color: menuRow.modelData.enabled ? previewPopup.textColor : root.colMuted
