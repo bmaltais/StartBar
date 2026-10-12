@@ -7,6 +7,7 @@
 // The rules themselves live in the JS modules imported below.
 import QtQuick
 import QtQml.Models
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -72,6 +73,21 @@ Item {
   readonly property color colPopupBackground: scheme ? scheme.background : Color.popups.background
   readonly property color colPopupText: scheme ? scheme.foreground : Color.popups.text
   readonly property color colPopupBorder: scheme ? scheme.border : Color.popups.border
+
+  // How every menu and window the plugin raises looks, after Windows 11:
+  // rounded corners (never sharper than the Start menu's), a hairline edge in
+  // the text colour instead of the theme's accent line, a quiet hover fill.
+  // Style.cornerRadius follows Hyprland's rounding, often 0.
+  readonly property int menuRadius: Math.max(Style.cornerRadius, Style.space(8))
+  readonly property int menuRowRadius: Math.max(Style.cornerRadius, Style.space(4))
+  readonly property int menuPad: Style.space(4)
+  readonly property int menuRowHeight: Style.space(32)
+  // A popup window is only as big as it is drawn, so its shadow needs room
+  // of its own: the popups are this much larger on every side and the menu
+  // is drawn inset, with the anchor moved out by the same amount.
+  readonly property int menuShadow: Style.space(14)
+  readonly property color colHairline: Util.alpha(colPopupText, 0.12)
+  readonly property color colRowHover: Util.alpha(colPopupText, 0.08)
 
   // Settings and Pins (docs/SPEC.md "Configuration"): read from the Dock's
   // own entry in the shell config's plugins[] array and written back
@@ -639,8 +655,8 @@ Item {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
     exclusionMode: ExclusionMode.Ignore
 
-    implicitWidth: Style.space(640)
-    implicitHeight: Math.min(Style.space(760), (root.settingsScreen ? root.settingsScreen.height : 900) - Style.space(80))
+    implicitWidth: Style.space(640) + root.menuShadow * 2
+    implicitHeight: Math.min(Style.space(760), (root.settingsScreen ? root.settingsScreen.height : 900) - Style.space(80)) + root.menuShadow * 2
 
     onVisibleChanged: if (!visible) settingsWindow.confirmingReset = false
 
@@ -660,12 +676,22 @@ Item {
       onTriggered: settingsWindow.confirmingReset = false
     }
 
+    RectangularShadow {
+      anchors.fill: settingsFrame
+      radius: settingsFrame.radius
+      blur: root.menuShadow
+      offset.y: Style.space(4)
+      color: Qt.rgba(0, 0, 0, 0.6)
+    }
+
     Rectangle {
+      id: settingsFrame
       anchors.fill: parent
-      radius: Style.cornerRadius
-      color: Color.popups.background
+      anchors.margins: root.menuShadow
+      radius: root.menuRadius
+      color: root.colPopupBackground
       border.width: Style.normalBorderWidth
-      border.color: Color.popups.border
+      border.color: root.colHairline
       focus: true
       Keys.onEscapePressed: settingsWindow.visible = false
 
@@ -683,7 +709,7 @@ Item {
           anchors.leftMargin: Style.spacing.lg
           anchors.verticalCenter: parent.verticalCenter
           text: "Taskbar settings"
-          color: Color.popups.text
+          color: root.colPopupText
           font.family: Style.font.family
           font.pixelSize: Style.font.body + 3
           font.bold: true
@@ -695,14 +721,14 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           width: Style.space(30)
           height: width
-          radius: Style.cornerRadius
-          color: closeSettingsMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : "transparent"
+          radius: root.menuRowRadius
+          color: closeSettingsMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : "transparent"
 
           Text {
             textFormat: Text.PlainText
             anchors.centerIn: parent
             text: "✕"
-            color: Color.popups.text
+            color: root.colPopupText
             font.pixelSize: Style.font.body
           }
 
@@ -747,7 +773,7 @@ Item {
                 topPadding: Style.spacing.md
                 bottomPadding: Style.spacing.xs
                 text: groupBlock.modelData.title
-                color: Color.accent
+                color: root.colPopupText
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body
                 font.bold: true
@@ -773,7 +799,7 @@ Item {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     height: 1
-                    color: Util.alpha(Color.popups.border, 0.5)
+                    color: Util.alpha(root.colHairline, 0.5)
                   }
 
                   Column {
@@ -788,7 +814,7 @@ Item {
                       width: parent.width
                       elide: Text.ElideRight
                       text: fieldRow.field.label
-                      color: Color.popups.text
+                      color: root.colPopupText
                       font.family: Style.font.family
                       font.pixelSize: Style.font.body
                     }
@@ -799,7 +825,7 @@ Item {
                       width: parent.width
                       wrapMode: Text.WordWrap
                       text: fieldRow.field.hint || ""
-                      color: Util.alpha(Color.popups.text, 0.55)
+                      color: Util.alpha(root.colPopupText, 0.55)
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption
                     }
@@ -857,7 +883,7 @@ Item {
           anchors.leftMargin: Style.spacing.lg
           anchors.verticalCenter: parent.verticalCenter
           text: "Changes apply instantly"
-          color: Util.alpha(Color.popups.text, 0.55)
+          color: Util.alpha(root.colPopupText, 0.55)
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }
@@ -868,17 +894,17 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           width: resetLabel.implicitWidth + Style.spacing.lg * 2
           height: Style.space(32)
-          radius: Style.cornerRadius
+          radius: root.menuRowRadius
           color: settingsWindow.confirmingReset
             ? Util.alpha(Color.urgent, 0.5)
-            : (resetMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08))
+            : (resetMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : Util.alpha(root.colPopupText, 0.08))
 
           Text {
             textFormat: Text.PlainText
             id: resetLabel
             anchors.centerIn: parent
             text: settingsWindow.confirmingReset ? "Click again to reset everything" : "Reset to defaults"
-            color: Color.popups.text
+            color: root.colPopupText
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -917,7 +943,7 @@ Item {
         width: implicitWidth
         height: implicitHeight
         radius: height / 2
-        color: sw.value ? Color.accent : Util.alpha(Color.popups.text, 0.25)
+        color: sw.value ? root.colAccent : Util.alpha(root.colPopupText, 0.25)
 
         Rectangle {
           width: parent.height - 6
@@ -925,7 +951,7 @@ Item {
           radius: width / 2
           y: 3
           x: sw.value ? parent.width - width - 3 : 3
-          color: Color.popups.background
+          color: root.colPopupBackground
 
           Behavior on x { NumberAnimation { duration: 100 } }
         }
@@ -957,15 +983,15 @@ Item {
             readonly property bool selected: choices.value === choice.modelData.value
             width: choiceLabel.implicitWidth + Style.spacing.lg * 2
             height: Style.space(28)
-            radius: Style.cornerRadius
-            color: choice.selected ? Color.accent : (choiceMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08))
+            radius: root.menuRowRadius
+            color: choice.selected ? root.colAccent : (choiceMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : Util.alpha(root.colPopupText, 0.08))
 
             Text {
               textFormat: Text.PlainText
               id: choiceLabel
               anchors.centerIn: parent
               text: choice.modelData.label
-              color: choice.selected ? Color.background : Color.popups.text
+              color: choice.selected ? root.colPopupBackground : root.colPopupText
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -1000,9 +1026,9 @@ Item {
         Rectangle {
           width: Style.space(28)
           height: width
-          radius: Style.cornerRadius
-          color: minusMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
-          Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "−"; color: Color.popups.text; font.pixelSize: Style.font.body }
+          radius: root.menuRowRadius
+          color: minusMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : Util.alpha(root.colPopupText, 0.08)
+          Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "−"; color: root.colPopupText; font.pixelSize: Style.font.body }
           MouseArea { id: minusMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: stepper.step(-1) }
         }
 
@@ -1014,7 +1040,7 @@ Item {
           horizontalAlignment: Text.AlignHCenter
           verticalAlignment: Text.AlignVCenter
           text: stepper.value + (stepper.field && stepper.field.unit ? " " + stepper.field.unit : "")
-          color: Color.popups.text
+          color: root.colPopupText
           font.family: Style.font.family
           font.pixelSize: Style.font.body
         }
@@ -1022,9 +1048,9 @@ Item {
         Rectangle {
           width: Style.space(28)
           height: width
-          radius: Style.cornerRadius
-          color: plusMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
-          Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "+"; color: Color.popups.text; font.pixelSize: Style.font.body }
+          radius: root.menuRowRadius
+          color: plusMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : Util.alpha(root.colPopupText, 0.08)
+          Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "+"; color: root.colPopupText; font.pixelSize: Style.font.body }
           MouseArea { id: plusMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: stepper.step(1) }
         }
       }
@@ -1053,13 +1079,13 @@ Item {
             width: parent.width
             height: 4
             radius: 2
-            color: Util.alpha(Color.popups.text, 0.25)
+            color: Util.alpha(root.colPopupText, 0.25)
 
             Rectangle {
               width: slider.field ? parent.width * (slider.shown - slider.field.min) / (slider.field.max - slider.field.min) : 0
               height: parent.height
               radius: 2
-              color: Color.accent
+              color: root.colAccent
             }
           }
 
@@ -1068,7 +1094,7 @@ Item {
             width: Style.space(14)
             height: width
             radius: width / 2
-            color: Color.accent
+            color: root.colAccent
             x: slider.field ? (track.width - width) * (slider.shown - slider.field.min) / (slider.field.max - slider.field.min) : 0
           }
 
@@ -1097,7 +1123,7 @@ Item {
           height: Style.space(24)
           verticalAlignment: Text.AlignVCenter
           text: Math.round(slider.shown * 100) + "%"
-          color: Color.popups.text
+          color: root.colPopupText
           font.family: Style.font.family
           font.pixelSize: Style.font.body
         }
@@ -1115,17 +1141,17 @@ Item {
         implicitHeight: Style.space(30)
         width: implicitWidth
         height: implicitHeight
-        radius: Style.cornerRadius
-        color: Util.alpha(Color.popups.text, 0.08)
+        radius: root.menuRowRadius
+        color: Util.alpha(root.colPopupText, 0.08)
         border.width: input.activeFocus ? 1 : 0
-        border.color: Color.accent
+        border.color: root.colAccent
 
         PlainField {
           id: input
           anchors.fill: parent
           anchors.leftMargin: Style.spacing.md
           anchors.rightMargin: Style.spacing.md
-          color: Color.popups.text
+          color: root.colPopupText
           fontFamily: Style.font.family
           fontPixelSize: Style.font.body
           text: textBox.value === undefined || textBox.value === null ? "" : String(textBox.value)
@@ -1172,7 +1198,7 @@ Item {
           textFormat: Text.PlainText
           visible: listBox.isDefault
           text: "Default: Home and your Documents, Downloads, Pictures, Music and Videos folders"
-          color: Util.alpha(Color.popups.text, 0.7)
+          color: Util.alpha(root.colPopupText, 0.7)
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }
@@ -1189,17 +1215,17 @@ Item {
             Rectangle {
               width: listBox.width - Style.space(34)
               height: Style.space(30)
-              radius: Style.cornerRadius
-              color: Util.alpha(Color.popups.text, 0.08)
+              radius: root.menuRowRadius
+              color: Util.alpha(root.colPopupText, 0.08)
               border.width: placeInput.activeFocus ? 1 : 0
-              border.color: Color.accent
+              border.color: root.colAccent
 
               PlainField {
                 id: placeInput
                 anchors.fill: parent
                 anchors.leftMargin: Style.spacing.md
                 anchors.rightMargin: Style.spacing.md
-                color: Color.popups.text
+                color: root.colPopupText
                 fontFamily: Style.font.family
                 fontPixelSize: Style.font.body
                 text: placeEntry.modelData
@@ -1210,9 +1236,9 @@ Item {
             Rectangle {
               width: Style.space(28)
               height: width
-              radius: Style.cornerRadius
+              radius: root.menuRowRadius
               color: removeMouse.containsMouse ? Util.alpha(Color.urgent, 0.5) : "transparent"
-              Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "✕"; color: Color.popups.text; font.pixelSize: Style.font.caption }
+              Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "✕"; color: root.colPopupText; font.pixelSize: Style.font.caption }
               MouseArea { id: removeMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: listBox.removeAt(placeEntry.index) }
             }
           }
@@ -1224,14 +1250,14 @@ Item {
           Rectangle {
             width: addLabel.implicitWidth + Style.spacing.lg * 2
             height: Style.space(28)
-            radius: Style.cornerRadius
-            color: addMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
+            radius: root.menuRowRadius
+            color: addMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : Util.alpha(root.colPopupText, 0.08)
             Text {
               textFormat: Text.PlainText
               id: addLabel
               anchors.centerIn: parent
               text: listBox.isDefault ? "Customize" : "Add folder"
-              color: Color.popups.text
+              color: root.colPopupText
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -1251,14 +1277,14 @@ Item {
             visible: !listBox.isDefault
             width: useDefaultLabel.implicitWidth + Style.spacing.lg * 2
             height: Style.space(28)
-            radius: Style.cornerRadius
-            color: useDefaultMouse.containsMouse ? Style.hoverFillFor(Color.foreground, Color.accent) : Util.alpha(Color.popups.text, 0.08)
+            radius: root.menuRowRadius
+            color: useDefaultMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : Util.alpha(root.colPopupText, 0.08)
             Text {
               textFormat: Text.PlainText
               id: useDefaultLabel
               anchors.centerIn: parent
               text: "Use defaults"
-              color: Color.popups.text
+              color: root.colPopupText
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -2248,10 +2274,10 @@ Item {
           Rectangle {
             width: parent.width
             height: parent.height
-            radius: Style.cornerRadius
+            radius: root.menuRadius
             color: root.colPopupBackground
             border.width: Style.normalBorderWidth
-            border.color: root.colPopupBorder
+            border.color: root.colHairline
             y: (1 - previewPopup.slide) * height
 
             HoverHandler {
@@ -2459,7 +2485,7 @@ Item {
         // nothing is cut off however long a row's label is; never narrower
         // than a comfortable minimum.
         readonly property int rowWidth: Math.max(Style.space(190),
-          Math.ceil(barMenuMetrics.advanceWidth) + Style.space(22) + Style.spacing.controlPaddingX * 2 + Style.spacing.xxs * 2 + Style.space(12))
+          Math.ceil(barMenuMetrics.advanceWidth) + Style.space(22) + Style.space(12) * 2 + root.menuPad * 2 + Style.space(12))
 
         TextMetrics {
           id: barMenuMetrics
@@ -2488,28 +2514,39 @@ Item {
         anchor.onAnchoring: {
           var x = barMenu.pointX - barMenu.implicitWidth / 2
           anchor.rect.x = Math.round(Math.max(barMenu.menuMargin, Math.min(x, panel.width - barMenu.implicitWidth - barMenu.menuMargin)))
-          anchor.rect.y = Math.round(Math.max(barMenu.menuMargin, barMenu.frameTop - barMenu.implicitHeight - barMenu.menuMargin))
+          anchor.rect.y = Math.round(Math.max(barMenu.menuMargin, barMenu.frameTop - barMenu.implicitHeight - barMenu.menuMargin + root.menuShadow))
         }
 
-        implicitWidth: rowWidth
-        implicitHeight: barMenuColumn.implicitHeight + Style.spacing.xxs * 2
+        implicitWidth: rowWidth + root.menuShadow * 2
+        implicitHeight: barMenuColumn.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
 
         onVisibleChanged: revealState.set("barMenu", barMenu.visible)
         onClosed: barMenu.close()
 
+        RectangularShadow {
+          anchors.fill: barFrame
+          radius: barFrame.radius
+          blur: root.menuShadow
+          offset.y: Style.space(4)
+          spread: 0
+          color: Qt.rgba(0, 0, 0, 0.6)
+        }
+
         Rectangle {
+          id: barFrame
           anchors.fill: parent
-          radius: Style.cornerRadius
+          anchors.margins: root.menuShadow
+          radius: root.menuRadius
           color: root.colPopupBackground
           border.width: Style.normalBorderWidth
-          border.color: root.colPopupBorder
+          border.color: root.colHairline
 
           Column {
             id: barMenuColumn
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.margins: Style.spacing.xxs
+            anchors.margins: root.menuPad
 
             Repeater {
               model: barMenu.rows
@@ -2522,29 +2559,29 @@ Item {
                 readonly property bool newGroup: index > 0 && barMenu.rows[index - 1].group !== modelData.group
 
                 width: barMenuColumn.width
-                height: Style.spacing.popupRowHeight + (newGroup ? 5 : 0)
+                height: root.menuRowHeight + (newGroup ? root.menuPad * 2 + 1 : 0)
 
                 Rectangle {
                   visible: barRow.newGroup
                   anchors.top: parent.top
-                  anchors.topMargin: 2
+                  anchors.topMargin: root.menuPad
                   anchors.left: parent.left
                   anchors.right: parent.right
                   height: 1
-                  color: Util.alpha(root.colPopupBorder, 0.8)
+                  color: root.colHairline
                 }
 
                 Rectangle {
                   anchors.bottom: parent.bottom
                   width: parent.width
-                  height: Style.spacing.popupRowHeight
-                  radius: Style.cornerRadius
+                  height: root.menuRowHeight
+                  radius: root.menuRowRadius
                   color: barRowMouse.containsMouse ? Style.hoverFillFor(root.colForeground, previewPopup.accentColor) : "transparent"
 
                   Text {
                     textFormat: Text.PlainText
                     anchors.left: parent.left
-                    anchors.leftMargin: Style.spacing.controlPaddingX
+                    anchors.leftMargin: Style.space(12)
                     anchors.verticalCenter: parent.verticalCenter
                     text: barRow.modelData.checked ? "\u2713" : ""
                     color: previewPopup.textColor
@@ -2557,8 +2594,8 @@ Item {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Style.spacing.controlPaddingX + Style.space(22)
-                    anchors.rightMargin: Style.spacing.controlPaddingX
+                    anchors.leftMargin: Style.space(12) + Style.space(22)
+                    anchors.rightMargin: Style.space(12)
                     elide: Text.ElideRight
                     text: barRow.modelData.label
                     color: previewPopup.textColor
@@ -2616,7 +2653,7 @@ Item {
         // Sized to its longest row, since app actions ("New Private Window")
         // and window rows ("Move to scratchpad") vary; see barMenu.rowWidth.
         readonly property int rowWidth: Math.max(Style.space(160),
-          Math.ceil(contextMenuMetrics.advanceWidth) + Style.spacing.controlPaddingX * 2 + Style.spacing.xxs * 2 + Style.space(12))
+          Math.ceil(contextMenuMetrics.advanceWidth) + Style.space(12) * 2 + root.menuPad * 2 + Style.space(12))
 
         TextMetrics {
           id: contextMenuMetrics
@@ -2728,8 +2765,8 @@ Item {
 
         visible: false
         color: "transparent"
-        implicitWidth: contextMenu.rowWidth
-        implicitHeight: menuColumn.implicitHeight
+        implicitWidth: contextMenu.rowWidth + root.menuShadow * 2
+        implicitHeight: menuColumn.implicitHeight + root.menuShadow * 2
 
         onVisibleChanged: {
           revealState.set("menu", contextMenu.visible)
@@ -2774,8 +2811,8 @@ Item {
             if (contextMenu.forPreview) {
               var px = Math.max(contextMenu.menuMargin,
                 Math.min(contextMenu.previewPointX, panel.width - contextMenu.implicitWidth - contextMenu.menuMargin))
-              menuAnchor.rect.x = Math.round(px)
-              menuAnchor.rect.y = Math.round(Math.max(contextMenu.menuMargin, contextMenu.previewPointY - contextMenu.implicitHeight))
+              menuAnchor.rect.x = Math.round(px - root.menuShadow)
+              menuAnchor.rect.y = Math.round(Math.max(contextMenu.menuMargin, contextMenu.previewPointY - contextMenu.implicitHeight + root.menuShadow))
               return
             }
             if (!contextMenu.anchorItem || !contextMenu.anchorWindow) return
@@ -2783,7 +2820,7 @@ Item {
             var popupWidth = contextMenu.implicitWidth
             var popupHeight = contextMenu.implicitHeight
             var localX = target.width / 2 - popupWidth / 2
-            var localY = -popupHeight - contextMenu.menuMargin
+            var localY = -popupHeight - contextMenu.menuMargin + root.menuShadow
             var point = contextMenu.anchorWindow.contentItem.mapFromItem(target, localX, localY)
             point.x = Math.max(contextMenu.menuMargin, Math.min(point.x, contextMenu.anchorWindow.width - popupWidth - contextMenu.menuMargin))
             point.y = Math.max(contextMenu.menuMargin, point.y)
@@ -2792,12 +2829,23 @@ Item {
           }
         }
 
+        RectangularShadow {
+          anchors.fill: menuFrame
+          radius: menuFrame.radius
+          blur: root.menuShadow
+          offset.y: Style.space(4)
+          spread: 0
+          color: Qt.rgba(0, 0, 0, 0.6)
+        }
+
         Rectangle {
+          id: menuFrame
           anchors.fill: parent
-          radius: Style.cornerRadius
+          anchors.margins: root.menuShadow
+          radius: root.menuRadius
           color: root.colPopupBackground
           border.width: Style.normalBorderWidth
-          border.color: root.colPopupBorder
+          border.color: root.colHairline
 
           HoverHandler {
             id: menuHover
@@ -2808,7 +2856,7 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.margins: Style.spacing.xxs
+            anchors.margins: root.menuPad
 
             Repeater {
               model: contextMenu.rows
@@ -2821,24 +2869,24 @@ Item {
                 readonly property bool newGroup: index > 0 && contextMenu.rows[index - 1].group !== modelData.group
 
                 width: menuColumn.width
-                height: Style.spacing.popupRowHeight + (newGroup ? 5 : 0)
+                height: root.menuRowHeight + (newGroup ? root.menuPad * 2 + 1 : 0)
 
                 Rectangle {
                   visible: menuRow.newGroup
                   anchors.top: parent.top
-                  anchors.topMargin: 2
+                  anchors.topMargin: root.menuPad
                   anchors.left: parent.left
                   anchors.right: parent.right
                   height: 1
-                  color: Util.alpha(root.colPopupBorder, 0.8)
+                  color: root.colHairline
                 }
 
                 Rectangle {
                   id: menuRowBody
                   anchors.bottom: parent.bottom
                   width: parent.width
-                  height: Style.spacing.popupRowHeight
-                  radius: Style.cornerRadius
+                  height: root.menuRowHeight
+                  radius: root.menuRowRadius
                   // containsMouse, not a HoverHandler, to match Button.qml's
                   // own hover-fill convention.
                   color: menuRow.modelData.enabled && rowMouse.containsMouse
@@ -2850,8 +2898,8 @@ Item {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Style.spacing.controlPaddingX
-                    anchors.rightMargin: Style.spacing.controlPaddingX
+                    anchors.leftMargin: Style.space(12)
+                    anchors.rightMargin: Style.space(12)
                     elide: Text.ElideRight
                     text: menuRow.modelData.label
                     color: menuRow.modelData.enabled ? previewPopup.textColor : root.colMuted
