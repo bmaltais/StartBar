@@ -4,7 +4,7 @@
 #   scripts/screenshots.sh [--only NAME,NAME] [--install] [--out DIR] [--monitor NAME] [--no-restart]
 #
 #   --only      just these: taskbar, start-menu, start-menu-light, start-menu-dark,
-#               search, settings, right-click, preview
+#               search, settings, right-click, pin-menu, window-menu, preview
 #   --install   copy the results over screenshots/ (default: leave them in --out
 #               for a look, and print what each would replace)
 #   --out DIR   where the images go (default: a new directory under $TMPDIR or /tmp)
@@ -224,6 +224,82 @@ if wanted right-click; then
   "$pointer" left
   sleep 0.5
   override "$readme_state"
+fi
+
+# Item menus: right click an Item and crop to what appeared. pin-menu is the
+# first Pin with no Windows (its menu is short: the App's actions, its icon and
+# name, Unpin from taskbar); window-menu is a throwaway foot window posing as btop, whose Item
+# is not pinned (the App's actions, the window's state, Close Window, then its
+# icon and name and Pin to taskbar). The menu's crop is padded back like the
+# Bar menu's.
+item_menu() {
+  local name=$1 x=$2 before=$3
+  at "$x" $((mh - 26)); sleep 0.6
+  "$pointer" right >/dev/null
+  sleep 1
+  full "$tmp/im-after.png"
+  # Only the region over the Item: a terminal's blinking cursor elsewhere on
+  # the screen would otherwise count as a change.
+  local rx=$(( x > 160 ? x - 160 : 0 )) ry=$((mh - 700))
+  magick "$before" -crop "520x700+${rx}+${ry}" +repage "$tmp/im-b.png"
+  magick "$tmp/im-after.png" -crop "520x700+${rx}+${ry}" +repage "$tmp/im-a.png"
+  read -r bx by bw bh < <(changed_box "$tmp/im-b.png" "$tmp/im-a.png")
+  bx=$((bx + rx)); by=$((by + ry))
+  # Keeps the crop only for a menu above the Dock (not a Preview or a tooltip).
+  if [[ ${bh:-0} -lt 60 || ${by:-9999} -gt $((mh - 120)) ]]; then
+    return 1
+  fi
+  magick "$tmp/im-after.png" -crop "$((bw + 10))x$((bh + 6))+$((bx - 5))+$((by - 3))" +repage "$tmp/$name.png"
+  menu_h=$bh
+  return 0
+}
+
+if wanted pin-menu; then
+  at $((mw / 2)) 200; sleep 0.8
+  at $((mw / 2)) $((mh - 2)); sleep 1.2
+  full "$tmp/im-away.png"
+  found=false
+  for slot in $(seq 1 10); do
+    at $((mw / 2)) $((mh - 2)); sleep 0.5
+    menu_h=0
+    if item_menu pin-menu $((31 + 46 * slot)) "$tmp/im-away.png" && [[ $menu_h -lt 190 ]]; then
+      found=true
+      break
+    fi
+    # Close whatever opened (a Window Item's menu) and try the next slot.
+    at $((mw / 2)) 200; "$pointer" left >/dev/null; sleep 0.6
+  done
+  if $found; then keep "$tmp/pin-menu.png" pin-menu; else echo "screenshots: found no Pin without Windows, skipping pin-menu" >&2; fi
+  at $((mw / 2)) 200; "$pointer" left >/dev/null; sleep 0.5
+fi
+
+if wanted window-menu; then
+  at $((mw / 2)) $((mh - 2)); sleep 1.2
+  foot --app-id=btop --title="Window one" -o colors-dark.background=c8c8c8 -o colors-dark.foreground=202020 sh -c "echo 'Window one'; sleep 600" >/dev/null 2>&1 &
+  sleep 2.5
+  at $((mw / 2)) 200; sleep 0.8
+  at $((mw / 2)) $((mh - 2)); sleep 1.2
+  full "$tmp/wm-away.png"
+  # The throwaway window is the newest Item, so the last one on the Dock: try
+  # the slots from the right, and keep the first menu that opens on an Item (the
+  # Bar menu, which opens over empty Dock, is far taller).
+  found=false
+  for slot in $(seq 12 -1 1); do
+    at $((mw / 2)) $((mh - 2)); sleep 0.5
+    menu_h=0
+    if item_menu window-menu $((31 + 46 * slot)) "$tmp/wm-away.png" && [[ $menu_h -lt 400 ]]; then
+      found=true
+      break
+    fi
+    at $((mw / 2)) 200; "$pointer" left >/dev/null; sleep 0.6
+  done
+  if $found; then keep "$tmp/window-menu.png" window-menu; else echo "screenshots: no Item menu opened, skipping window-menu" >&2; fi
+  at $((mw / 2)) 200; "$pointer" left >/dev/null; sleep 0.5
+  # By class, not the list taken at the start: the window may map late.
+  for address in $(hyprctl clients -j | jq -r '.[] | select(.class == "btop") | .address'); do
+    hyprctl dispatch "hl.dsp.window.close({ window = \"address:$address\" })" >/dev/null 2>&1 || true
+  done
+  sleep 1
 fi
 
 # Preview: two throwaway windows of one app make a group Item, whose Preview is
