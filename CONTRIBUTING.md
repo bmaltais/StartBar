@@ -97,7 +97,7 @@ Pull requests run `npm test` on GitHub; the manifest and QML checks need Omarchy
 scripts/smoke.sh            # --monitor NAME, --type, --out DIR, --no-restart
 ```
 
-It restarts the shell with this checkout, fails if the plugin logs anything, and screenshots the Dock, the Start menu and the settings window in each colour scheme. It edits the plugin's entry in `shell.json` for the run and restores it on exit. Look at the screenshots: the script only knows the plugin loaded quietly. It cannot click, drag or hover. `scripts/pointer.sh` can (`move X Y`, `left`, `right`, `shot FILE`), given `ydotool` and a writable `/dev/uinput` (`docs/hyprland-notes.md` "Moving the pointer"); use it for Previews, the Item menu and the Bar menu. Drag, and anything it could not reach, still needs the checklist below.
+It restarts the shell with this checkout, fails if the plugin logs anything, and screenshots the Dock, the Start menu and the settings window in each colour scheme. It edits the plugin's entry in `shell.json` for the run and restores it on exit. Look at the screenshots: the script only knows the plugin loaded quietly. It cannot click, drag or hover. `scripts/pointer.sh` can (`move X Y`, `reveal`, `left`, `right`, `shot FILE [WxH+X+Y]`), given `ydotool` and a writable `/dev/uinput` (`docs/hyprland-notes.md` "Moving the pointer"); use it for Previews, the Item menu and the Bar menu. With auto-hide on, `reveal` first and take a `shot` before the first click: a click while the Dock is hidden goes to the window behind it. Drag, and anything it could not reach, still needs the checklist below.
 
 ### Retaking screenshots
 
