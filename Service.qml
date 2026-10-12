@@ -194,6 +194,10 @@ Item {
 
     property var openedAtByAddress: ({})
     property int nextOpenedAt: 0
+    // When a Window with no class yet was first seen, and whether any is
+    // being held back from the Dock for it (see refresh()).
+    property var firstSeenByAddress: ({})
+    property bool holding: false
     // A Placed Window Item's own position (CONTEXT.md "Placed"; DockModel.js
     // comment on `placements`): kept only here, in memory, keyed by Window
     // address exactly like openedAtByAddress, and pruned the same way on
@@ -229,6 +233,7 @@ Item {
       var seenAddresses = {}
       var windows = []
       var handles = {}
+      var held = false
 
       for (var i = 0; i < toplevels.length; i++) {
         var toplevel = toplevels[i]
@@ -242,6 +247,21 @@ Item {
         }
 
         var info = toplevel.lastIpcObject || {}
+        // A Window's class arrives a moment after the Window does. Until it
+        // does, its App is unknown, and the Window would show as a blank
+        // Letter Tile and then jump into its App's group, so it is held back
+        // (for a few seconds at most: a Window may really have no class).
+        if (!info.class) {
+          var firstSeen = dockState.firstSeenByAddress[address]
+          if (firstSeen === undefined) {
+            firstSeen = Date.now()
+            dockState.firstSeenByAddress[address] = firstSeen
+          }
+          if (Date.now() - firstSeen < root.classWaitMs) {
+            held = true
+            continue
+          }
+        }
         windows.push({
           id: address,
           class: DockModel.clipText(info.class),
@@ -261,6 +281,12 @@ Item {
         if (seenAddresses[key]) keptOpenedAt[key] = dockState.openedAtByAddress[key]
       }
       dockState.openedAtByAddress = keptOpenedAt
+      var keptFirstSeen = {}
+      for (var seenKey in dockState.firstSeenByAddress) {
+        if (seenAddresses[seenKey]) keptFirstSeen[seenKey] = dockState.firstSeenByAddress[seenKey]
+      }
+      dockState.firstSeenByAddress = keptFirstSeen
+      dockState.holding = held
       dockState.toplevelByAddress = handles
 
       var titles = {}
@@ -409,12 +435,17 @@ Item {
     running: true
 
     onTriggered: {
-      var unresolved = dockState.items.some(function (it) {
+      var unresolved = dockState.holding || dockState.items.some(function (it) {
         return it.kind === "window" && !it.app && !it.letter
       })
       if (unresolved) Hyprland.refreshToplevels()
+      // The wait for a class ends by the clock, not by an event.
+      if (dockState.holding) dockState.refresh()
     }
   }
+
+  // How long a new Window may go without a class before it is shown anyway.
+  readonly property int classWaitMs: 3000
 
   function resolveApp(window) {
     return window.class ? DesktopEntries.heuristicLookup(window.class) || null : null
@@ -1800,7 +1831,8 @@ Item {
               // The Letter Tile: no App, or an App whose icon file is not
               // found (yet).
               Rectangle {
-                visible: dockItem.modelData.app === null || root.iconSource(dockItem.modelData.app.icon) === ""
+                visible: dockItem.modelData.app === null
+                  || (root.iconSource(dockItem.modelData.app.icon) === "" && !root.icons.pending(dockItem.modelData.app.icon))
                 anchors.fill: parent
                 radius: Style.cornerRadius
                 color: root.colMuted
