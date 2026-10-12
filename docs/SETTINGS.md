@@ -77,7 +77,7 @@ Right-click an empty part of the bar and choose **Settings…** (or run `omarchy
 
 ### Menus
 
-- **Right-click an icon**: Pin/Unpin, New Window and the app's own actions; for a window, Maximize/Restore, Full screen/Exit full screen, Float/Tile, and when floating Center and Pin on top; Move to scratchpad; then Close Window. The menu stays open until you pick a row, click outside it, or move the pointer off it.
+- **Right-click an icon**: Pin/Unpin, New Window and the app's own actions; for a window, Maximize/Restore, Full screen/Exit full screen, Float/Tile, and when floating Center and Pin on top; Move to scratchpad; then the app and Pin/Unpin; and last, Close window (Close all windows for a group). The menu stays open until you pick a row, click outside it, or move the pointer off it.
 - **Right-click the bar** (an empty part) opens a menu of the common options (alignment, colours, Start menu, auto-hide, clock, previews...). Its last row, **Settings…**, opens the full settings window.
 
 ## Pinning

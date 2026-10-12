@@ -91,7 +91,7 @@ Right-click an empty part of the bar for the common options. Its last row, **Set
 omarchy-shell io.github.bmaltais.startbar settings
 ```
 
-Right-click an icon for its own menu. A pin with no windows offers the app's actions, the app itself and **Unpin from taskbar**; a running app adds its window actions and **Close Window**, and ends with the app and **Pin to taskbar**.
+Right-click an icon for its own menu. A pin with no windows offers the app's actions, the app itself and **Unpin from taskbar**; a running app adds its window actions, then the app and **Pin to taskbar**, and ends with **Close window** (**Close all windows** for a stack of several).
 
 <table>
   <tr>
