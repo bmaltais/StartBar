@@ -2774,7 +2774,7 @@ Item {
             }
             pinRows.push({
               label: "Unpin from taskbar",
-              glyph: "\uf08d",
+              glyph: "\u{f0404}",
               enabled: true,
               group: 1,
               trigger: function () { root.togglePin(appId, true) },
