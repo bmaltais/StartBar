@@ -1401,7 +1401,7 @@ Item {
       // corner, for `omarchy-shell <id> layout` (scripts/screenshots.sh and
       // scripts/pointer.sh read it instead of finding things in a screenshot):
       // { monitor, items: [{ key, kind, appId, count, x, y, width, height }],
-      //   menus: { item, bar, preview } } with a menu's rectangle when it is open.
+      //   menus: { item, bar, preview, start } } with a menu's rectangle when it is open.
       // The panel covers the monitor less any bar reserved at an edge, so its
       // own offset is the monitor's size less its own.
       function layout() {
@@ -1433,7 +1433,12 @@ Item {
         return {
           monitor: panel.screen.name,
           items: items,
-          menus: { item: ofPopup(contextMenu), bar: ofPopup(barMenu), preview: ofPopup(previewPopup) },
+          menus: {
+            item: ofPopup(contextMenu),
+            bar: ofPopup(barMenu),
+            preview: ofPopup(previewPopup),
+            start: startMenu.visible ? rect(startMenu.x, startMenu.y, startMenu.width, startMenu.height) : null,
+          },
         }
       }
 
@@ -1855,15 +1860,35 @@ Item {
             Repeater {
               model: Math.min(dockItem.modelData.count || 1, 3) - 1
 
-              Rectangle {
+              Item {
+                id: copy
                 required property int index
+                readonly property real shrink: 1 - (index + 1) * 0.12
                 z: -1 - index
-                x: icon.x + icon.width - Style.space(2) + (index + 1) * Style.space(3)
-                y: icon.y + icon.height * 0.15
-                width: Style.space(3)
-                height: icon.height * 0.7
-                radius: width / 2
-                color: Util.alpha(root.colForeground, 0.35 - index * 0.1)
+                width: icon.width * shrink
+                height: icon.height * shrink
+                x: icon.x + icon.width - width + (index + 1) * Style.space(4)
+                y: icon.y + (icon.height - height) / 2
+                opacity: 0.85 - index * 0.25
+
+                Image {
+                  visible: source.toString() !== ""
+                  anchors.fill: parent
+                  fillMode: Image.PreserveAspectFit
+                  asynchronous: true
+                  sourceSize.width: width * Screen.devicePixelRatio
+                  sourceSize.height: height * Screen.devicePixelRatio
+                  source: dockItem.modelData.app ? root.iconSource(dockItem.modelData.app.icon) : ""
+                }
+
+                // A Letter Tile Window has no icon to copy.
+                Rectangle {
+                  visible: dockItem.modelData.app === null
+                    || root.iconSource(dockItem.modelData.app.icon) === ""
+                  anchors.fill: parent
+                  radius: Style.cornerRadius
+                  color: root.colMuted
+                }
               }
             }
 
@@ -2790,7 +2815,8 @@ Item {
               })
             }
             previewRows.push({
-              label: "Close Window",
+              label: "Close window",
+              glyph: "\u{f0156}",
               enabled: true,
               group: 2,
               trigger: function () { root.closeWindow(win.id) },
@@ -2854,37 +2880,38 @@ Item {
               })
             }
           }
-          // A Group Item's menu acts on the whole group: the window-state
-          // rows are left out and Close closes every Window in it.
-          var grouped = item.count > 1
-          list.push({
-            label: grouped ? "Close all " + item.count + " windows" : "Close Window",
-            enabled: menu.canClose,
-            group: 2,
-            trigger: function () {
-              var windows = grouped ? item.windows : [item.window]
-              for (var w = 0; w < windows.length; w++) root.closeWindow(windows[w].id)
-            },
-          })
-          // Last, as in Windows 11: the App's icon and name (starts another
-          // instance), then Pin to / Unpin from taskbar. A Letter Tile Window
-          // has no App, so it has neither.
+          // As in Windows 11: the App's icon and name (starts another
+          // instance), then Pin to / Unpin from taskbar. A Letter Tile
+          // Window has no App, so it has neither.
           if (item.app) {
             list.push({
               label: root.pinTooltipText(item),
               icon: item.app.icon,
               enabled: menu.canLaunch,
-              group: 3,
+              group: 2,
               trigger: function () { root.launchApp(item.app) },
             })
             list.push({
               label: menu.pinned ? "Unpin from taskbar" : "Pin to taskbar",
               glyph: menu.pinned ? "\u{f0404}" : "\u{f0403}",
               enabled: menu.canPin,
-              group: 3,
+              group: 2,
               trigger: function () { root.togglePin(appId, menu.pinned) },
             })
           }
+          // A Group Item's menu acts on the whole group: the window-state
+          // rows are left out and Close closes every Window in it.
+          var grouped = item.count > 1
+          list.push({
+            label: grouped ? "Close all windows" : "Close window",
+            glyph: "\u{f0156}",
+            enabled: menu.canClose,
+            group: 3,
+            trigger: function () {
+              var windows = grouped ? item.windows : [item.window]
+              for (var w = 0; w < windows.length; w++) root.closeWindow(windows[w].id)
+            },
+          })
           return list
         }
 

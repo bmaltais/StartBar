@@ -23,9 +23,12 @@
 # yours, so the images differ from release to release for those reasons alone.
 # Look at every one before committing it.
 #
-# Crops are anchored to the monitor's bottom-left corner, as the current images
-# are; their sizes are in `crops` below. The Preview and the Bar menu vary in
-# size, so they are cropped to the rectangle the shell reports for them (`layout`).
+# Every image is the subject plus the same margin ($margin px) of wallpaper on
+# each side, so they look alike side by side. Things that sit on the bottom edge
+# (the Dock, and the Preview and Start menu above it) carry on down to the
+# monitor's bottom edge instead, and ones against the left edge start at it. The
+# Items, menus and Preview are cropped to the rectangle the shell reports for
+# them (`layout`); the settings window to its own size.
 set -euo pipefail
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -66,9 +69,8 @@ out=${out:-${TMPDIR:-/tmp}/startbar-screenshots-$(date +%Y%m%d-%H%M%S)}
 mkdir -p "$out"
 pointer=$repo/scripts/pointer.sh
 
-# Crop sizes of the fixed-size images, from the current files in screenshots/.
-crop_taskbar=790x170
-crop_start=790x710
+# The wallpaper left around every subject, in pixels.
+margin=32
 
 monitor=${monitor:-$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')}
 read -r mx my mw mh < <(hyprctl monitors -j | jq -r --arg m "$monitor" '.[] | select(.name == $m) | "\(.x) \(.y) \(.width) \(.height)"')
@@ -106,12 +108,48 @@ override() {
   sleep 1.2
 }
 
+# The Dock's Items and any open menu, as rectangles (see below).
+shell_layout() { omarchy-shell "$id" layout 2>/dev/null; }
+
+# wait_for FILTER: run a jq filter (ending in @tsv) over the layout until it gives
+# something, up to 4 s, and print it space-separated. Fails if it never does.
+wait_for() {
+  local out i
+  for i in $(seq 1 40); do
+    out=$(shell_layout | jq -re "$1 // empty" 2>/dev/null | tr '\t' ' ') || out=""
+    if [[ -n $out ]]; then echo "$out"; return 0; fi
+    sleep 0.1
+  done
+  return 1
+}
+
 full() { grim -o "$monitor" "$1"; }
 
-# crop FULL.png WxH OUT.png: that size from the monitor's bottom-left corner.
-crop_bottom_left() {
-  local size=$1 h=${2#*x}
-  magick "$3" -crop "${size}+0+$((mh - h))" +repage "$4"
+# frame FULL.png OUT.png X Y W H [down]: the rectangle plus $margin on every
+# side, clamped to the monitor; with `down`, carried on to the monitor's bottom
+# edge (for things standing on the Dock).
+frame() {
+  local x=$(($3 - margin)) y=$(($4 - margin)) w=$(($5 + 2 * margin)) h=$(($6 + 2 * margin))
+  ((x < 0)) && { w=$((w + x)); x=0; }
+  ((y < 0)) && { h=$((h + y)); y=0; }
+  ((x + w > mw)) && w=$((mw - x))
+  [[ ${7:-} == down ]] && h=$((mh - y))
+  ((y + h > mh)) && h=$((mh - y))
+  magick "$1" -crop "${w}x${h}+${x}+${y}" +repage "$2"
+}
+
+# stash CLASS: move that app's windows to a workspace of their own, away from the
+# one being shot, so they appear in the Dock without covering the wallpaper.
+stash() {
+  local address i
+  for i in $(seq 1 30); do
+    hyprctl clients -j | jq -e --arg c "$1" '.[] | select(.class == $c)' >/dev/null && break
+    sleep 0.1
+  done
+  for address in $(hyprctl clients -j | jq -r --arg c "$1" '.[] | select(.class == $c) | .address'); do
+    hyprctl dispatch "hl.dsp.window.move({ workspace = \"$((empty_ws + 1))\", follow = false, window = \"address:$address\" })" >/dev/null
+  done
+  sleep 0.5
 }
 
 # pointer move to monitor-relative X Y
@@ -146,7 +184,9 @@ trap 'rm -rf "$tmp"; cleanup' EXIT
 if wanted taskbar; then
   at $((mw / 2)) 200
   full "$tmp/t.png"
-  crop_bottom_left "$crop_taskbar" "$crop_taskbar" "$tmp/t.png" "$tmp/taskbar.png"
+  # From the top of the Items (less the margin) down to the bottom edge, 790 wide.
+  top=$(shell_layout | jq -r '[.items[].y] | min // 0')
+  magick "$tmp/t.png" -crop "790x$((mh - top + margin))+0+$((top - margin))" +repage "$tmp/taskbar.png"
   keep "$tmp/taskbar.png" taskbar
 fi
 
@@ -154,23 +194,22 @@ fi
 start_menu() {
   local scheme=$1 name=$2 typed=${3:-false}
   override "$(jq -c --arg s "$scheme" '. + {colorScheme: $s}' <<<"$readme_state")"
-  full "$tmp/before.png"
   omarchy-shell -q "$id" startMenu
   sleep 1.5
   full "$tmp/menu.png"
-  local box
-  box=$(changed_box "$tmp/before.png" "$tmp/menu.png")
-  read -r _ _ _ bh <<<"$box"
-  if [[ ${bh:-0} -lt 300 ]]; then
+  local box bx by bw bh
+  box=$(wait_for '.menus.start | select(.height > 300) | [.x, .y, .width, .height] | @tsv') || box=""
+  read -r bx by bw bh <<<"$box"
+  if [[ -z $box ]]; then
     echo "screenshots: the Start menu did not open for $name, skipping it" >&2
   else
-    crop_bottom_left "$crop_start" "$crop_start" "$tmp/menu.png" "$tmp/$name.png"
+    frame "$tmp/menu.png" "$tmp/$name.png" $bx $by $bw $bh down
     keep "$tmp/$name.png" "$name"
     if $typed && wanted search; then
       wtype "fi"
       sleep 1
       full "$tmp/typed.png"
-      crop_bottom_left "$crop_start" "$crop_start" "$tmp/typed.png" "$tmp/search.png"
+      frame "$tmp/typed.png" "$tmp/search.png" $bx $by $bw $bh down
       keep "$tmp/search.png" search
     fi
   fi
@@ -186,7 +225,7 @@ if wanted settings; then
   omarchy-shell -q "$id" settings
   sleep 1.5
   full "$tmp/s.png"
-  magick "$tmp/s.png" -crop "640x760+$(((mw - 640) / 2))+$(((mh - 760) / 2))" +repage "$tmp/settings.png"
+  frame "$tmp/s.png" "$tmp/settings.png" $(((mw - 640) / 2)) $(((mh - 760) / 2)) 640 760
   keep "$tmp/settings.png" settings
   omarchy-shell -q "$id" closeSettings
   sleep 0.6
@@ -196,25 +235,9 @@ fi
 # the Dock's Items and any open menu as rectangles in pixels from the monitor's
 # top-left corner (the panel's `layout()` in Service.qml), so nothing is found by
 # comparing screenshots.
-shell_layout() { omarchy-shell "$id" layout 2>/dev/null; }
 
-# wait_for FILTER: run a jq filter (ending in @tsv) over the layout until it gives
-# something, up to 4 s, and print it space-separated. Fails if it never does.
-wait_for() {
-  local out i
-  for i in $(seq 1 40); do
-    out=$(shell_layout | jq -re "$1 // empty" 2>/dev/null | tr '\t' ' ') || out=""
-    if [[ -n $out ]]; then echo "$out"; return 0; fi
-    sleep 0.1
-  done
-  return 1
-}
-
-# crop_rect FULL.png OUT.png X Y W H: a menu's rectangle, padded back out to take
-# in its hairline edge.
-crop_rect() {
-  magick "$1" -crop "$(($5 + 10))x$(($6 + 6))+$(($3 - 5))+$(($4 - 3))" +repage "$2"
-}
+# crop_rect FULL.png OUT.png X Y W H: a menu's rectangle with the margin.
+crop_rect() { frame "$1" "$2" "$3" "$4" "$5" "$6"; }
 
 # right_click_item FILTER MENU: right click the centre of the Item the filter picks,
 # and print the rectangle of the menu that opens ("x y w h").
@@ -270,6 +293,7 @@ fi
 # name and Pin to taskbar).
 if wanted window-menu; then
   foot --app-id=btop --title="Window one" -o colors-dark.background=c8c8c8 -o colors-dark.foreground=202020 sh -c "echo 'Window one'; sleep 600" >/dev/null 2>&1 &
+  stash btop
   at $((mw / 2)) 200; sleep 0.5
   if rect=$(open_item_menu '.appId == "btop"'); then
     read -r bx by bw bh <<<"$rect"
@@ -294,8 +318,9 @@ if wanted preview; then
   for n in one two; do
     foot --app-id=startbar-screenshot --title="Window $n" sh -c "echo 'Window $n'; ls $repo | head -12; sleep 600" >/dev/null 2>&1 &
   done
+  sleep 1; stash startbar-screenshot
   at $((mw / 2)) 200; sleep 0.5
-  if item=$(wait_for '.items[] | select(.count >= 2) | [.x, .y, .width, .height] | @tsv'); then
+  if item=$(wait_for '.items[] | select(.key == "group:class:startbar-screenshot") | [.x, .y, .width, .height] | @tsv'); then
     read -r x y w h <<<"$item"
     spares=($(hyprctl clients -j | jq -r '.[] | select(.class == "startbar-screenshot") | .address'))
     # From the Dock's edge first: jumping straight onto an Item can lose the hover.
@@ -305,8 +330,7 @@ if wanted preview; then
       read -r bx by bw bh <<<"$rect"
       sleep 0.6
       full "$tmp/pv.png"
-      px=$((bx > 7 ? bx - 7 : 0)); py=$((by > 7 ? by - 7 : 0))
-      magick "$tmp/pv.png" -crop "$((bw + 14))x$((mh - py))+${px}+${py}" +repage "$tmp/preview.png"
+      frame "$tmp/pv.png" "$tmp/preview.png" $bx $by $bw $bh down
       keep "$tmp/preview.png" preview
     else
       echo "screenshots: the Preview did not open, skipping it" >&2
