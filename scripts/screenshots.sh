@@ -280,20 +280,19 @@ if wanted window-menu; then
   at $((mw / 2)) 200; sleep 0.8
   at $((mw / 2)) $((mh - 2)); sleep 1.2
   full "$tmp/wm-away.png"
-  # The throwaway window is the newest Item, so the last one on the Dock: try
-  # the slots from the right, and keep the first menu that opens on an Item (the
-  # Bar menu, which opens over empty Dock, is far taller).
-  found=false
-  for slot in $(seq 12 -1 1); do
-    at $((mw / 2)) $((mh - 2)); sleep 0.5
-    menu_h=0
-    if item_menu window-menu $((31 + 46 * slot)) "$tmp/wm-away.png" && [[ $menu_h -lt 400 ]]; then
-      found=true
-      break
-    fi
-    at $((mw / 2)) 200; "$pointer" left >/dev/null; sleep 0.6
-  done
-  if $found; then keep "$tmp/window-menu.png" window-menu; else echo "screenshots: no Item menu opened, skipping window-menu" >&2; fi
+  # The throwaway window is the newest Item, so the last icon on the Dock: scan
+  # one row of pixels through the icons for the rightmost column that differs
+  # from the Dock's own colour, and right-click just inside it.
+  row=$(magick "$tmp/wm-away.png" -crop "$((mw / 2))x1+0+$((mh - 26))" +repage -depth 8 txt:- | tail -n +2 \
+    | sed -E 's/^([0-9]+),0:.*(#[0-9A-Fa-f]{6}).*$/\1 \2/')
+  bg=${row##* }
+  last_x=$(awk -v bg="$bg" '$2 != bg { last = $1 } END { print last }' <<<"$row")
+  menu_h=0
+  if [[ -n $last_x ]] && item_menu window-menu $((last_x - 8)) "$tmp/wm-away.png" && [[ $menu_h -lt 400 ]]; then
+    keep "$tmp/window-menu.png" window-menu
+  else
+    echo "screenshots: no Item menu opened, skipping window-menu" >&2
+  fi
   at $((mw / 2)) 200; "$pointer" left >/dev/null; sleep 0.5
   # By class, not the list taken at the start: the window may map late.
   for address in $(hyprctl clients -j | jq -r '.[] | select(.class == "btop") | .address'); do
