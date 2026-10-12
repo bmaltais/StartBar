@@ -348,7 +348,17 @@ Item {
 
   Connections {
     target: Hyprland
-    function onRawEvent(event) { dockState.refresh() }
+    function onRawEvent(event) {
+      // An App started any other way (Super+Space, a Pin, a terminal) is
+      // still a recently launched App: openwindow data is
+      // "address,workspace,class,title".
+      if (event.name === "openwindow") {
+        var cls = String(event.data).split(",")[2]
+        var app = cls ? root.resolveApp({ class: cls }) : null
+        if (app && app.id) dockSettings.apply({ type: "pushRecentApp", appId: app.id })
+      }
+      dockState.refresh()
+    }
   }
 
   // DesktopEntries scans .desktop files asynchronously in the background,

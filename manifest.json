@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.bmaltais.startbar",
   "name": "StartBar",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "author": "Bernard Maltais",
   "license": "MIT",
   "description": "A Windows 11-style taskbar with a Start menu for Omarchy: every open window on every workspace and monitor, plus pinned apps.",
