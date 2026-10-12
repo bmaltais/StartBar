@@ -2781,20 +2781,7 @@ Item {
             })
             return pinRows
           }
-          var list = [
-            {
-              label: menu.pinned ? "Unpin" : "Pin",
-              enabled: menu.canPin,
-              group: 0,
-              trigger: function () { root.togglePin(appId, menu.pinned) },
-            },
-            {
-              label: "New Window",
-              enabled: menu.canLaunch,
-              group: 0,
-              trigger: function () { root.launchApp(item.app) },
-            },
-          ]
+          var list = []
           var appActions = item.app && item.app.actions ? item.app.actions : []
           for (var i = 0; i < appActions.length; i++) {
             list.push({
@@ -2827,6 +2814,25 @@ Item {
               for (var w = 0; w < windows.length; w++) root.closeWindow(windows[w].id)
             },
           })
+          // Last, as in Windows 11: the App's icon and name (starts another
+          // instance), then Pin to / Unpin from taskbar. A Letter Tile Window
+          // has no App, so it has neither.
+          if (item.app) {
+            list.push({
+              label: root.pinTooltipText(item),
+              icon: item.app.icon,
+              enabled: menu.canLaunch,
+              group: 3,
+              trigger: function () { root.launchApp(item.app) },
+            })
+            list.push({
+              label: menu.pinned ? "Unpin from taskbar" : "Pin to taskbar",
+              glyph: menu.pinned ? "\u{f0404}" : "\u{f0403}",
+              enabled: menu.canPin,
+              group: 3,
+              trigger: function () { root.togglePin(appId, menu.pinned) },
+            })
+          }
           return list
         }
 
