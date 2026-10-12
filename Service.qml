@@ -194,6 +194,10 @@ Item {
 
     property var openedAtByAddress: ({})
     property int nextOpenedAt: 0
+    // When a Window with no class yet was first seen, and whether any is
+    // being held back from the Dock for it (see refresh()).
+    property var firstSeenByAddress: ({})
+    property bool holding: false
     // A Placed Window Item's own position (CONTEXT.md "Placed"; DockModel.js
     // comment on `placements`): kept only here, in memory, keyed by Window
     // address exactly like openedAtByAddress, and pruned the same way on
@@ -229,6 +233,7 @@ Item {
       var seenAddresses = {}
       var windows = []
       var handles = {}
+      var held = false
 
       for (var i = 0; i < toplevels.length; i++) {
         var toplevel = toplevels[i]
@@ -242,6 +247,21 @@ Item {
         }
 
         var info = toplevel.lastIpcObject || {}
+        // A Window's class arrives a moment after the Window does. Until it
+        // does, its App is unknown, and the Window would show as a blank
+        // Letter Tile and then jump into its App's group, so it is held back
+        // (for a few seconds at most: a Window may really have no class).
+        if (!info.class) {
+          var firstSeen = dockState.firstSeenByAddress[address]
+          if (firstSeen === undefined) {
+            firstSeen = Date.now()
+            dockState.firstSeenByAddress[address] = firstSeen
+          }
+          if (Date.now() - firstSeen < root.classWaitMs) {
+            held = true
+            continue
+          }
+        }
         windows.push({
           id: address,
           class: DockModel.clipText(info.class),
@@ -261,6 +281,12 @@ Item {
         if (seenAddresses[key]) keptOpenedAt[key] = dockState.openedAtByAddress[key]
       }
       dockState.openedAtByAddress = keptOpenedAt
+      var keptFirstSeen = {}
+      for (var seenKey in dockState.firstSeenByAddress) {
+        if (seenAddresses[seenKey]) keptFirstSeen[seenKey] = dockState.firstSeenByAddress[seenKey]
+      }
+      dockState.firstSeenByAddress = keptFirstSeen
+      dockState.holding = held
       dockState.toplevelByAddress = handles
 
       var titles = {}
@@ -409,12 +435,17 @@ Item {
     running: true
 
     onTriggered: {
-      var unresolved = dockState.items.some(function (it) {
+      var unresolved = dockState.holding || dockState.items.some(function (it) {
         return it.kind === "window" && !it.app && !it.letter
       })
       if (unresolved) Hyprland.refreshToplevels()
+      // The wait for a class ends by the clock, not by an event.
+      if (dockState.holding) dockState.refresh()
     }
   }
+
+  // How long a new Window may go without a class before it is shown anyway.
+  readonly property int classWaitMs: 3000
 
   function resolveApp(window) {
     return window.class ? DesktopEntries.heuristicLookup(window.class) || null : null
@@ -519,10 +550,14 @@ Item {
     dockSettings.apply({ type: "unpinAppFromDrag", appId: appId })
   }
 
-  // A Pin's tooltip (docs/SPEC.md "What the Dock shows": "a 'missing'
-  // tooltip"): the App's own name once resolved, its bare Pin id if the
-  // App resolved but has none, or an explicit missing note once its App
-  // is no longer installed.
+  // A Pin whose App is installed shows no tooltip, as in Windows: its icon
+  // says what it is. Only a missing one explains itself.
+  function pinHasNoTooltip(item) {
+    return item.kind === "pin" && !item.missing
+  }
+
+  // A missing Pin's tooltip (docs/SPEC.md "What the Dock shows": "a
+  // 'missing' tooltip"): its bare Pin id and an explicit missing note.
   function pinTooltipText(item) {
     if (item.missing) return item.appId + " (missing)"
     return (item.app && item.app.name) || item.appId
@@ -633,6 +668,17 @@ Item {
     // For a Super-key binding: `omarchy-shell io.github.bmaltais.startbar startMenu`.
     function startMenu(): void { root.startMenuRequested(root.focusedScreenName(), "toggle") }
     function closeStartMenu(): void { root.startMenuRequested(root.focusedScreenName(), "close") }
+    // Where the Dock's Items and any open menu are on the focused monitor, as
+    // JSON (see `layout` in the panel). For the scripts that drive the pointer.
+    function layout(): string {
+      var name = root.focusedScreenName()
+      for (var i = 0; i < panels.instances.length; i++) {
+        if (panels.instances[i].screen && panels.instances[i].screen.name === name) {
+          return JSON.stringify(panels.instances[i].layout())
+        }
+      }
+      return "{}"
+    }
   }
 
   FileView {
@@ -1302,6 +1348,7 @@ Item {
   }
 
   Variants {
+    id: panels
     model: Quickshell.screens
 
     PanelWindow {
@@ -1349,6 +1396,46 @@ Item {
       // Whether the Dock/bar is on screen: always, unless it auto-hides, in
       // which case it follows the Revealed state.
       readonly property bool shown: !root.autoHide || revealState.revealed
+
+      // Where everything is on this monitor, in pixels from its top-left
+      // corner, for `omarchy-shell <id> layout` (scripts/screenshots.sh and
+      // scripts/pointer.sh read it instead of finding things in a screenshot):
+      // { monitor, items: [{ key, kind, appId, count, x, y, width, height }],
+      //   menus: { item, bar, preview } } with a menu's rectangle when it is open.
+      // The panel covers the monitor less any bar reserved at an edge, so its
+      // own offset is the monitor's size less its own.
+      function layout() {
+        var ox = panel.screen.width - panel.width
+        var oy = panel.screen.height - panel.height
+        function rect(x, y, w, h) {
+          return { x: Math.round(x + ox), y: Math.round(y + oy), width: Math.round(w), height: Math.round(h) }
+        }
+        function ofItem(it) {
+          var p = it.mapToItem(null, 0, 0)
+          return rect(p.x, p.y, it.width, it.height)
+        }
+        // A popup window is as big as its menu plus the shadow's room all round.
+        function ofPopup(w) {
+          return w.visible ? rect(w.relativeX + root.menuShadow, w.relativeY + root.menuShadow,
+            w.implicitWidth - root.menuShadow * 2, w.implicitHeight - root.menuShadow * 2) : null
+        }
+        var items = []
+        for (var i = 0; i < repeater.count; i++) {
+          var it = repeater.itemAt(i)
+          if (!it || !it.modelData) continue
+          var r = ofItem(it)
+          r.key = it.key
+          r.kind = it.modelData.kind
+          r.appId = root.menuAppId(it.modelData) || ""
+          r.count = it.modelData.count || 1
+          items.push(r)
+        }
+        return {
+          monitor: panel.screen.name,
+          items: items,
+          menus: { item: ofPopup(contextMenu), bar: ofPopup(barMenu), preview: ofPopup(previewPopup) },
+        }
+      }
 
       // Full-width, above any bar reservation because it's anchored to
       // this panel's own bottom edge, which ExclusionMode.Normal already
@@ -1800,7 +1887,8 @@ Item {
               // The Letter Tile: no App, or an App whose icon file is not
               // found (yet).
               Rectangle {
-                visible: dockItem.modelData.app === null || root.iconSource(dockItem.modelData.app.icon) === ""
+                visible: dockItem.modelData.app === null
+                  || (root.iconSource(dockItem.modelData.app.icon) === "" && !root.icons.pending(dockItem.modelData.app.icon))
                 anchors.fill: parent
                 radius: Style.cornerRadius
                 color: root.colMuted
@@ -1935,6 +2023,7 @@ Item {
               // revealState and can't keep the Dock revealed on its own.
               PanelToolTip {
                 visible: mouseArea.containsMouse && panel.shown && !previewState.enabledFor(dockItem.modelData)
+                  && !root.pinHasNoTooltip(dockItem.modelData)
                 text: dockItem.isPin
                   ? root.pinTooltipText(dockItem.modelData)
                   : root.windowTooltipText(dockItem.modelData)
@@ -2187,7 +2276,7 @@ Item {
         }
         readonly property int thumbWidth: {
           var n = Math.max(1, windowIds.length)
-          var room = panel.width - Style.spacing.xs * 2 - Style.spacing.sm * 2 - (Style.spacing.xs * 2 + Style.spacing.xs) * n
+          var room = panel.width - Style.spacing.xs * 2 - Style.spacing.sm * 2 - root.menuShadow * 2 - (Style.spacing.xs * 2 + Style.spacing.xs) * n
           return Math.max(Style.space(80), Math.min(Style.space(220), Math.floor(room / n)))
         }
         readonly property int thumbHeight: Math.round(thumbWidth * 124 / 220)
@@ -2224,8 +2313,12 @@ Item {
 
         visible: previewState.showing && liveItem !== null
         color: "transparent"
-        implicitWidth: previewRow.implicitWidth + Style.spacing.sm * 2
-        implicitHeight: previewRow.implicitHeight + Style.spacing.sm * 2
+        // Room for the card's shadow on every side (see root.menuShadow).
+        implicitWidth: previewRow.implicitWidth + Style.spacing.sm * 2 + root.menuShadow * 2
+        implicitHeight: previewRow.implicitHeight + Style.spacing.sm * 2 + root.menuShadow * 2
+        // Only the card takes the pointer, so the empty band that holds the
+        // shadow never gets between the pointer and the Dock's icons.
+        mask: Region { item: previewCard }
 
         onVisibleChanged: {
           revealState.set("preview", previewPopup.visible)
@@ -2249,7 +2342,7 @@ Item {
             var x = previewState.anchorX - previewPopup.implicitWidth / 2
             x = Math.max(Style.spacing.xs, Math.min(x, panel.width - previewPopup.implicitWidth - Style.spacing.xs))
             previewAnchor.rect.x = Math.round(x)
-            previewAnchor.rect.y = Math.round(Math.max(Style.spacing.xs, previewState.anchorY - previewPopup.implicitHeight - Style.spacing.xs))
+            previewAnchor.rect.y = Math.round(Math.max(Style.spacing.xs, previewState.anchorY - previewPopup.implicitHeight - Style.spacing.xs + root.menuShadow))
           }
         }
 
@@ -2271,14 +2364,25 @@ Item {
           anchors.fill: parent
           clip: true
 
+          RectangularShadow {
+            anchors.fill: previewCard
+            radius: previewCard.radius
+            blur: root.menuShadow
+            offset.y: Style.space(4)
+            spread: 0
+            color: Qt.rgba(0, 0, 0, 0.6)
+          }
+
           Rectangle {
-            width: parent.width
-            height: parent.height
+            id: previewCard
+            x: root.menuShadow
+            width: parent.width - root.menuShadow * 2
+            height: parent.height - root.menuShadow * 2
             radius: root.menuRadius
             color: root.colPopupBackground
             border.width: Style.normalBorderWidth
             border.color: root.colHairline
-            y: (1 - previewPopup.slide) * height
+            y: root.menuShadow + (1 - previewPopup.slide) * (height + root.menuShadow)
 
             HoverHandler {
               onHoveredChanged: previewState.popupHover(hovered)
@@ -2653,7 +2757,8 @@ Item {
         // Sized to its longest row, since app actions ("New Private Window")
         // and window rows ("Move to scratchpad") vary; see barMenu.rowWidth.
         readonly property int rowWidth: Math.max(Style.space(160),
-          Math.ceil(contextMenuMetrics.advanceWidth) + Style.space(12) * 2 + root.menuPad * 2 + Style.space(12))
+          Math.ceil(contextMenuMetrics.advanceWidth) + Style.space(12) * 2 + root.menuPad * 2 + Style.space(12)
+          + (contextMenu.rows.some(function (r) { return r.icon || r.glyph }) ? Style.space(24) : 0))
 
         TextMetrics {
           id: contextMenuMetrics
@@ -2696,20 +2801,39 @@ Item {
           if (!item) return []
           var menu = DockModel.menuFor(item)
           var appId = root.menuAppId(item)
-          var list = [
-            {
-              label: menu.pinned ? "Unpin" : "Pin",
-              enabled: menu.canPin,
-              group: 0,
-              trigger: function () { root.togglePin(appId, menu.pinned) },
-            },
-            {
-              label: "New Window",
-              enabled: menu.canLaunch,
-              group: 0,
-              trigger: function () { root.launchApp(item.app) },
-            },
-          ]
+          // A Pin with no Windows, as in Windows 11: the App's own actions,
+          // then a row with its icon and name that starts it, then
+          // "Unpin from taskbar".
+          if (item.kind === "pin") {
+            var pinRows = []
+            var pinActions = item.app && item.app.actions ? item.app.actions : []
+            for (var a = 0; a < pinActions.length; a++) {
+              pinRows.push({
+                label: pinActions[a].name,
+                enabled: true,
+                group: 0,
+                trigger: (function (action) { return function () { action.execute() } })(pinActions[a]),
+              })
+            }
+            if (item.app) {
+              pinRows.push({
+                label: root.pinTooltipText(item),
+                icon: item.app.icon,
+                enabled: true,
+                group: 1,
+                trigger: function () { root.launchApp(item.app) },
+              })
+            }
+            pinRows.push({
+              label: "Unpin from taskbar",
+              glyph: "\u{f0404}",
+              enabled: true,
+              group: 1,
+              trigger: function () { root.togglePin(appId, true) },
+            })
+            return pinRows
+          }
+          var list = []
           var appActions = item.app && item.app.actions ? item.app.actions : []
           for (var i = 0; i < appActions.length; i++) {
             list.push({
@@ -2742,6 +2866,25 @@ Item {
               for (var w = 0; w < windows.length; w++) root.closeWindow(windows[w].id)
             },
           })
+          // Last, as in Windows 11: the App's icon and name (starts another
+          // instance), then Pin to / Unpin from taskbar. A Letter Tile Window
+          // has no App, so it has neither.
+          if (item.app) {
+            list.push({
+              label: root.pinTooltipText(item),
+              icon: item.app.icon,
+              enabled: menu.canLaunch,
+              group: 3,
+              trigger: function () { root.launchApp(item.app) },
+            })
+            list.push({
+              label: menu.pinned ? "Unpin from taskbar" : "Pin to taskbar",
+              glyph: menu.pinned ? "\u{f0404}" : "\u{f0403}",
+              enabled: menu.canPin,
+              group: 3,
+              trigger: function () { root.togglePin(appId, menu.pinned) },
+            })
+          }
           return list
         }
 
@@ -2766,7 +2909,7 @@ Item {
         visible: false
         color: "transparent"
         implicitWidth: contextMenu.rowWidth + root.menuShadow * 2
-        implicitHeight: menuColumn.implicitHeight + root.menuShadow * 2
+        implicitHeight: menuColumn.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
 
         onVisibleChanged: {
           revealState.set("menu", contextMenu.visible)
@@ -2893,12 +3036,43 @@ Item {
                     ? Style.hoverFillFor(root.colForeground, previewPopup.accentColor)
                     : "transparent"
 
+                  // The App's icon, or a glyph, for the rows that have one.
+                  Item {
+                    id: menuRowIcon
+                    visible: !!menuRow.modelData.icon || !!menuRow.modelData.glyph
+                    anchors.left: parent.left
+                    anchors.leftMargin: Style.space(12)
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Style.space(16)
+                    height: Style.space(16)
+
+                    Image {
+                      visible: !!menuRow.modelData.icon && source.toString() !== ""
+                      anchors.fill: parent
+                      fillMode: Image.PreserveAspectFit
+                      asynchronous: true
+                      sourceSize.width: width * Screen.devicePixelRatio
+                      sourceSize.height: height * Screen.devicePixelRatio
+                      source: menuRow.modelData.icon ? root.iconSource(menuRow.modelData.icon) : ""
+                    }
+
+                    Text {
+                      textFormat: Text.PlainText
+                      visible: !!menuRow.modelData.glyph
+                      anchors.centerIn: parent
+                      text: menuRow.modelData.glyph || ""
+                      color: previewPopup.textColor
+                      font.family: "JetBrainsMono Nerd Font"
+                      font.pixelSize: Style.space(14)
+                    }
+                  }
+
                   Text {
                     textFormat: Text.PlainText
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Style.space(12)
+                    anchors.leftMargin: Style.space(12) + (menuRowIcon.visible ? Style.space(16) + Style.space(8) : 0)
                     anchors.rightMargin: Style.space(12)
                     elide: Text.ElideRight
                     text: menuRow.modelData.label

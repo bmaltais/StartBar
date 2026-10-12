@@ -39,6 +39,19 @@ Item {
     return ""
   }
 
+  // True while the first search for `name` is queued or running, so a caller
+  // can wait for it instead of drawing its fallback and swapping it a moment
+  // later. False once that search is over, found or not (a retry later keeps
+  // the fallback showing).
+  function pending(name) {
+    if (!name || !DockIcons.searchCommand(name)) return false
+    resolver.files // re-ask when a search finds a file
+    resolver.searching // and when one starts or ends
+    resolver.tries // and when one is counted
+    if (resolver.files[name]) return false
+    return !resolver.tries[name] || resolver.searching === name
+  }
+
   function search(name) {
     if (!DockIcons.shouldSearch(resolver.tries[name], resolver.last[name], Date.now())) return
     if (resolver.searching === name || resolver.queue.indexOf(name) >= 0) return
