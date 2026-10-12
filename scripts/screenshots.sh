@@ -25,7 +25,7 @@
 #
 # Crops are anchored to the monitor's bottom-left corner, as the current images
 # are; their sizes are in `crops` below. The Preview and the Bar menu vary in
-# size, so they are cropped to what appeared on screen when they opened.
+# size, so they are cropped to the rectangle the shell reports for them (`layout`).
 set -euo pipefail
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -114,16 +114,6 @@ crop_bottom_left() {
   magick "$3" -crop "${size}+0+$((mh - h))" +repage "$4"
 }
 
-# changed_box BEFORE AFTER: "x y w h" of what differs between two screenshots.
-changed_box() {
-  local diff
-  diff=$(mktemp --suffix=.png)
-  magick compare -metric AE -fuzz 4% "$1" "$2" -compose Src -highlight-color white -lowlight-color black "$diff" 2>/dev/null || true
-  # %@ prints no newline, and `read` fails on a line without one.
-  { magick "$diff" -format '%@' info: 2>/dev/null; echo; } | sed -E 's/^([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)$/\3 \4 \1 \2/'
-  rm -f "$diff"
-}
-
 # pointer move to monitor-relative X Y
 at() { "$pointer" move $((mx + $1)) $((my + $2)); }
 
@@ -202,99 +192,95 @@ if wanted settings; then
   sleep 0.6
 fi
 
+# Where things are comes from the shell itself: `omarchy-shell <id> layout` gives
+# the Dock's Items and any open menu as rectangles in pixels from the monitor's
+# top-left corner (the panel's `layout()` in Service.qml), so nothing is found by
+# comparing screenshots.
+shell_layout() { omarchy-shell "$id" layout 2>/dev/null; }
+
+# wait_for FILTER: run a jq filter (ending in @tsv) over the layout until it gives
+# something, up to 4 s, and print it space-separated. Fails if it never does.
+wait_for() {
+  local out i
+  for i in $(seq 1 40); do
+    out=$(shell_layout | jq -re "$1 // empty" 2>/dev/null | tr '\t' ' ') || out=""
+    if [[ -n $out ]]; then echo "$out"; return 0; fi
+    sleep 0.1
+  done
+  return 1
+}
+
+# crop_rect FULL.png OUT.png X Y W H: a menu's rectangle, padded back out to take
+# in its hairline edge.
+crop_rect() {
+  magick "$1" -crop "$(($5 + 10))x$(($6 + 6))+$(($3 - 5))+$(($4 - 3))" +repage "$2"
+}
+
+# right_click_item FILTER MENU: right click the centre of the Item the filter picks,
+# and print the rectangle of the menu that opens ("x y w h").
+open_item_menu() {
+  local item x y w h
+  item=$(wait_for ".items[] | select($1) | [.x, .y, .width, .height] | @tsv") || return 1
+  read -r x y w h <<<"$item"
+  at $((x + w / 2)) $((y + h / 2)); sleep 0.4
+  "$pointer" right >/dev/null
+  wait_for '.menus.item | select(.height > 40) | [.x, .y, .width, .height] | @tsv'
+}
+
 # Bar menu: right click on the bar away from any Item, with auto-hide on as in
 # the image, so the Dock is revealed by the pointer first.
 if wanted right-click; then
   override "$(jq -c '. + {autoHide: true}' <<<"$readme_state")"
   at $((mw / 2)) $((mh - 2)); sleep 1.2
   at $((mw * 6 / 10)) $((mh - 12)); sleep 0.5
-  full "$tmp/rc-before.png"
-  "$pointer" right
-  sleep 1
-  full "$tmp/rc-after.png"
-  read -r bx by bw bh < <(changed_box "$tmp/rc-before.png" "$tmp/rc-after.png")
-  if [[ ${bh:-0} -lt 200 ]]; then
-    echo "screenshots: the Bar menu did not open, skipping it" >&2
-  else
-    # The diff trims the menu's own border (close to the background in colour); pad it back.
-    magick "$tmp/rc-after.png" -crop "$((bw + 10))x$((bh + 6))+$((bx - 5))+$((by - 3))" +repage "$tmp/right-click.png"
+  "$pointer" right >/dev/null
+  if rect=$(wait_for '.menus.bar | select(.height > 100) | [.x, .y, .width, .height] | @tsv'); then
+    read -r bx by bw bh <<<"$rect"
+    sleep 0.3
+    full "$tmp/rc.png"
+    crop_rect "$tmp/rc.png" "$tmp/right-click.png" $bx $by $bw $bh
     keep "$tmp/right-click.png" right-click
+  else
+    echo "screenshots: the Bar menu did not open, skipping it" >&2
   fi
   at $((mw / 2)) 200
-  "$pointer" left
+  "$pointer" left >/dev/null
   sleep 0.5
   override "$readme_state"
 fi
 
-# Item menus: right click an Item and crop to what appeared. pin-menu is the
-# first Pin with no Windows (its menu is short: the App's actions, its icon and
-# name, Unpin from taskbar); window-menu is a throwaway foot window posing as btop, whose Item
-# is not pinned (the App's actions, the window's state, Close Window, then its
-# icon and name and Pin to taskbar). The menu's crop is padded back like the
-# Bar menu's.
-item_menu() {
-  local name=$1 x=$2 before=$3
-  at "$x" $((mh - 26)); sleep 0.6
-  "$pointer" right >/dev/null
-  sleep 1
-  full "$tmp/im-after.png"
-  # Only the region over the Item: a terminal's blinking cursor elsewhere on
-  # the screen would otherwise count as a change.
-  local rx=$(( x > 160 ? x - 160 : 0 )) ry=$((mh - 700))
-  magick "$before" -crop "520x700+${rx}+${ry}" +repage "$tmp/im-b.png"
-  magick "$tmp/im-after.png" -crop "520x700+${rx}+${ry}" +repage "$tmp/im-a.png"
-  read -r bx by bw bh < <(changed_box "$tmp/im-b.png" "$tmp/im-a.png")
-  bx=$((bx + rx)); by=$((by + ry))
-  # Keeps the crop only for a menu above the Dock (not a Preview or a tooltip).
-  if [[ ${bh:-0} -lt 60 || ${by:-9999} -gt $((mh - 120)) ]]; then
-    return 1
-  fi
-  magick "$tmp/im-after.png" -crop "$((bw + 10))x$((bh + 6))+$((bx - 5))+$((by - 3))" +repage "$tmp/$name.png"
-  menu_h=$bh
-  return 0
-}
-
+# pin-menu: the first Pin with no Windows (the App's actions, its icon and name,
+# Unpin from taskbar).
 if wanted pin-menu; then
-  at $((mw / 2)) 200; sleep 0.8
-  at $((mw / 2)) $((mh - 2)); sleep 1.2
-  full "$tmp/im-away.png"
-  found=false
-  for slot in $(seq 1 10); do
-    at $((mw / 2)) $((mh - 2)); sleep 0.5
-    menu_h=0
-    if item_menu pin-menu $((31 + 46 * slot)) "$tmp/im-away.png" && [[ $menu_h -lt 190 ]]; then
-      found=true
-      break
-    fi
-    # Close whatever opened (a Window Item's menu) and try the next slot.
-    at $((mw / 2)) 200; "$pointer" left >/dev/null; sleep 0.6
-  done
-  if $found; then keep "$tmp/pin-menu.png" pin-menu; else echo "screenshots: found no Pin without Windows, skipping pin-menu" >&2; fi
+  at $((mw / 2)) 200; sleep 0.5
+  if rect=$(open_item_menu '.kind == "pin"'); then
+    read -r bx by bw bh <<<"$rect"
+    sleep 0.3
+    full "$tmp/pm.png"
+    crop_rect "$tmp/pm.png" "$tmp/pin-menu.png" $bx $by $bw $bh
+    keep "$tmp/pin-menu.png" pin-menu
+  else
+    echo "screenshots: found no Pin without Windows, skipping pin-menu" >&2
+  fi
   at $((mw / 2)) 200; "$pointer" left >/dev/null; sleep 0.5
 fi
 
+# window-menu: a throwaway foot window posing as btop, whose Item is not pinned
+# (the App's actions, the window's state, Close Window, then the App's icon and
+# name and Pin to taskbar).
 if wanted window-menu; then
-  at $((mw / 2)) $((mh - 2)); sleep 1.2
   foot --app-id=btop --title="Window one" -o colors-dark.background=c8c8c8 -o colors-dark.foreground=202020 sh -c "echo 'Window one'; sleep 600" >/dev/null 2>&1 &
-  sleep 2.5
-  at $((mw / 2)) 200; sleep 0.8
-  at $((mw / 2)) $((mh - 2)); sleep 1.2
-  full "$tmp/wm-away.png"
-  # The throwaway window is the newest Item, so the last icon on the Dock: scan
-  # one row of pixels through the icons for the rightmost column that differs
-  # from the Dock's own colour, and right-click just inside it.
-  row=$(magick "$tmp/wm-away.png" -crop "$((mw / 2))x1+0+$((mh - 26))" +repage -depth 8 txt:- | tail -n +2 \
-    | sed -E 's/^([0-9]+),0:.*(#[0-9A-Fa-f]{6}).*$/\1 \2/')
-  bg=${row##* }
-  last_x=$(awk -v bg="$bg" '$2 != bg { last = $1 } END { print last }' <<<"$row")
-  menu_h=0
-  if [[ -n $last_x ]] && item_menu window-menu $((last_x - 8)) "$tmp/wm-away.png" && [[ $menu_h -lt 400 ]]; then
+  at $((mw / 2)) 200; sleep 0.5
+  if rect=$(open_item_menu '.appId == "btop"'); then
+    read -r bx by bw bh <<<"$rect"
+    sleep 0.3
+    full "$tmp/wm.png"
+    crop_rect "$tmp/wm.png" "$tmp/window-menu.png" $bx $by $bw $bh
     keep "$tmp/window-menu.png" window-menu
   else
-    echo "screenshots: no Item menu opened, skipping window-menu" >&2
+    echo "screenshots: the throwaway window's menu did not open, skipping window-menu" >&2
   fi
   at $((mw / 2)) 200; "$pointer" left >/dev/null; sleep 0.5
-  # By class, not the list taken at the start: the window may map late.
   for address in $(hyprctl clients -j | jq -r '.[] | select(.class == "btop") | .address'); do
     hyprctl dispatch "hl.dsp.window.close({ window = \"address:$address\" })" >/dev/null 2>&1 || true
   done
@@ -302,42 +288,31 @@ if wanted window-menu; then
 fi
 
 # Preview: two throwaway windows of one app make a group Item, whose Preview is
-# wider than any single Window's. Hover the Dock's slots in turn and keep the
-# widest Preview; what appeared, against the screen with the pointer away, is
-# the crop.
+# wider than any single Window's. Hover that Item and crop to the Preview and the
+# Dock under it.
 if wanted preview; then
   for n in one two; do
     foot --app-id=startbar-screenshot --title="Window $n" sh -c "echo 'Window $n'; ls $repo | head -12; sleep 600" >/dev/null 2>&1 &
   done
-  sleep 2.5
-  spares=($(hyprctl clients -j | jq -r '.[] | select(.class == "startbar-screenshot") | .address'))
-  # Baseline with the pointer on the Dock's edge, not over a window: focus follows
-  # the pointer, and a different active border would show up in every diff.
-  at $((mw / 2)) 200; sleep 0.8
-  at $((mw / 2)) $((mh - 2)); sleep 1.2
-  full "$tmp/away.png"
-  best=0; found=""
-  if [[ ${#spares[@]} -ge 2 ]]; then
-    for slot in $(seq 0 14); do
-      # Back to the edge first: jumping from Item to Item loses some hovers.
-      at $((mw / 2)) $((mh - 2)); sleep 0.5
-      at $((31 + 46 * slot)) $((mh - 26)); sleep 1.2
-      full "$tmp/hover.png"
-      read -r bx by bw bh < <(changed_box "$tmp/away.png" "$tmp/hover.png")
-      if [[ ${bw:-0} -gt $best && ${by:-9999} -lt $((mh - 120)) ]]; then
-        best=$bw
-        cp "$tmp/hover.png" "$tmp/best.png"
-        found="$bx $by $bw $bh"
-      fi
-    done
-  fi
-  if [[ -z $found || $best -lt 300 ]]; then
-    echo "screenshots: could not find a Preview of the two windows, skipping it" >&2
+  at $((mw / 2)) 200; sleep 0.5
+  if item=$(wait_for '.items[] | select(.count >= 2) | [.x, .y, .width, .height] | @tsv'); then
+    read -r x y w h <<<"$item"
+    spares=($(hyprctl clients -j | jq -r '.[] | select(.class == "startbar-screenshot") | .address'))
+    # From the Dock's edge first: jumping straight onto an Item can lose the hover.
+    at $((mw / 2)) $((mh - 2)); sleep 0.5
+    at $((x + w / 2)) $((y + h / 2))
+    if rect=$(wait_for '.menus.preview | select(.width > 100 and .height > 50) | [.x, .y, .width, .height] | @tsv'); then
+      read -r bx by bw bh <<<"$rect"
+      sleep 0.6
+      full "$tmp/pv.png"
+      px=$((bx > 7 ? bx - 7 : 0)); py=$((by > 7 ? by - 7 : 0))
+      magick "$tmp/pv.png" -crop "$((bw + 14))x$((mh - py))+${px}+${py}" +repage "$tmp/preview.png"
+      keep "$tmp/preview.png" preview
+    else
+      echo "screenshots: the Preview did not open, skipping it" >&2
+    fi
   else
-    read -r bx by bw bh <<<"$found"
-    x=$((bx > 7 ? bx - 7 : 0)); y=$((by > 7 ? by - 7 : 0))
-    magick "$tmp/best.png" -crop "$((bw + 14))x$((mh - y))+${x}+${y}" +repage "$tmp/preview.png"
-    keep "$tmp/preview.png" preview
+    echo "screenshots: could not find a group Item of the two windows, skipping the Preview" >&2
   fi
   at $((mw / 2)) 200
 fi

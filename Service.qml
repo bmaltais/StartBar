@@ -668,6 +668,17 @@ Item {
     // For a Super-key binding: `omarchy-shell io.github.bmaltais.startbar startMenu`.
     function startMenu(): void { root.startMenuRequested(root.focusedScreenName(), "toggle") }
     function closeStartMenu(): void { root.startMenuRequested(root.focusedScreenName(), "close") }
+    // Where the Dock's Items and any open menu are on the focused monitor, as
+    // JSON (see `layout` in the panel). For the scripts that drive the pointer.
+    function layout(): string {
+      var name = root.focusedScreenName()
+      for (var i = 0; i < panels.instances.length; i++) {
+        if (panels.instances[i].screen && panels.instances[i].screen.name === name) {
+          return JSON.stringify(panels.instances[i].layout())
+        }
+      }
+      return "{}"
+    }
   }
 
   FileView {
@@ -1337,6 +1348,7 @@ Item {
   }
 
   Variants {
+    id: panels
     model: Quickshell.screens
 
     PanelWindow {
@@ -1384,6 +1396,46 @@ Item {
       // Whether the Dock/bar is on screen: always, unless it auto-hides, in
       // which case it follows the Revealed state.
       readonly property bool shown: !root.autoHide || revealState.revealed
+
+      // Where everything is on this monitor, in pixels from its top-left
+      // corner, for `omarchy-shell <id> layout` (scripts/screenshots.sh and
+      // scripts/pointer.sh read it instead of finding things in a screenshot):
+      // { monitor, items: [{ key, kind, appId, count, x, y, width, height }],
+      //   menus: { item, bar, preview } } with a menu's rectangle when it is open.
+      // The panel covers the monitor less any bar reserved at an edge, so its
+      // own offset is the monitor's size less its own.
+      function layout() {
+        var ox = panel.screen.width - panel.width
+        var oy = panel.screen.height - panel.height
+        function rect(x, y, w, h) {
+          return { x: Math.round(x + ox), y: Math.round(y + oy), width: Math.round(w), height: Math.round(h) }
+        }
+        function ofItem(it) {
+          var p = it.mapToItem(null, 0, 0)
+          return rect(p.x, p.y, it.width, it.height)
+        }
+        // A popup window is as big as its menu plus the shadow's room all round.
+        function ofPopup(w) {
+          return w.visible ? rect(w.relativeX + root.menuShadow, w.relativeY + root.menuShadow,
+            w.implicitWidth - root.menuShadow * 2, w.implicitHeight - root.menuShadow * 2) : null
+        }
+        var items = []
+        for (var i = 0; i < repeater.count; i++) {
+          var it = repeater.itemAt(i)
+          if (!it || !it.modelData) continue
+          var r = ofItem(it)
+          r.key = it.key
+          r.kind = it.modelData.kind
+          r.appId = root.menuAppId(it.modelData) || ""
+          r.count = it.modelData.count || 1
+          items.push(r)
+        }
+        return {
+          monitor: panel.screen.name,
+          items: items,
+          menus: { item: ofPopup(contextMenu), bar: ofPopup(barMenu), preview: ofPopup(previewPopup) },
+        }
+      }
 
       // Full-width, above any bar reservation because it's anchored to
       // this panel's own bottom edge, which ExclusionMode.Normal already
@@ -2857,7 +2909,7 @@ Item {
         visible: false
         color: "transparent"
         implicitWidth: contextMenu.rowWidth + root.menuShadow * 2
-        implicitHeight: menuColumn.implicitHeight + root.menuShadow * 2
+        implicitHeight: menuColumn.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
 
         onVisibleChanged: {
           revealState.set("menu", contextMenu.visible)
