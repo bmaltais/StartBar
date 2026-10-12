@@ -2219,7 +2219,7 @@ Item {
         }
         readonly property int thumbWidth: {
           var n = Math.max(1, windowIds.length)
-          var room = panel.width - Style.spacing.xs * 2 - Style.spacing.sm * 2 - (Style.spacing.xs * 2 + Style.spacing.xs) * n
+          var room = panel.width - Style.spacing.xs * 2 - Style.spacing.sm * 2 - root.menuShadow * 2 - (Style.spacing.xs * 2 + Style.spacing.xs) * n
           return Math.max(Style.space(80), Math.min(Style.space(220), Math.floor(room / n)))
         }
         readonly property int thumbHeight: Math.round(thumbWidth * 124 / 220)
@@ -2256,8 +2256,12 @@ Item {
 
         visible: previewState.showing && liveItem !== null
         color: "transparent"
-        implicitWidth: previewRow.implicitWidth + Style.spacing.sm * 2
-        implicitHeight: previewRow.implicitHeight + Style.spacing.sm * 2
+        // Room for the card's shadow on every side (see root.menuShadow).
+        implicitWidth: previewRow.implicitWidth + Style.spacing.sm * 2 + root.menuShadow * 2
+        implicitHeight: previewRow.implicitHeight + Style.spacing.sm * 2 + root.menuShadow * 2
+        // Only the card takes the pointer, so the empty band that holds the
+        // shadow never gets between the pointer and the Dock's icons.
+        mask: Region { item: previewCard }
 
         onVisibleChanged: {
           revealState.set("preview", previewPopup.visible)
@@ -2281,7 +2285,7 @@ Item {
             var x = previewState.anchorX - previewPopup.implicitWidth / 2
             x = Math.max(Style.spacing.xs, Math.min(x, panel.width - previewPopup.implicitWidth - Style.spacing.xs))
             previewAnchor.rect.x = Math.round(x)
-            previewAnchor.rect.y = Math.round(Math.max(Style.spacing.xs, previewState.anchorY - previewPopup.implicitHeight - Style.spacing.xs))
+            previewAnchor.rect.y = Math.round(Math.max(Style.spacing.xs, previewState.anchorY - previewPopup.implicitHeight - Style.spacing.xs + root.menuShadow))
           }
         }
 
@@ -2303,14 +2307,25 @@ Item {
           anchors.fill: parent
           clip: true
 
+          RectangularShadow {
+            anchors.fill: previewCard
+            radius: previewCard.radius
+            blur: root.menuShadow
+            offset.y: Style.space(4)
+            spread: 0
+            color: Qt.rgba(0, 0, 0, 0.6)
+          }
+
           Rectangle {
-            width: parent.width
-            height: parent.height
+            id: previewCard
+            x: root.menuShadow
+            width: parent.width - root.menuShadow * 2
+            height: parent.height - root.menuShadow * 2
             radius: root.menuRadius
             color: root.colPopupBackground
             border.width: Style.normalBorderWidth
             border.color: root.colHairline
-            y: (1 - previewPopup.slide) * height
+            y: root.menuShadow + (1 - previewPopup.slide) * (height + root.menuShadow)
 
             HoverHandler {
               onHoveredChanged: previewState.popupHover(hovered)
