@@ -550,10 +550,14 @@ Item {
     dockSettings.apply({ type: "unpinAppFromDrag", appId: appId })
   }
 
-  // A Pin's tooltip (docs/SPEC.md "What the Dock shows": "a 'missing'
-  // tooltip"): the App's own name once resolved, its bare Pin id if the
-  // App resolved but has none, or an explicit missing note once its App
-  // is no longer installed.
+  // A Pin whose App is installed shows no tooltip, as in Windows: its icon
+  // says what it is. Only a missing one explains itself.
+  function pinHasNoTooltip(item) {
+    return item.kind === "pin" && !item.missing
+  }
+
+  // A missing Pin's tooltip (docs/SPEC.md "What the Dock shows": "a
+  // 'missing' tooltip"): its bare Pin id and an explicit missing note.
   function pinTooltipText(item) {
     if (item.missing) return item.appId + " (missing)"
     return (item.app && item.app.name) || item.appId
@@ -1967,6 +1971,7 @@ Item {
               // revealState and can't keep the Dock revealed on its own.
               PanelToolTip {
                 visible: mouseArea.containsMouse && panel.shown && !previewState.enabledFor(dockItem.modelData)
+                  && !root.pinHasNoTooltip(dockItem.modelData)
                 text: dockItem.isPin
                   ? root.pinTooltipText(dockItem.modelData)
                   : root.windowTooltipText(dockItem.modelData)
@@ -2700,7 +2705,8 @@ Item {
         // Sized to its longest row, since app actions ("New Private Window")
         // and window rows ("Move to scratchpad") vary; see barMenu.rowWidth.
         readonly property int rowWidth: Math.max(Style.space(160),
-          Math.ceil(contextMenuMetrics.advanceWidth) + Style.space(12) * 2 + root.menuPad * 2 + Style.space(12))
+          Math.ceil(contextMenuMetrics.advanceWidth) + Style.space(12) * 2 + root.menuPad * 2 + Style.space(12)
+          + (contextMenu.rows.some(function (r) { return r.icon || r.glyph }) ? Style.space(24) : 0))
 
         TextMetrics {
           id: contextMenuMetrics
@@ -2743,6 +2749,38 @@ Item {
           if (!item) return []
           var menu = DockModel.menuFor(item)
           var appId = root.menuAppId(item)
+          // A Pin with no Windows, as in Windows 11: the App's own actions,
+          // then a row with its icon and name that starts it, then
+          // "Unpin from taskbar".
+          if (item.kind === "pin") {
+            var pinRows = []
+            var pinActions = item.app && item.app.actions ? item.app.actions : []
+            for (var a = 0; a < pinActions.length; a++) {
+              pinRows.push({
+                label: pinActions[a].name,
+                enabled: true,
+                group: 0,
+                trigger: (function (action) { return function () { action.execute() } })(pinActions[a]),
+              })
+            }
+            if (item.app) {
+              pinRows.push({
+                label: root.pinTooltipText(item),
+                icon: item.app.icon,
+                enabled: true,
+                group: 1,
+                trigger: function () { root.launchApp(item.app) },
+              })
+            }
+            pinRows.push({
+              label: "Unpin from taskbar",
+              glyph: "\uf08d",
+              enabled: true,
+              group: 1,
+              trigger: function () { root.togglePin(appId, true) },
+            })
+            return pinRows
+          }
           var list = [
             {
               label: menu.pinned ? "Unpin" : "Pin",
@@ -2940,12 +2978,43 @@ Item {
                     ? Style.hoverFillFor(root.colForeground, previewPopup.accentColor)
                     : "transparent"
 
+                  // The App's icon, or a glyph, for the rows that have one.
+                  Item {
+                    id: menuRowIcon
+                    visible: !!menuRow.modelData.icon || !!menuRow.modelData.glyph
+                    anchors.left: parent.left
+                    anchors.leftMargin: Style.space(12)
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Style.space(16)
+                    height: Style.space(16)
+
+                    Image {
+                      visible: !!menuRow.modelData.icon && source.toString() !== ""
+                      anchors.fill: parent
+                      fillMode: Image.PreserveAspectFit
+                      asynchronous: true
+                      sourceSize.width: width * Screen.devicePixelRatio
+                      sourceSize.height: height * Screen.devicePixelRatio
+                      source: menuRow.modelData.icon ? root.iconSource(menuRow.modelData.icon) : ""
+                    }
+
+                    Text {
+                      textFormat: Text.PlainText
+                      visible: !!menuRow.modelData.glyph
+                      anchors.centerIn: parent
+                      text: menuRow.modelData.glyph || ""
+                      color: previewPopup.textColor
+                      font.family: "JetBrainsMono Nerd Font"
+                      font.pixelSize: Style.space(14)
+                    }
+                  }
+
                   Text {
                     textFormat: Text.PlainText
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Style.space(12)
+                    anchors.leftMargin: Style.space(12) + (menuRowIcon.visible ? Style.space(16) + Style.space(8) : 0)
                     anchors.rightMargin: Style.space(12)
                     elide: Text.ElideRight
                     text: menuRow.modelData.label
