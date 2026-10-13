@@ -46,6 +46,20 @@
 
 var SPECIAL_WORKSPACE_PREFIX = "special:";
 
+// The key of the Pin Item for an App id, and the test for one. The one place
+// that knows the format: Placed positions are stored under these keys, and
+// only a Pin's is persisted (DockConfig.js keeps the same prefix in its
+// validation; test/dockPlaced.test.js fails if the two drift apart).
+var PIN_KEY_PREFIX = "pin:";
+
+function pinKey(appId) {
+  return PIN_KEY_PREFIX + appId;
+}
+
+function isPinKey(key) {
+  return typeof key === "string" && key.indexOf(PIN_KEY_PREFIX) === 0;
+}
+
 function groupKeyFor(window, app) {
   return app ? "app:" + app.id : "class:" + window.class;
 }
@@ -95,7 +109,7 @@ function toWindowItem(window, app, pinned) {
 function toPinItem(pinId, app) {
   return {
     kind: "pin",
-    key: "pin:" + pinId,
+    key: pinKey(pinId),
     appId: pinId,
     app: app || null,
     letter: app ? null : pinId ? pinId.charAt(0) : "",
@@ -379,6 +393,228 @@ function movedPlacements(items, placements, key, index) {
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// Windows to Items. Everything between "Hyprland says these toplevels exist"
+// and "these are the Dock's Items" is here, so it can be run under Node with
+// plain objects shaped like Quickshell's HyprlandToplevel:
+//   { address, title, activated, urgent, workspace: { name }, lastIpcObject }.
+// Service.qml only reads the live toplevels, hands them in, and stores what
+// comes back.
+
+// How long a new Window may go without a class before it is shown anyway.
+var CLASS_WAIT_MS = 3000;
+
+// The state refreshItems carries from one call to the next:
+//   openedAt / nextOpenedAt  Launch Order ranks, assigned the first time a
+//                            Window's address is seen and kept while it is open
+//   firstSeen                when a Window with no class yet was first seen
+//   windowPlacements         this session's Placed Window and Group Items,
+//                            { key: index }, dropped with their Item
+//   signature                what the Dock last showed (see refreshItems)
+function newItemsState() {
+  return { openedAt: {}, nextOpenedAt: 0, firstSeen: {}, windowPlacements: {}, signature: "" };
+}
+
+// A Window's App from its class: the desktop entry `lookup` finds for it, or
+// failing that the one for a Chromium web app's Omarchy-style class. null when
+// the class is empty or nothing matches. `lookup(name)` is the shell's
+// DesktopEntries.heuristicLookup, or a fake.
+function resolveApp(windowClass, lookup) {
+  if (!windowClass) return null;
+  var app = lookup(windowClass);
+  if (app) return app;
+  var alias = chromeAppClass(windowClass);
+  return alias ? lookup(alias) || null : null;
+}
+
+// What an "openwindow" event's data ("address,workspace,class,title") says,
+// splitting only as far as the class: a title may hold commas.
+function openedWindow(data) {
+  var parts = String(data).split(",");
+  return { address: parts[0], class: parts[2] || "" };
+}
+
+// The Window record buildDockItems takes, from one toplevel.
+function windowFromToplevel(toplevel, openedAt) {
+  var info = toplevel.lastIpcObject || {};
+  return {
+    id: toplevel.address,
+    class: clipText(info.class),
+    workspace: toplevel.workspace ? toplevel.workspace.name : String((info.workspace && info.workspace.name) || ""),
+    openedAt: openedAt,
+    title: clipText(toplevel.title || info.title),
+    active: !!toplevel.activated,
+    attention: !!toplevel.urgent,
+    fullscreen: info.fullscreen || 0,
+    floating: !!info.floating,
+    pinned: !!info.pinned,
+  };
+}
+
+// The Placed positions buildDockItems applies: the persisted Pins' plus this
+// session's Window and Group Items'.
+function placedList(pinPlacements, windowPlacements) {
+  var combined = (Array.isArray(pinPlacements) ? pinPlacements : []).slice();
+  for (var key in windowPlacements) combined.push({ key: key, index: windowPlacements[key] });
+  return combined;
+}
+
+// One refresh of the Dock's Items. `input`:
+//   toplevels      the live toplevels (any with no address are skipped)
+//   now            the time in ms
+//   classWaitMs    optional, defaults to CLASS_WAIT_MS
+//   pins           the Pins, App ids in order
+//   pinPlacements  the persisted Placed Pins, [{ key, index }]
+//   grouped        the groupWindows setting
+//   lookup         DesktopEntries.heuristicLookup, or a fake
+//   byId           DesktopEntries.byId, or a fake: a Pin's App by id
+// Returns:
+//   state    the next state, to be passed in on the next call
+//   items    the Items to show
+//   changed  false when they look exactly like the last call's (a title change
+//            alone does not count), and a caller that already shows those must
+//            not replace them: replacing makes every delegate be rebuilt,
+//            including the one the pointer is on
+//   held     a Window with no class yet is being kept off the Dock; the caller
+//            should refresh again once classWaitMs has passed
+//   titles   Window title by address (kept apart from the Items so a changing
+//            title does not rebuild them)
+//   handles  toplevel by address, for the Previews
+// A Window's class arrives a moment after the Window does. Until it does its
+// App is unknown and it would show as a blank Letter Tile, then jump into its
+// App's group, so it is held back for classWaitMs at most (a Window may really
+// have no class).
+function refreshItems(state, input) {
+  var classWaitMs = input.classWaitMs === undefined ? CLASS_WAIT_MS : input.classWaitMs;
+  var openedAt = Object.assign({}, state.openedAt);
+  var nextOpenedAt = state.nextOpenedAt;
+  var firstSeen = Object.assign({}, state.firstSeen);
+  var seen = {};
+  var handles = {};
+  var windows = [];
+  var held = false;
+
+  for (var i = 0; i < input.toplevels.length; i++) {
+    var toplevel = input.toplevels[i];
+    var address = toplevel.address;
+    if (typeof address !== "string" || address.length === 0) continue;
+
+    seen[address] = true;
+    handles[address] = toplevel;
+    if (!(address in openedAt)) openedAt[address] = nextOpenedAt++;
+
+    var info = toplevel.lastIpcObject || {};
+    if (!info.class) {
+      if (firstSeen[address] === undefined) firstSeen[address] = input.now;
+      if (input.now - firstSeen[address] < classWaitMs) {
+        held = true;
+        continue;
+      }
+    }
+    windows.push(windowFromToplevel(toplevel, openedAt[address]));
+  }
+
+  var keptOpenedAt = {};
+  for (var a in openedAt) if (seen[a]) keptOpenedAt[a] = openedAt[a];
+  var keptFirstSeen = {};
+  for (var f in firstSeen) if (seen[f]) keptFirstSeen[f] = firstSeen[f];
+
+  var titles = {};
+  for (var t = 0; t < windows.length; t++) titles[windows[t].id] = windows[t].title;
+
+  var lookup = input.lookup;
+  var items = buildDockItems(
+    windows,
+    function (window) { return resolveApp(window.class, lookup); },
+    input.pins,
+    function (appId) { return appId ? input.byId(appId) || null : null; },
+    placedList(input.pinPlacements, state.windowPlacements),
+    !!input.grouped
+  );
+
+  // A Placed Window or Group Item lasts only while its Item exists.
+  var itemKeys = {};
+  for (var n = 0; n < items.length; n++) itemKeys[items[n].key] = true;
+  var keptPlacements = {};
+  for (var placedKey in state.windowPlacements) {
+    if (itemKeys[placedKey]) keptPlacements[placedKey] = state.windowPlacements[placedKey];
+  }
+
+  // The signature leaves out `title` (tracked in `titles`) and reduces each
+  // App to its id.
+  var signature = JSON.stringify(items, function (key, value) {
+    if (key === "title") return undefined;
+    if (key === "app") return value ? value.id : null;
+    return value;
+  });
+
+  return {
+    state: {
+      openedAt: keptOpenedAt,
+      nextOpenedAt: nextOpenedAt,
+      firstSeen: keptFirstSeen,
+      windowPlacements: keptPlacements,
+      signature: signature,
+    },
+    items: items,
+    changed: signature !== state.signature,
+    held: held,
+    titles: titles,
+    handles: handles,
+  };
+}
+
+// Whether the Dock is still waiting on Hyprland for something: a Window held
+// back for its class, or a Window Item with neither an App nor a Letter Tile
+// letter. The caller re-asks Hyprland for its toplevels while this holds.
+function awaitingToplevels(items, held) {
+  if (held) return true;
+  return items.some(function (it) { return it.kind === "window" && !it.app && !it.letter; });
+}
+
+// The steps that turn the list of Item keys a list model holds into `next`,
+// one at a time and in order: { op: "remove", at }, { op: "move", from, to },
+// { op: "insert", at, key }. An Item that stays keeps its row and a reorder is
+// a move, so a drop does not tear down and rebuild every delegate.
+function keyOps(current, next) {
+  var list = current.slice();
+  var ops = [];
+  var wanted = {};
+  for (var n = 0; n < next.length; n++) wanted[next[n]] = true;
+  for (var r = list.length - 1; r >= 0; r--) {
+    if (!wanted[list[r]]) {
+      ops.push({ op: "remove", at: r });
+      list.splice(r, 1);
+    }
+  }
+  for (var i = 0; i < next.length; i++) {
+    if (i < list.length && list[i] === next[i]) continue;
+    var at = list.indexOf(next[i], i + 1);
+    if (at >= 0) {
+      ops.push({ op: "move", from: at, to: i });
+      list.splice(i, 0, list.splice(at, 1)[0]);
+    } else {
+      ops.push({ op: "insert", at: i, key: next[i] });
+      list.splice(i, 0, next[i]);
+    }
+  }
+  return ops;
+}
+
+// The Placed positions after dropping the Item `key` at slot `index` of
+// `items`, as the Pins' (to persist) and the state with the Window and Group
+// Items' (to keep in memory).
+function dropPlaced(state, items, pinPlacements, key, index) {
+  var moved = movedPlacements(items, placedList(pinPlacements, state.windowPlacements), key, index);
+  var pins = [];
+  var windows = {};
+  for (var i = 0; i < moved.length; i++) {
+    if (isPinKey(moved[i].key)) pins.push(moved[i]);
+    else windows[moved[i].key] = moved[i].index;
+  }
+  return { pins: pins, state: Object.assign({}, state, { windowPlacements: windows }) };
+}
+
 // Any app can set its window's title and class to anything, however long, and
 // the Dock lays them out in tooltips and Previews: cap what it takes in.
 var MAX_WINDOW_TEXT = 256;
@@ -410,5 +646,17 @@ if (typeof module !== "undefined" && module.exports) {
     windowActions: windowActions,
     movedPlacements: movedPlacements,
     menuFor: menuFor,
+    PIN_KEY_PREFIX: PIN_KEY_PREFIX,
+    pinKey: pinKey,
+    isPinKey: isPinKey,
+    CLASS_WAIT_MS: CLASS_WAIT_MS,
+    newItemsState: newItemsState,
+    resolveApp: resolveApp,
+    openedWindow: openedWindow,
+    placedList: placedList,
+    refreshItems: refreshItems,
+    awaitingToplevels: awaitingToplevels,
+    keyOps: keyOps,
+    dropPlaced: dropPlaced,
   };
 }

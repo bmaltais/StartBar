@@ -39,7 +39,7 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 
 | Module | What it decides |
 | --- | --- |
-| `DockModel.js` | Which Items the Dock shows and in what order: Launch Order, Pins, Placed |
+| `DockModel.js` | Which Items the Dock shows and in what order: Launch Order, Pins, Placed. It also takes Hyprland's toplevels to Items (`refreshItems`: Launch Order ranks, Windows held back until they have a class, App lookup, what changed) and decides where a drop is stored (`dropPlaced`: a Pin's position for settings, a Window's or Group's in memory). Tests give it plain objects shaped like the toplevels |
 | `DockConfig.js` | Settings: defaults, the effective view of the config entry, and every change to it |
 | `DockInteraction.js` | Reveal and hide (one hold per holder: strip, dock, menus, Start menu, drag), and where a dragged Item lands |
 | `DockHyprland.js` | How to ask Hyprland for each thing the Dock wants: focus, raise, close, Window-state rows, Peek. Returns the command; tests run `bash -n` over every script |
@@ -66,6 +66,7 @@ It is one long file. Search for these names:
 | `previewState`, `previewPopup` | The state, timers and effects of `DockPreview.js`, and the Preview itself with its thumbnails |
 | `contextMenu` | The Item menu, and the Preview menu (`previewWindowId`) |
 | `barMenu` | The Bar menu |
+| `dockState` | Holds what `DockModel.refreshItems` returns and calls it on every Hyprland event; `placeItem` stores a drop through `DockModel.dropPlaced` |
 | `dockRow` | The Items, drag and drop |
 
 ### Checks

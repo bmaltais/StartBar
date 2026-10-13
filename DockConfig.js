@@ -86,7 +86,7 @@ function effectivePlacements(entry) {
     if (!isPlainObject(candidate)) continue;
     var key = candidate.key;
     var index = Number(candidate.index);
-    if (typeof key !== "string" || key.indexOf("pin:") !== 0) continue;
+    if (typeof key !== "string" || key.indexOf("pin:") !== 0) continue; // DockModel.PIN_KEY_PREFIX
     if (seen[key]) continue;
     if (!isFinite(index) || index < 0) continue;
     seen[key] = true;
@@ -463,7 +463,7 @@ function applyIntent(entry, intent) {
   else if (kind === "unpinApp" && appId) patch.pins = withoutId(view.pins, appId);
   else if (kind === "unpinAppFromDrag" && appId) {
     patch.pins = withoutId(view.pins, appId);
-    patch.placements = unplaced(view.placements, "pin:" + appId);
+    patch.placements = unplaced(view.placements, "pin:" + appId); // DockModel.pinKey
   } else if (kind === "setPlacements") {
     patch.placements = effectivePlacements({ placements: intent.placements });
   } else if (kind === "pinStartApp" && appId) patch.startPins = withId(view.startPins, appId);
