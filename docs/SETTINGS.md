@@ -75,12 +75,12 @@ It is the one part of the Dock that takes keyboard focus, and only while open.
 
 ### Settings window
 
-Right-click an empty part of the bar and choose **Settings…** (or run `omarchy-shell io.github.bmaltais.startbar settings`, handy for a keybinding) to open a window with a widget for every option in the tables above: switches, choice buttons, steppers, a slider for opacity, text fields, and an editor for the Start menu's Places folders. Changes apply instantly and are saved to `shell.json`. "Reset to defaults" (click twice) puts every setting back; your Pins and Start menu pins are kept.
+Right-click an empty part of the bar and choose **Settings…** (or run `omarchy-shell io.github.bmaltais.startbar settings`, handy for a keybinding) to open a window with a widget for every option in the tables above, with pages listed down the left (Taskbar, Windows, Start menu), a search box centred at the top to find a setting by typing, and options that depend on another one dimmed while it is off: switches, choice buttons, steppers, a slider for opacity, text fields, and an editor for the Start menu's Places folders. Changes apply instantly and are saved to `shell.json`. "Reset to defaults" (click twice) puts every setting back; your Pins and Start menu pins are kept.
 
 ### Menus
 
 - **Right-click an icon**: Pin/Unpin, New Window and the app's own actions; for a window, Maximize/Restore, Full screen/Exit full screen, Float/Tile, and when floating Center and Pin on top; Move to scratchpad; then the app and Pin/Unpin; and last, Close window (Close all windows for a group). The menu stays open until you pick a row, click outside it, or move the pointer off it.
-- **Right-click the bar** (an empty part) opens a menu of the common options (alignment, colours, Start menu, auto-hide, clock, previews...). Its last row, **Settings…**, opens the full settings window.
+- **Right-click the bar** (an empty part) opens a short menu: Icon alignment, Colors, Start button and Window previews are sections that open a submenu beside them, and the everyday toggles follow (auto-hide, clock, group windows, workspace badge, transparent background). Its last row, **Settings…**, opens the full settings window.
 
 ## Pinning
 

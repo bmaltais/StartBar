@@ -5,6 +5,8 @@ const {
   effectiveView,
   applyIntent,
   barMenuRows,
+  fieldEnabled,
+  searchSettings,
 } = require("../DockConfig.js");
 
 const settingsValues = (entry) => effectiveView(entry).values;
@@ -81,4 +83,53 @@ test("the quick menu ends with a Settings... row that opens the settings window"
   const last = rows[rows.length - 1];
   assert.equal(last.label, "Settings\u2026");
   assert.equal(last.action, "settings");
+});
+
+test("a field with enabledWhen is enabled only while its other setting has the stated value", () => {
+  const field = (key) => fields().find((f) => f.key === key);
+  assert.equal(fieldEnabled(field("revealDelayMs"), settingsValues({ autoHide: true })), true);
+  assert.equal(fieldEnabled(field("revealDelayMs"), settingsValues({})), false);
+  assert.equal(fieldEnabled(field("opacity"), settingsValues({})), true);
+  assert.equal(fieldEnabled(field("opacity"), settingsValues({ transparent: true })), false);
+  assert.equal(fieldEnabled(field("previewPeek"), settingsValues({ showPreviews: false })), false);
+  assert.equal(fieldEnabled(field("clock"), settingsValues({})), true);
+});
+
+test("every enabledWhen names another field, never itself", () => {
+  const keys = new Set(fields().map((f) => f.key));
+  for (const f of fields().filter((x) => x.enabledWhen)) {
+    assert.ok(keys.has(f.enabledWhen.key), f.key);
+    assert.notEqual(f.enabledWhen.key, f.key);
+    assert.equal(typeof f.enabledWhen.is, "boolean", f.key);
+  }
+});
+
+test("every row the menu can click is enabled or says nothing about it, never falsy by omission", () => {
+  const rows = barMenuRows(effectiveTaskbar({}));
+  const clickable = rows.filter((r) => !r.children).concat(rows.flatMap((r) => r.children || []));
+  for (const r of clickable) assert.equal(r.enabled !== false, true, r.label);
+});
+
+test("search keeps the fields whose label, hint or page match every word, in any case", () => {
+  const keysOf = (query) => searchSettings(settingsSchema(), query).flatMap((g) => g.fields.map((f) => f.key));
+
+  assert.deepEqual(keysOf("hide delay"), ["hideDelayMs"]);
+  assert.deepEqual(keysOf("DELAY HIDE"), ["hideDelayMs"]);
+  assert.ok(keysOf("clock").includes("showClock"));
+  // a hint is searched too: "thumbnail" only appears in a hint
+  assert.ok(keysOf("thumbnail").includes("previewPeek"));
+  // a page title matches all its fields
+  const start = searchSettings(settingsSchema(), "start menu");
+  assert.deepEqual(start.map((g) => g.title), ["Start menu"]);
+  assert.equal(start[0].fields.length, settingsSchema().find((g) => g.title === "Start menu").fields.length);
+});
+
+test("search groups results by page, and a blank or unmatched query gives none", () => {
+  assert.deepEqual(searchSettings(settingsSchema(), ""), []);
+  assert.deepEqual(searchSettings(settingsSchema(), "   "), []);
+  assert.deepEqual(searchSettings(settingsSchema(), null), []);
+  assert.deepEqual(searchSettings(settingsSchema(), "zzzz"), []);
+  const pages = searchSettings(settingsSchema(), "preview").map((g) => g.title);
+  assert.deepEqual(pages, ["Windows"]);
+  assert.ok(searchSettings(settingsSchema(), "icon").map((g) => g.title).length >= 2);
 });

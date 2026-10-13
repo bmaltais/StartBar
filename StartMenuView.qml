@@ -367,13 +367,22 @@ Item {
       onHoveredChanged: startMenu.send({ type: "menuHover", hovered: hovered })
     }
 
+    // A slight shadow lifts the search box off the menu.
+    RectangularShadow {
+      anchors.fill: searchBox
+      radius: searchBox.radius
+      blur: Style.space(6)
+      offset.y: Style.space(1)
+      color: Qt.rgba(0, 0, 0, 0.3)
+    }
+
     Rectangle {
       id: searchBox
       anchors.top: parent.top
       anchors.left: placesPane.right
       anchors.right: parent.right
       anchors.margins: Style.spacing.xxl
-      height: Style.space(40)
+      height: Style.space(34)
       // A pill, as in Windows 11. Style.cornerRadius follows Hyprland's
       // window rounding, which many setups (this one included) set to 0,
       // and a sharp search box looks out of place.

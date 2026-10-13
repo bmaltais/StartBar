@@ -719,6 +719,16 @@ Item {
 
     readonly property var values: dockSettings.values
     property bool confirmingReset: false
+    // The page shown: an index into DockConfig.settingsSchema().
+    property int page: 0
+    // What is typed in the search box; while it is not blank the right side
+    // lists the matching fields of every page instead of the chosen page.
+    property string query: ""
+    readonly property bool searching: settingsWindow.query.trim() !== ""
+    readonly property var schema: DockConfig.settingsSchema()
+    readonly property var shownGroups: settingsWindow.searching
+      ? DockConfig.searchSettings(settingsWindow.schema, settingsWindow.query)
+      : [settingsWindow.schema[settingsWindow.page]]
 
     screen: root.settingsScreen
     visible: false
@@ -728,10 +738,48 @@ Item {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
     exclusionMode: ExclusionMode.Ignore
 
-    implicitWidth: Style.space(640) + root.menuShadow * 2
-    implicitHeight: Math.min(Style.space(760), (root.settingsScreen ? root.settingsScreen.height : 900) - Style.space(80)) + root.menuShadow * 2
+    // The window covers the whole screen, transparent, and only the frame
+    // takes input (`mask`), so the clicks around it reach the desktop. The
+    // frame sits at posX, posY inside it; dragging the title bar moves it
+    // there at once, with no round trip to the compositor (moving a
+    // layer-shell window by its margins lags the pointer and the drag
+    // wobbles). It opens centred, on the screen it was opened from.
+    readonly property real boxWidth: Style.space(780) + root.menuShadow * 2
+    readonly property real boxHeight: Math.min(Style.space(620), (root.settingsScreen ? root.settingsScreen.height : 900) - Style.space(80)) + root.menuShadow * 2
+    property real posX: 0
+    property real posY: 0
+    anchors.left: true
+    anchors.right: true
+    anchors.top: true
+    anchors.bottom: true
+    mask: Region { item: settingsFrame }
 
-    onVisibleChanged: if (!visible) settingsWindow.confirmingReset = false
+    function centre() {
+      var sw = root.settingsScreen ? root.settingsScreen.width : 1920
+      var sh = root.settingsScreen ? root.settingsScreen.height : 1080
+      settingsWindow.posX = Math.max(0, (sw - settingsWindow.boxWidth) / 2)
+      settingsWindow.posY = Math.max(0, (sh - settingsWindow.boxHeight) / 2)
+    }
+    // Keeps the frame on the screen: at least the title bar stays reachable.
+    function moveBy(dx, dy) {
+      var sw = root.settingsScreen ? root.settingsScreen.width : 1920
+      var sh = root.settingsScreen ? root.settingsScreen.height : 1080
+      var grab = Style.space(60)
+      settingsWindow.posX = Math.max(grab - settingsWindow.boxWidth, Math.min(sw - grab, settingsWindow.posX + dx))
+      settingsWindow.posY = Math.max(-root.menuShadow, Math.min(sh - grab, settingsWindow.posY + dy))
+    }
+
+    onVisibleChanged: {
+      if (visible) {
+        settingsWindow.centre()
+        settingsWindow.query = ""
+        settingsSearch.forceActiveFocus()
+      } else {
+        settingsWindow.confirmingReset = false
+      }
+    }
+    onPageChanged: settingsFlick.contentY = 0
+    onQueryChanged: settingsFlick.contentY = 0
 
     function commit(key, value) {
       dockSettings.apply({ type: "setSetting", key: key, value: value })
@@ -759,14 +807,20 @@ Item {
 
     Rectangle {
       id: settingsFrame
-      anchors.fill: parent
-      anchors.margins: root.menuShadow
+      x: settingsWindow.posX + root.menuShadow
+      y: settingsWindow.posY + root.menuShadow
+      width: settingsWindow.boxWidth - root.menuShadow * 2
+      height: settingsWindow.boxHeight - root.menuShadow * 2
       radius: root.menuRadius
       color: root.colPopupBackground
       border.width: Style.normalBorderWidth
       border.color: root.colHairline
       focus: true
-      Keys.onEscapePressed: settingsWindow.visible = false
+      // Escape clears a search first, then closes the window.
+      Keys.onEscapePressed: {
+        if (settingsWindow.searching) settingsWindow.query = ""
+        else settingsWindow.visible = false
+      }
 
       // Header
       Item {
@@ -774,18 +828,84 @@ Item {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: Style.space(52)
+        height: Style.space(60)
 
-        Text {
-          textFormat: Text.PlainText
-          anchors.left: parent.left
-          anchors.leftMargin: Style.spacing.lg
-          anchors.verticalCenter: parent.verticalCenter
-          text: "Taskbar settings"
-          color: root.colPopupText
-          font.family: Style.font.family
-          font.pixelSize: Style.font.body + 3
-          font.bold: true
+        // Drag the title bar to move the window. The window moves with the
+        // pointer, so the pointer's place in it stays put and each move is
+        // the distance from where the press was.
+        MouseArea {
+          anchors.fill: parent
+          cursorShape: pressed ? Qt.ClosedHandCursor : Qt.ArrowCursor
+          property real pressX: 0
+          property real pressY: 0
+          onPressed: function (mouse) { pressX = mouse.x; pressY = mouse.y }
+          onPositionChanged: function (mouse) {
+            if (pressed) settingsWindow.moveBy(mouse.x - pressX, mouse.y - pressY)
+          }
+        }
+
+        // The search box, centred in the title bar, drawn like the Start
+        // menu's: a pill with the same fill, outline, magnifier and shadow.
+        RectangularShadow {
+          anchors.fill: searchBox
+          radius: searchBox.radius
+          blur: Style.space(6)
+          offset.y: Style.space(1)
+          color: Qt.rgba(0, 0, 0, 0.3)
+        }
+
+        Rectangle {
+          id: searchBox
+          anchors.centerIn: parent
+          width: Math.min(Style.space(380), parent.width - Style.space(120))
+          height: Style.space(34)
+          radius: height / 2
+          color: Util.alpha(root.colPopupText, 0.05)
+          border.width: 1
+          border.color: Util.alpha(root.colPopupText, 0.12)
+
+          Text {
+            textFormat: Text.PlainText
+            id: searchIcon
+            anchors.left: parent.left
+            anchors.leftMargin: Style.spacing.lg + 2
+            anchors.verticalCenter: parent.verticalCenter
+            text: "\uDB80\uDF49"
+            color: Util.alpha(root.colPopupText, 0.7)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body + 4
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            visible: settingsSearch.text === ""
+            anchors.left: searchIcon.right
+            anchors.leftMargin: Style.spacing.md
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Find a setting"
+            color: Util.alpha(root.colPopupText, 0.5)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+
+          PlainField {
+            id: settingsSearch
+            anchors.fill: parent
+            anchors.leftMargin: searchIcon.x + searchIcon.width + Style.spacing.md
+            anchors.rightMargin: Style.spacing.md
+            maxLength: 64
+            color: root.colPopupText
+            fontFamily: Style.font.family
+            fontPixelSize: Style.font.body
+            text: settingsWindow.query
+            onTextChanged: if (settingsWindow.query !== settingsSearch.text) settingsWindow.query = settingsSearch.text
+          }
+
+          // The query is also cleared by Escape, which lives outside the box.
+          Connections {
+            target: settingsWindow
+            function onQueryChanged() { if (settingsSearch.text !== settingsWindow.query) settingsSearch.text = settingsWindow.query }
+          }
         }
 
         Rectangle {
@@ -815,14 +935,121 @@ Item {
         }
       }
 
-      // Body: scrolls when the screen is short.
-      Flickable {
-        id: settingsFlick
+      // Left side, as in the Windows 11 settings: one item per page, one
+      // under the other.
+      Item {
+        id: settingsSide
         anchors.top: settingsHeader.bottom
         anchors.bottom: settingsFooter.top
         anchors.left: parent.left
-        anchors.right: parent.right
         anchors.leftMargin: Style.spacing.lg
+        width: Style.space(190)
+
+        // The window's name, on the row of the page heading beside it.
+        Text {
+          textFormat: Text.PlainText
+          id: settingsTitle
+          anchors.top: parent.top
+          anchors.left: parent.left
+          anchors.right: parent.right
+          height: Style.space(40)
+          verticalAlignment: Text.AlignVCenter
+          elide: Text.ElideRight
+          text: "Taskbar settings"
+          color: root.colPopupText
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body + 3
+          font.bold: true
+        }
+
+        Column {
+          anchors.top: settingsTitle.bottom
+          anchors.topMargin: Style.spacing.sm
+          anchors.left: parent.left
+          anchors.right: parent.right
+          spacing: Style.space(2)
+
+          Repeater {
+            model: settingsWindow.schema
+
+            delegate: Rectangle {
+              id: navItem
+              required property var modelData
+              required property int index
+              readonly property bool current: !settingsWindow.searching && settingsWindow.page === navItem.index
+              width: parent.width
+              height: Style.space(38)
+              radius: root.menuRowRadius
+              color: navItem.current
+                ? Util.alpha(root.colAccent, 0.22)
+                : (navMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : "transparent")
+
+              // The mark beside the current page.
+              Rectangle {
+                visible: navItem.current
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(3)
+                anchors.verticalCenter: parent.verticalCenter
+                width: Style.space(3)
+                height: Style.space(16)
+                radius: width / 2
+                color: root.colAccent
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(16)
+                anchors.verticalCenter: parent.verticalCenter
+                text: navItem.modelData.title
+                color: root.colPopupText
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                font.bold: navItem.current
+              }
+
+              MouseArea {
+                id: navMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  settingsWindow.query = ""
+                  settingsWindow.page = navItem.index
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // The heading of the right side: the page, or what a search found.
+      Text {
+        textFormat: Text.PlainText
+        id: settingsHeading
+        anchors.top: settingsHeader.bottom
+        anchors.left: settingsSide.right
+        anchors.leftMargin: Style.spacing.lg * 2
+        anchors.right: parent.right
+        anchors.rightMargin: Style.spacing.lg
+        height: Style.space(40)
+        verticalAlignment: Text.AlignVCenter
+        elide: Text.ElideRight
+        text: settingsWindow.searching ? "Search results" : settingsWindow.schema[settingsWindow.page].title
+        color: root.colPopupText
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body + 8
+        font.bold: true
+      }
+
+      // Body: scrolls when the screen is short.
+      Flickable {
+        id: settingsFlick
+        anchors.top: settingsHeading.bottom
+        anchors.bottom: settingsFooter.top
+        anchors.left: settingsSide.right
+        anchors.right: parent.right
+        anchors.leftMargin: Style.spacing.lg * 2
         anchors.rightMargin: Style.spacing.lg
         contentHeight: settingsColumn.implicitHeight
         clip: true
@@ -833,22 +1060,37 @@ Item {
           width: settingsFlick.width
           spacing: Style.spacing.xs
 
+          Text {
+            textFormat: Text.PlainText
+            visible: settingsWindow.searching && settingsWindow.shownGroups.length === 0
+            width: settingsColumn.width
+            wrapMode: Text.WordWrap
+            topPadding: Style.spacing.md
+            text: "No settings match \u201C" + settingsWindow.query.trim() + "\u201D."
+            color: Util.alpha(root.colPopupText, 0.7)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+
           Repeater {
-            model: DockConfig.settingsSchema()
+            model: settingsWindow.shownGroups
 
             delegate: Column {
               id: groupBlock
               required property var modelData
+              required property int index
               width: settingsColumn.width
 
+              // Search results come from several pages: say which.
               Text {
                 textFormat: Text.PlainText
+                visible: settingsWindow.searching
                 topPadding: Style.spacing.md
                 bottomPadding: Style.spacing.xs
                 text: groupBlock.modelData.title
-                color: root.colPopupText
+                color: Util.alpha(root.colPopupText, 0.7)
                 font.family: Style.font.family
-                font.pixelSize: Style.font.body
+                font.pixelSize: Style.font.caption
                 font.bold: true
               }
 
@@ -861,8 +1103,13 @@ Item {
                   readonly property var field: fieldRow.modelData
                   readonly property var value: settingsWindow.values[fieldRow.field.key]
                   readonly property bool stacked: fieldRow.field.type === "list"
+                  // A field that follows another setting is dimmed and
+                  // inert while that one is off, and indented under it.
+                  readonly property bool live: DockConfig.fieldEnabled(fieldRow.field, settingsWindow.values)
+                  readonly property real indent: fieldRow.field.enabledWhen ? Style.space(16) : 0
 
                   width: groupBlock.width
+                  opacity: fieldRow.live ? 1 : 0.4
                   height: fieldRow.stacked
                     ? labelColumn.implicitHeight + editorLoader.height + Style.spacing.md * 2
                     : Math.max(labelColumn.implicitHeight, editorLoader.height) + Style.spacing.md * 2
@@ -880,7 +1127,8 @@ Item {
                     anchors.top: parent.top
                     anchors.topMargin: Style.spacing.md
                     anchors.left: parent.left
-                    width: fieldRow.stacked ? parent.width : parent.width - editorLoader.width - Style.spacing.md
+                    anchors.leftMargin: fieldRow.indent
+                    width: (fieldRow.stacked ? parent.width : parent.width - editorLoader.width - Style.spacing.md) - fieldRow.indent
 
                     Text {
                       textFormat: Text.PlainText
@@ -906,6 +1154,7 @@ Item {
 
                   Loader {
                     id: editorLoader
+                    enabled: fieldRow.live
                     anchors.right: parent.right
                     anchors.verticalCenter: fieldRow.stacked ? undefined : parent.verticalCenter
                     anchors.bottom: fieldRow.stacked ? parent.bottom : undefined
@@ -2626,37 +2875,82 @@ Item {
       }
 
 
-      // The bar's quick menu: right click on the bar
-      // itself. Rows come from DockConfig.barMenuRows; choosing one writes
-      // its patch through the same write-back Pin/Unpin uses, so the bar
-      // updates live. Closes on any choice or an outside click, and holds
-      // the bar Revealed while open, like the Item context menu.
+      // The bar's quick menu: right click on the bar itself. Rows come from
+      // DockConfig.barMenuRows; choosing one writes its patch through the
+      // same write-back Pin/Unpin uses, so the bar updates live. A section
+      // row (Colors, Start button...) opens its choices in a second popup
+      // beside it, barSubMenu, as a traditional submenu does. Closes on any
+      // choice or an outside click, and holds the bar Revealed while open,
+      // like the Item context menu.
       PopupWindow {
         id: barMenu
 
         property real pointX: 0
         readonly property int menuMargin: Style.spacing.xs
+        // The section whose submenu is open ("" for none), and where its
+        // row is in this window; both reset when the menu closes.
+        property string openSection: ""
+        property real openRowY: 0
         readonly property var rows: DockConfig.barMenuRows(root.taskbar)
-        // Sized to its longest label (plus the check column and padding), so
-        // nothing is cut off however long a row's label is; never narrower
-        // than a comfortable minimum.
+        readonly property var openRows: {
+          for (let i = 0; i < barMenu.rows.length; i++) {
+            if (barMenu.rows[i].children && barMenu.rows[i].label === barMenu.openSection) return barMenu.rows[i].children
+          }
+          return []
+        }
+        // Sized to its longest label (plus the check column, the value and
+        // chevron of a section, and padding), so nothing is cut off however
+        // long a row's label is; never narrower than a comfortable minimum.
         readonly property int rowWidth: Math.max(Style.space(190),
           Math.ceil(barMenuMetrics.advanceWidth) + Style.space(22) + Style.space(12) * 2 + root.menuPad * 2 + Style.space(12))
+        readonly property int subRowWidth: Math.max(Style.space(170),
+          Math.ceil(barSubMetrics.advanceWidth) + Style.space(22) + Style.space(12) * 2 + root.menuPad * 2 + Style.space(12))
 
         TextMetrics {
           id: barMenuMetrics
           font.family: Style.font.family
           font.pixelSize: Style.font.body
-          text: DockConfig.longestLabel(barMenu.rows)
+          text: DockConfig.longestLabel(DockConfig.barMenuLabels(barMenu.rows))
         }
 
-        function close() { barMenu.visible = false }
+        TextMetrics {
+          id: barSubMetrics
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          text: DockConfig.longestLabel(DockConfig.barSubmenuLabels(barMenu.rows))
+        }
+
+        function close() {
+          barSubClose.stop()
+          barMenu.openSection = ""
+          barMenu.visible = false
+        }
         function openAt(x) {
           barMenu.pointX = x
+          barMenu.openSection = ""
           barMenu.visible = true
+        }
+        // The pointer is on a row: a section opens its submenu, any other
+        // row closes the one open. Leaving a row toward the submenu must not
+        // close it, so a close waits a moment and entering the submenu
+        // cancels it.
+        function hoverRow(row, rowY) {
+          if (row.children) {
+            barSubClose.stop()
+            barMenu.openRowY = rowY
+            barMenu.openSection = row.label
+          } else if (barMenu.openSection !== "") {
+            barSubClose.restart()
+          }
         }
         // The menu sits just above the bar.
         readonly property real frameTop: panel.height - root.taskbar.barHeight
+
+        Timer {
+          id: barSubClose
+          interval: 250
+          onTriggered: barMenu.openSection = ""
+        }
 
         grabFocus: true
         visible: false
@@ -2674,9 +2968,12 @@ Item {
         }
 
         implicitWidth: rowWidth + root.menuShadow * 2
-        implicitHeight: barMenuColumn.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
+        implicitHeight: barMenuLoader.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
 
-        onVisibleChanged: revealState.set("barMenu", barMenu.visible)
+        onVisibleChanged: {
+          revealState.set("barMenu", barMenu.visible || barSubMenu.visible)
+          if (!barMenu.visible) barMenu.openSection = ""
+        }
         onClosed: barMenu.close()
 
         RectangularShadow {
@@ -2697,82 +2994,216 @@ Item {
           border.width: Style.normalBorderWidth
           border.color: root.colHairline
 
-          Column {
-            id: barMenuColumn
+          Loader {
+            id: barMenuLoader
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.margins: root.menuPad
+            sourceComponent: barMenuList
+            onLoaded: {
+              item.rows = Qt.binding(function () { return barMenu.rows })
+              item.openLabel = Qt.binding(function () { return barMenu.openSection })
+              item.rowsTop = Qt.binding(function () { return root.menuShadow + root.menuPad })
+            }
 
-            Repeater {
-              model: barMenu.rows
+            Connections {
+              target: barMenuLoader.item
+              ignoreUnknownSignals: true
+              function onHovered(row, y) { barMenu.hoverRow(row, y) }
+              function onChosen(row) { barMenu.choose(row) }
+            }
+          }
+        }
 
-              delegate: Item {
-                id: barRow
-                required property var modelData
-                required property int index
+        // A row was clicked: write its setting, or open the Settings window.
+        // Close first so the menu never lingers over the window it opens.
+        function choose(row) {
+          if (row.enabled === false) return
+          barMenu.close()
+          if (row.action === "settings") root.openSettings(panel.screen)
+          else dockSettings.apply({ type: "setSettings", patch: row.patch })
+        }
+      }
 
-                readonly property bool newGroup: index > 0 && barMenu.rows[index - 1].group !== modelData.group
+      // The submenu: a popup of its own, anchored to the Bar menu, level
+      // with the section row it belongs to, on its right (or its left when
+      // the screen has no room).
+      PopupWindow {
+        id: barSubMenu
 
-                width: barMenuColumn.width
-                height: root.menuRowHeight + (newGroup ? root.menuPad * 2 + 1 : 0)
+        grabFocus: true
+        visible: barMenu.visible && barMenu.openRows.length > 0
+        color: "transparent"
+        anchor.window: barMenu
+        anchor.adjustment: PopupAdjustment.Flip | PopupAdjustment.Slide
+        anchor.edges: Edges.Top | Edges.Right
+        anchor.gravity: Edges.Bottom | Edges.Right
+        anchor.rect.width: 1
+        anchor.rect.height: 1
+        anchor.onAnchoring: {
+          // Frame to frame: the submenu's frame starts where the menu's ends,
+          // and its first row lines up with the section's.
+          anchor.rect.x = barMenu.implicitWidth - root.menuShadow * 2 - 1
+          anchor.rect.y = barMenu.openRowY - root.menuPad - root.menuShadow
+        }
 
-                Rectangle {
-                  visible: barRow.newGroup
-                  anchors.top: parent.top
-                  anchors.topMargin: root.menuPad
+        implicitWidth: barMenu.subRowWidth + root.menuShadow * 2
+        implicitHeight: barSubLoader.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
+
+        onVisibleChanged: {
+          revealState.set("barMenu", barMenu.visible || barSubMenu.visible)
+          if (visible) barSubMenu.anchor.updateAnchor()
+        }
+        onImplicitHeightChanged: if (visible) barSubMenu.anchor.updateAnchor()
+
+        HoverHandler {
+          onHoveredChanged: if (hovered) barSubClose.stop()
+        }
+
+        RectangularShadow {
+          anchors.fill: barSubFrame
+          radius: barSubFrame.radius
+          blur: root.menuShadow
+          offset.y: Style.space(4)
+          spread: 0
+          color: Qt.rgba(0, 0, 0, 0.6)
+        }
+
+        Rectangle {
+          id: barSubFrame
+          anchors.fill: parent
+          anchors.margins: root.menuShadow
+          radius: root.menuRadius
+          color: root.colPopupBackground
+          border.width: Style.normalBorderWidth
+          border.color: root.colHairline
+
+          Loader {
+            id: barSubLoader
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: root.menuPad
+            sourceComponent: barMenuList
+            onLoaded: {
+              item.rows = Qt.binding(function () { return barMenu.openRows })
+              item.openLabel = ""
+              item.rowsTop = 0
+            }
+
+            Connections {
+              target: barSubLoader.item
+              ignoreUnknownSignals: true
+              function onChosen(row) { barMenu.choose(row) }
+            }
+          }
+        }
+      }
+
+      // The rows of a Bar menu popup (the menu, or a submenu): a column of
+      // rows with a divider before each new group. `hovered(row, y)` says
+      // where the pointer is (y in the popup window); `chosen(row)` is a
+      // click on a row that is not a section.
+      Component {
+        id: barMenuList
+
+        Column {
+          id: barList
+          property var rows: []
+          property string openLabel: ""
+          property real rowsTop: 0
+          signal hovered(var row, real y)
+          signal chosen(var row)
+
+          Repeater {
+            model: barList.rows
+
+            delegate: Item {
+              id: barRow
+              required property var modelData
+              required property int index
+
+              readonly property bool newGroup: barRow.index > 0 && barList.rows[barRow.index - 1].group !== barRow.modelData.group
+              readonly property bool isSection: !!barRow.modelData.children
+              readonly property bool live: barRow.modelData.enabled !== false
+              readonly property bool open: barRow.isSection && barRow.modelData.label === barList.openLabel
+
+              width: barList.width
+              height: root.menuRowHeight + (barRow.newGroup ? root.menuPad * 2 + 1 : 0)
+
+              Rectangle {
+                visible: barRow.newGroup
+                anchors.top: parent.top
+                anchors.topMargin: root.menuPad
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 1
+                color: root.colHairline
+              }
+
+              Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: root.menuRowHeight
+                radius: root.menuRowRadius
+                color: (barRowMouse.containsMouse && barRow.live) || barRow.open
+                  ? Style.hoverFillFor(root.colForeground, previewPopup.accentColor)
+                  : "transparent"
+
+                Text {
+                  textFormat: Text.PlainText
                   anchors.left: parent.left
-                  anchors.right: parent.right
-                  height: 1
-                  color: root.colHairline
+                  anchors.leftMargin: Style.space(12)
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: barRow.modelData.checked ? "\u2713" : ""
+                  color: previewPopup.textColor
+                  opacity: barRow.live ? 1 : 0.4
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
                 }
 
-                Rectangle {
-                  anchors.bottom: parent.bottom
-                  width: parent.width
-                  height: root.menuRowHeight
-                  radius: root.menuRowRadius
-                  color: barRowMouse.containsMouse ? Style.hoverFillFor(root.colForeground, previewPopup.accentColor) : "transparent"
+                Text {
+                  textFormat: Text.PlainText
+                  anchors.left: parent.left
+                  anchors.right: barRow.isSection ? sectionChevron.left : parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  anchors.leftMargin: Style.space(12) + Style.space(22)
+                  anchors.rightMargin: Style.space(12)
+                  elide: Text.ElideRight
+                  text: barRow.modelData.label
+                  color: previewPopup.textColor
+                  opacity: barRow.live ? 1 : 0.4
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                }
 
-                  Text {
-                    textFormat: Text.PlainText
-                    anchors.left: parent.left
-                    anchors.leftMargin: Style.space(12)
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: barRow.modelData.checked ? "\u2713" : ""
-                    color: previewPopup.textColor
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                  }
+                // A section's chevron, pointing at its submenu.
+                Text {
+                  textFormat: Text.PlainText
+                  id: sectionChevron
+                  visible: barRow.isSection
+                  anchors.right: parent.right
+                  anchors.rightMargin: Style.space(12)
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "\u25B8"
+                  color: previewPopup.textColor
+                  opacity: 0.7
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                }
 
-                  Text {
-                    textFormat: Text.PlainText
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Style.space(12) + Style.space(22)
-                    anchors.rightMargin: Style.space(12)
-                    elide: Text.ElideRight
-                    text: barRow.modelData.label
-                    color: previewPopup.textColor
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                  }
-
-                  MouseArea {
-                    id: barRowMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                      // The Settings row opens the full window; every other
-                      // row writes its setting. Close first so the menu never
-                      // lingers over the window it opens.
-                      var row = barRow.modelData
-                      barMenu.close()
-                      if (row.action === "settings") root.openSettings(panel.screen)
-                      else dockSettings.apply({ type: "setSettings", patch: row.patch })
-                    }
+                MouseArea {
+                  id: barRowMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: barRow.live ? Qt.PointingHandCursor : Qt.ArrowCursor
+                  onEntered: barList.hovered(barRow.modelData, barList.rowsTop + barRow.y + parent.y)
+                  // A section also opens on a click, for a pointer that
+                  // never "enters" (touch, a keyboard-driven one).
+                  onClicked: {
+                    if (barRow.isSection) barList.hovered(barRow.modelData, barList.rowsTop + barRow.y + parent.y)
+                    else barList.chosen(barRow.modelData)
                   }
                 }
               }
