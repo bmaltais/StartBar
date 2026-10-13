@@ -1712,6 +1712,10 @@ Item {
           menus: {
             item: ofPopup(contextMenu),
             bar: ofPopup(barMenu),
+            // Anchored to the Bar menu, so its place is relative to that window.
+            barSub: barSubMenu.visible ? rect(barMenu.relativeX + barSubMenu.relativeX + root.menuShadow,
+              barMenu.relativeY + barSubMenu.relativeY + root.menuShadow,
+              barSubMenu.implicitWidth - root.menuShadow * 2, barSubMenu.implicitHeight - root.menuShadow * 2) : null,
             preview: ofPopup(previewPopup),
             start: startMenu.visible ? rect(startMenu.x, startMenu.y, startMenu.width, startMenu.height) : null,
           },

@@ -12,8 +12,9 @@
 
 <p align="center">
   <a href="#install">Install</a> ·
-  <a href="#features">Features</a> ·
+  <a href="#tour">Tour</a> ·
   <a href="#configure">Configure</a> ·
+  <a href="#commands">Commands</a> ·
   <a href="#update-and-remove">Update and remove</a> ·
   <a href="#contributing">Contributing</a>
 </p>
@@ -24,50 +25,42 @@
 omarchy plugin add https://github.com/bmaltais/StartBar --enable
 ```
 
-It shows a taskbar at the bottom of every monitor. Everything it needs comes with Omarchy; there is nothing else to install. The Start button opens StartBar's own Start menu, shown below; to open the Omarchy menu instead, right-click the bar and choose **Omarchy menu on Start**. The same menu turns on a clock.
+It shows a taskbar at the bottom of every monitor. Everything it needs comes with Omarchy; there is nothing else to install. The Start button opens StartBar's own Start menu. To open the Omarchy menu instead, right-click the bar, open **Start button** and choose **Open the Omarchy menu**.
 
-## Features
+## Tour
 
-| | |
-|---|---|
-| **Every window** | One icon per open window, across all workspaces and monitors. Click to jump to it. |
-| **Pins** | Keep apps in the bar whether or not they are running. Drag to reorder, drag out to unpin. |
-| **Start menu** | Search every installed app, a Pinned grid, an A-Z list, recently launched apps, your folders, and lock, sign out and power. |
-| **Hover previews** | Live window thumbnails with a close button. Hovering one shows that window, even from behind a maximized one, and moving away puts things back. |
-| **Grouped windows** | Optionally stack an app's windows into one icon and pick the window from the previews, as on Windows. |
-| **Right-click menus** | The app's own actions, plus Maximize, Full screen, Float, Move to scratchpad and Close. |
-| **Follows your theme** | Colours and fonts track the current Omarchy theme live, or pick a fixed light or dark bar. |
+### The taskbar
+
+<img src="screenshots/taskbar.png" alt="A full-width taskbar with a Start button, pinned apps and open windows">
+
+- **Every window.** One icon per open window, across all workspaces and monitors. Click to jump to it.
+- **Pins.** Keep apps in the bar whether or not they are running. Drag to reorder, drag out to unpin.
+- **Grouped windows.** Optionally stack an app's windows into one icon and pick the window from the previews, as on Windows.
+- **Extras.** Auto-hide, a clock, a workspace badge over each icon, a transparent bar, and an option to open each new window on a workspace of its own.
+
+### The Start menu
 
 <table>
-  <tr>
-    <th>Start menu</th>
-    <th>Search</th>
-  </tr>
   <tr valign="top">
     <td><img src="screenshots/start-menu.png" alt="The Start menu with pinned apps, recommended apps and folders"></td>
     <td><img src="screenshots/search.png" alt="Typing in the Start menu filters every installed app"></td>
   </tr>
-  <tr>
-    <th colspan="2">Taskbar</th>
-  </tr>
-  <tr valign="top">
-    <td colspan="2"><img src="screenshots/taskbar.png" alt="A full-width taskbar with a Start button, pinned apps and open windows"></td>
-  </tr>
 </table>
+
+Search every installed app, a Pinned grid you can reorder, an A-Z list, recently launched apps, your folders, and lock, sign out and power. Bind a key to toggle it, then type to search, use the arrow keys to move and Enter to launch. Escape backs out one step at a time.
+
+### Hover previews
+
+<img src="screenshots/preview.png" alt="Hovering a grouped icon shows one thumbnail per window to pick from" width="473">
+
+Live window thumbnails with a close button. Hovering one shows that window, even from behind a maximized one, and moving away puts things back.
+
+### Colours
 
 <table>
   <tr>
-    <th>Grouped windows</th>
-  </tr>
-  <tr valign="top">
-    <td><img src="screenshots/preview.png" alt="Hovering a grouped icon shows one thumbnail per window to pick from" width="473"></td>
-  </tr>
-</table>
-
-<table>
-  <tr>
-    <th>Light colours</th>
-    <th>Dark colours</th>
+    <th>Light</th>
+    <th>Dark</th>
   </tr>
   <tr valign="top">
     <td><img src="screenshots/start-menu-light.png" alt="The taskbar and Start menu with the fixed light colours"></td>
@@ -75,23 +68,11 @@ It shows a taskbar at the bottom of every monitor. Everything it needs comes wit
   </tr>
 </table>
 
-### Start menu from the keyboard
+Colours and fonts follow the current Omarchy theme live, or pick a fixed light or dark bar.
 
-Bind a key to toggle the menu, then type to search, use the arrow keys to move and Enter to launch. Escape backs out one step at a time.
+### Right-click an icon
 
-```sh
-omarchy-shell io.github.bmaltais.startbar startMenu
-```
-
-## Configure
-
-Right-click an empty part of the bar for the common options. Its last row, **Settings…**, opens a window with a control for every option. You can also open that window with:
-
-```sh
-omarchy-shell io.github.bmaltais.startbar settings
-```
-
-Right-click an icon for its own menu. A pin with no windows offers the app's actions, the app itself and **Unpin from taskbar**; a running app adds its window actions, then the app and **Pin to taskbar**, and ends with **Close window** (**Close all windows** for a stack of several).
+Each icon has its own menu. A pin with no windows offers the app's actions, the app itself and **Unpin from taskbar**; a running app adds its window actions (Maximize, Full screen, Float, Move to scratchpad), then the app and **Pin to taskbar**, and ends with **Close window** (**Close all windows** for a stack of several).
 
 <table>
   <tr>
@@ -104,18 +85,38 @@ Right-click an icon for its own menu. A pin with no windows offers the app's act
   </tr>
 </table>
 
+## Configure
+
+Changes apply as you make them. There are two ways in.
+
+### Right-click the bar
+
+The common options, kept short: icon alignment, colours, the Start button and window previews open a submenu beside them, and the everyday toggles (auto-hide, clock, group windows, workspace badge, transparent background) sit below. Options that mean nothing while another is off are dimmed. The last row, **Settings…**, opens the full window.
+
+<img src="screenshots/right-click-submenu.png" alt="The bar's right-click menu with the Start button submenu open" width="440">
+
+### The settings window
+
+A control for every option, laid out like the Windows 11 settings: a search box at the top, the pages down the left (Taskbar, Windows, Start menu) and the chosen page on the right. Drag the title bar to move it. Options that follow another one are indented and dimmed while it is off.
+
+<img src="screenshots/settings.png" alt="The settings window: a search box on top, the pages down the left, the chosen page's options on the right" width="600">
+
 <table>
   <tr>
-    <th>Right-click the bar</th>
-    <th>Settings window</th>
+    <th>Another page</th>
+    <th>Search</th>
   </tr>
   <tr valign="top">
-    <td><img src="screenshots/right-click.png" alt="The bar's right-click menu: sections for icon alignment, colours, the Start button and window previews, then toggles and Settings" width="250"></td>
-    <td><img src="screenshots/settings.png" alt="The settings window: a search box on top, the pages down the left, the chosen page's options on the right" width="560"></td>
+    <td><img src="screenshots/settings-windows.png" alt="The Windows page, with the preview options dimmed because previews are off"></td>
+    <td><img src="screenshots/settings-search.png" alt="Typing icon in the search box lists the matching settings from every page"></td>
   </tr>
 </table>
 
-Changes apply as you make them. Everything is saved in StartBar's own entry in `~/.config/omarchy/shell.json`, which you can also edit by hand:
+Type in the search box to find a setting on any page: every word must appear in a setting's name or description, or in its page's name.
+
+### shell.json
+
+Everything is saved in StartBar's own entry in `~/.config/omarchy/shell.json`, which you can also edit by hand:
 
 ```json
 {
@@ -130,6 +131,17 @@ Changes apply as you make them. Everything is saved in StartBar's own entry in `
 ```
 
 Every key, its default, and how pinning and dragging behave are in [docs/SETTINGS.md](docs/SETTINGS.md).
+
+## Commands
+
+Run these with `omarchy-shell io.github.bmaltais.startbar <command>`, for instance from a key binding:
+
+| Command | Does |
+|---|---|
+| `startMenu` | Toggles the Start menu on the focused monitor |
+| `closeStartMenu` | Closes it |
+| `settings` | Opens the settings window on the focused monitor |
+| `closeSettings` | Closes it |
 
 ## Update and remove
 

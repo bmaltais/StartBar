@@ -4,7 +4,8 @@
 #   scripts/screenshots.sh [--only NAME,NAME] [--install] [--out DIR] [--monitor NAME] [--no-restart]
 #
 #   --only      just these: taskbar, start-menu, start-menu-light, start-menu-dark,
-#               search, settings, right-click, pin-menu, window-menu, preview
+#               search, settings, settings-windows, settings-search, right-click,
+#               right-click-submenu, pin-menu, window-menu, preview
 #   --install   copy the results over screenshots/ (default: leave them in --out
 #               for a look, and print what each would replace)
 #   --out DIR   where the images go (default: a new directory under $TMPDIR or /tmp)
@@ -221,14 +222,43 @@ if wanted start-menu-light; then start_menu light start-menu-light; fi
 if wanted start-menu-dark; then start_menu dark start-menu-dark; fi
 override "$readme_state"
 
+# The settings window's frame is 780x620, centred; its page list is at x+48 and
+# its search box at the top centre (Service.qml, settingsWindow).
+settings_x=$(((mw - 780) / 2))
+settings_y=$(((mh - 620) / 2))
+settings_shot() { frame "$tmp/s.png" "$tmp/$1.png" "$settings_x" "$settings_y" 780 620; keep "$tmp/$1.png" "$1"; }
+settings_page() { at $((settings_x + 48)) $((settings_y + $1)); sleep 0.3; "$pointer" left >/dev/null; sleep 0.6; }
+
+# Changing shell.json while the window is open closes it, so each shot opens it
+# afresh, after any change.
+open_settings() { omarchy-shell -q "$id" settings; sleep 1.5; }
+close_settings() { omarchy-shell -q "$id" closeSettings; sleep 0.6; }
+
 if wanted settings; then
-  omarchy-shell -q "$id" settings
-  sleep 1.5
-  full "$tmp/s.png"
-  frame "$tmp/s.png" "$tmp/settings.png" $(((mw - 780) / 2)) $(((mh - 620) / 2)) 780 620
-  keep "$tmp/settings.png" settings
-  omarchy-shell -q "$id" closeSettings
-  sleep 0.6
+  open_settings
+  settings_page 123   # it opens on the page it was last on: choose the first
+  full "$tmp/s.png"; settings_shot settings
+  close_settings
+fi
+
+if wanted settings-windows; then
+  # With previews off, the options that follow them are dimmed and indented.
+  override "$(jq -c '. + {showPreviews: false}' <<<"$readme_state")"
+  open_settings
+  settings_page 163
+  full "$tmp/s.png"; settings_shot settings-windows
+  close_settings
+  override "$readme_state"
+fi
+
+if wanted settings-search; then
+  open_settings
+  # Click into the search box so the keys reach the window, then type.
+  at $((mw / 2)) $((settings_y + 30)); sleep 0.3; "$pointer" left >/dev/null; sleep 0.3
+  wtype "icon"
+  sleep 1
+  full "$tmp/s.png"; settings_shot settings-search
+  close_settings
 fi
 
 # Where things are comes from the shell itself: `omarchy-shell <id> layout` gives
@@ -252,7 +282,7 @@ open_item_menu() {
 
 # Bar menu: right click on the bar away from any Item, with auto-hide on as in
 # the image, so the Dock is revealed by the pointer first.
-if wanted right-click; then
+if wanted right-click || wanted right-click-submenu; then
   override "$(jq -c '. + {autoHide: true}' <<<"$readme_state")"
   at $((mw / 2)) $((mh - 2)); sleep 1.2
   at $((mw * 6 / 10)) $((mh - 12)); sleep 0.5
@@ -263,6 +293,22 @@ if wanted right-click; then
     full "$tmp/rc.png"
     crop_rect "$tmp/rc.png" "$tmp/right-click.png" "$bx" "$by" "$bw" "$bh"
     keep "$tmp/right-click.png" right-click
+    if wanted right-click-submenu; then
+      # Rest on the Start button row, the third: two 32 px rows, the 9 px gap
+      # before a new group, then half a row, after the menu's 4 px padding.
+      at $((bx + bw / 2)) $((by + 4 + 64 + 9 + 16)); sleep 0.3
+      at $((bx + bw / 2 + 3)) $((by + 4 + 64 + 9 + 16)); sleep 0.8
+      if sub=$(wait_for '.menus.barSub | [.x, .y, .width, .height] | @tsv'); then
+        read -r sx sy sw sh <<<"$sub"
+        full "$tmp/rcs.png"
+        ux=$((bx < sx ? bx : sx)); uy=$((by < sy ? by : sy))
+        ur=$((bx + bw > sx + sw ? bx + bw : sx + sw)); ub=$((by + bh > sy + sh ? by + bh : sy + sh))
+        crop_rect "$tmp/rcs.png" "$tmp/right-click-submenu.png" "$ux" "$uy" $((ur - ux)) $((ub - uy))
+        keep "$tmp/right-click-submenu.png" right-click-submenu
+      else
+        echo "screenshots: the submenu did not open, skipping it" >&2
+      fi
+    fi
   else
     echo "screenshots: the Bar menu did not open, skipping it" >&2
   fi
