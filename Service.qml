@@ -232,7 +232,7 @@ Item {
     // settings, plus this session's Placed Window Items.
     function placements() {
       var combined = dockSettings.placements.slice()
-      for (var key in dockState.windowPlacements) {
+      for (let key in dockState.windowPlacements) {
         combined.push({ key: key, index: dockState.windowPlacements[key] })
       }
       return combined
@@ -247,9 +247,9 @@ Item {
       var handles = {}
       var held = false
 
-      for (var i = 0; i < toplevels.length; i++) {
-        var toplevel = toplevels[i]
-        var address = toplevel.address
+      for (let i = 0; i < toplevels.length; i++) {
+        let toplevel = toplevels[i]
+        let address = toplevel.address
         if (typeof address !== "string" || address.length === 0) continue
 
         seenAddresses[address] = true
@@ -258,13 +258,13 @@ Item {
           dockState.openedAtByAddress[address] = dockState.nextOpenedAt++
         }
 
-        var info = toplevel.lastIpcObject || {}
+        let info = toplevel.lastIpcObject || {}
         // A Window's class arrives a moment after the Window does. Until it
         // does, its App is unknown, and the Window would show as a blank
         // Letter Tile and then jump into its App's group, so it is held back
         // (for a few seconds at most: a Window may really have no class).
         if (!info.class) {
-          var firstSeen = dockState.firstSeenByAddress[address]
+          let firstSeen = dockState.firstSeenByAddress[address]
           if (firstSeen === undefined) {
             firstSeen = Date.now()
             dockState.firstSeenByAddress[address] = firstSeen
@@ -289,12 +289,12 @@ Item {
       }
 
       var keptOpenedAt = {}
-      for (var key in dockState.openedAtByAddress) {
+      for (let key in dockState.openedAtByAddress) {
         if (seenAddresses[key]) keptOpenedAt[key] = dockState.openedAtByAddress[key]
       }
       dockState.openedAtByAddress = keptOpenedAt
       var keptFirstSeen = {}
-      for (var seenKey in dockState.firstSeenByAddress) {
+      for (let seenKey in dockState.firstSeenByAddress) {
         if (seenAddresses[seenKey]) keptFirstSeen[seenKey] = dockState.firstSeenByAddress[seenKey]
       }
       dockState.firstSeenByAddress = keptFirstSeen
@@ -302,7 +302,7 @@ Item {
       dockState.toplevelByAddress = handles
 
       var titles = {}
-      for (var t = 0; t < windows.length; t++) titles[windows[t].id] = windows[t].title
+      for (let t = 0; t < windows.length; t++) titles[windows[t].id] = windows[t].title
       dockState.titles = titles
 
       // The Repeater below is fed a plain array, so assigning a new one
@@ -315,9 +315,9 @@ Item {
       var next = DockModel.buildDockItems(windows, resolveApp, dockSettings.pins, resolveAppById, dockState.placements(), !!(root.taskbar && root.taskbar.groupWindows))
       // A Placed Window or Group Item lasts only while its Item exists.
       var itemKeys = {}
-      for (var n = 0; n < next.length; n++) itemKeys[next[n].key] = true
+      for (let n = 0; n < next.length; n++) itemKeys[next[n].key] = true
       var keptPlacements = {}
-      for (var placedKey in dockState.windowPlacements) {
+      for (let placedKey in dockState.windowPlacements) {
         if (itemKeys[placedKey]) keptPlacements[placedKey] = dockState.windowPlacements[placedKey]
       }
       dockState.windowPlacements = keptPlacements
@@ -341,15 +341,15 @@ Item {
 
     function syncItemModel(next) {
       var byKey = {}
-      for (var n = 0; n < next.length; n++) byKey[next[n].key] = next[n]
-      for (var r = dockItemKeys.count - 1; r >= 0; r--) {
+      for (let n = 0; n < next.length; n++) byKey[next[n].key] = next[n]
+      for (let r = dockItemKeys.count - 1; r >= 0; r--) {
         if (!byKey[dockItemKeys.get(r).key]) dockItemKeys.remove(r)
       }
       dockState.itemByKey = byKey
-      for (var i = 0; i < next.length; i++) {
+      for (let i = 0; i < next.length; i++) {
         if (i < dockItemKeys.count && dockItemKeys.get(i).key === next[i].key) continue
-        var at = -1
-        for (var j = i + 1; j < dockItemKeys.count; j++) {
+        let at = -1
+        for (let j = i + 1; j < dockItemKeys.count; j++) {
           if (dockItemKeys.get(j).key === next[i].key) { at = j; break }
         }
         if (at >= 0) dockItemKeys.move(at, i, 1)
@@ -365,8 +365,8 @@ Item {
       // still a recently launched App: openwindow data is
       // "address,workspace,class,title".
       if (event.name === "openwindow") {
-        var cls = String(event.data).split(",")[2]
-        var app = cls ? root.resolveApp({ class: cls }) : null
+        let cls = String(event.data).split(",")[2]
+        let app = cls ? root.resolveApp({ class: cls }) : null
         if (app && app.id) dockSettings.apply({ type: "pushRecentApp", appId: app.id })
       }
       dockState.refresh()
@@ -548,7 +548,7 @@ Item {
     var placements = DockModel.movedPlacements(dockState.items, dockState.placements(), item.key, targetIndex)
     var windowPlacements = {}
     var pinPlacements = []
-    for (var i = 0; i < placements.length; i++) {
+    for (let i = 0; i < placements.length; i++) {
       if (placements[i].key.indexOf("pin:") === 0) pinPlacements.push(placements[i])
       else windowPlacements[placements[i].key] = placements[i].index
     }
@@ -636,14 +636,14 @@ Item {
   function focusNextInGroup(item) {
     var windows = item.windows || []
     var at = -1
-    for (var i = 0; i < windows.length; i++) if (windows[i].active) at = i
+    for (let i = 0; i < windows.length; i++) if (windows[i].active) at = i
     var next = windows[(at + 1) % windows.length]
     if (next) root.focusWindow(next.id)
   }
 
   function windowTooltipText(item) {
     if (item.count > 1) {
-      var name = (item.app && item.app.name) || item.window.class || ""
+      let name = (item.app && item.app.name) || item.window.class || ""
       return name + "\n" + item.count + " windows"
     }
     return (dockState.titles[item.window.id] || item.window.title || item.window.class || "") + "\nWorkspace: " + (item.badge || "")
@@ -662,7 +662,7 @@ Item {
   // from a click on a particular monitor's bar.
   function focusedScreen() {
     var name = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""
-    for (var i = 0; i < Quickshell.screens.length; i++) {
+    for (let i = 0; i < Quickshell.screens.length; i++) {
       if (Quickshell.screens[i].name === name) return Quickshell.screens[i]
     }
     return null
@@ -694,7 +694,7 @@ Item {
     // JSON (see `layout` in the panel). For the scripts that drive the pointer.
     function layout(): string {
       var name = root.focusedScreenName()
-      for (var i = 0; i < panels.instances.length; i++) {
+      for (let i = 0; i < panels.instances.length; i++) {
         if (panels.instances[i].screen && panels.instances[i].screen.name === name) {
           return JSON.stringify(panels.instances[i].layout())
         }
@@ -1246,7 +1246,7 @@ Item {
         function seedFromDefaults() {
           var places = StartMenu.effectivePlaces(dockSettings.startPlaces, userDirsForSettings.text(), Quickshell.env("HOME") || "")
           var paths = []
-          for (var i = 0; i < places.length; i++) paths.push(places[i].path)
+          for (let i = 0; i < places.length; i++) paths.push(places[i].path)
           listBox.commit(paths)
         }
 
@@ -1442,10 +1442,10 @@ Item {
             w.implicitWidth - root.menuShadow * 2, w.implicitHeight - root.menuShadow * 2) : null
         }
         var items = []
-        for (var i = 0; i < repeater.count; i++) {
-          var it = repeater.itemAt(i)
+        for (let i = 0; i < repeater.count; i++) {
+          let it = repeater.itemAt(i)
           if (!it || !it.modelData) continue
-          var r = ofItem(it)
+          let r = ofItem(it)
           r.key = it.key
           r.kind = it.modelData.kind
           r.appId = root.menuAppId(it.modelData) || ""
@@ -1746,7 +1746,7 @@ Item {
         property bool dropping: false
 
         function indexOfKey(items, key) {
-          for (var i = 0; i < items.length; i++) {
+          for (let i = 0; i < items.length; i++) {
             if (items[i].key === key) return i
           }
           return -1
@@ -1800,7 +1800,7 @@ Item {
             dragGhost.visible = false
             root.unpinFromDrag(root.menuAppId(item))
           } else {
-            var slot = decision.action === "reorder" ? decision.index : from
+            let slot = decision.action === "reorder" ? decision.index : from
             dockRow.settlingKey = item.key
             settleX.to = dockRow.x + slot * (dockRow.itemWidth + dockRow.spacing)
             settleY.to = dockRow.dragHomeY
@@ -2208,7 +2208,7 @@ Item {
           // handler sends its own event and reads the state as it now is.
           previewState.model = result.state
           previewState.arm(result.timers)
-          for (var i = 0; i < result.effects.length; i++) previewState.perform(result.effects[i])
+          for (let i = 0; i < result.effects.length; i++) previewState.perform(result.effects[i])
         }
 
         function arm(timers) {
@@ -2242,7 +2242,7 @@ Item {
           // The anchor only moves for an Item that can have a Preview: a Pin
           // hovered while another Item's is up must not drag that one along.
           if (enabled && !root.dragInProgress) {
-            var point = delegate.mapToItem(panel.contentItem, delegate.width / 2, 0)
+            let point = delegate.mapToItem(panel.contentItem, delegate.width / 2, 0)
             previewState.anchorX = point.x
             previewState.anchorY = point.y
           }
@@ -2318,7 +2318,7 @@ Item {
         onLiveWindowsChanged: windowIds = DockPreview.windowIds(windowIds, liveWindows)
 
         function windowFor(id) {
-          for (var i = 0; i < liveWindows.length; i++) if (liveWindows[i].id === id) return liveWindows[i]
+          for (let i = 0; i < liveWindows.length; i++) if (liveWindows[i].id === id) return liveWindows[i]
           return { id: id }
         }
         readonly property int thumbWidth: {
@@ -2823,10 +2823,10 @@ Item {
           if (contextMenu.forPreview) {
             // Live, so a state that changes while the menu is open (or a
             // peek being put back) is reflected in the labels.
-            var win = previewPopup.windowFor(contextMenu.previewWindowId)
-            var previewRows = []
-            var winStates = DockModel.windowActions(win)
-            for (var s = 0; s < winStates.length; s++) {
+            let win = previewPopup.windowFor(contextMenu.previewWindowId)
+            let previewRows = []
+            let winStates = DockModel.windowActions(win)
+            for (let s = 0; s < winStates.length; s++) {
               previewRows.push({
                 label: winStates[s].label,
                 enabled: true,
@@ -2853,9 +2853,9 @@ Item {
           // then a row with its icon and name that starts it, then
           // "Unpin from taskbar".
           if (item.kind === "pin") {
-            var pinRows = []
-            var pinActions = item.app && item.app.actions ? item.app.actions : []
-            for (var a = 0; a < pinActions.length; a++) {
+            let pinRows = []
+            let pinActions = item.app && item.app.actions ? item.app.actions : []
+            for (let a = 0; a < pinActions.length; a++) {
               pinRows.push({
                 label: pinActions[a].name,
                 enabled: true,
@@ -2883,7 +2883,7 @@ Item {
           }
           var list = []
           var appActions = item.app && item.app.actions ? item.app.actions : []
-          for (var i = 0; i < appActions.length; i++) {
+          for (let i = 0; i < appActions.length; i++) {
             list.push({
               label: appActions[i].name,
               enabled: true,
@@ -2892,8 +2892,8 @@ Item {
             })
           }
           if (item.kind === "window" && !(item.count > 1)) {
-            var states = DockModel.windowActions(item.window)
-            for (var j = 0; j < states.length; j++) {
+            let states = DockModel.windowActions(item.window)
+            for (let j = 0; j < states.length; j++) {
               list.push({
                 label: states[j].label,
                 enabled: true,
@@ -2931,7 +2931,7 @@ Item {
             group: 3,
             trigger: function () {
               var windows = grouped ? item.windows : [item.window]
-              for (var w = 0; w < windows.length; w++) root.closeWindow(windows[w].id)
+              for (let w = 0; w < windows.length; w++) root.closeWindow(windows[w].id)
             },
           })
           return list
@@ -3001,7 +3001,7 @@ Item {
 
           onAnchoring: {
             if (contextMenu.forPreview) {
-              var px = Math.max(contextMenu.menuMargin,
+              let px = Math.max(contextMenu.menuMargin,
                 Math.min(contextMenu.previewPointX, panel.width - contextMenu.implicitWidth - contextMenu.menuMargin))
               menuAnchor.rect.x = Math.round(px - root.menuShadow)
               menuAnchor.rect.y = Math.round(Math.max(contextMenu.menuMargin, contextMenu.previewPointY - contextMenu.implicitHeight + root.menuShadow))

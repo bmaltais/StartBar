@@ -81,7 +81,7 @@ Item {
         var file = DockIcons.pickBest(text)
         var name = resolver.searching
         if (file) {
-          var files = Object.assign({}, resolver.files)
+          let files = Object.assign({}, resolver.files)
           files[name] = file
           resolver.files = files
         } else if (resolver.tries[name] < DockIcons.MAX_TRIES) {

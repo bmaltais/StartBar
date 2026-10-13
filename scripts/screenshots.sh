@@ -114,8 +114,8 @@ shell_layout() { omarchy-shell "$id" layout 2>/dev/null; }
 # wait_for FILTER: run a jq filter (ending in @tsv) over the layout until it gives
 # something, up to 4 s, and print it space-separated. Fails if it never does.
 wait_for() {
-  local out i
-  for i in $(seq 1 40); do
+  local out
+  for _ in $(seq 1 40); do
     out=$(shell_layout | jq -re "$1 // empty" 2>/dev/null | tr '\t' ' ') || out=""
     if [[ -n $out ]]; then echo "$out"; return 0; fi
     sleep 0.1
@@ -141,8 +141,8 @@ frame() {
 # stash CLASS: move that app's windows to a workspace of their own, away from the
 # one being shot, so they appear in the Dock without covering the wallpaper.
 stash() {
-  local address i
-  for i in $(seq 1 30); do
+  local address
+  for _ in $(seq 1 30); do
     hyprctl clients -j | jq -e --arg c "$1" '.[] | select(.class == $c)' >/dev/null && break
     sleep 0.1
   done
@@ -203,13 +203,13 @@ start_menu() {
   if [[ -z $box ]]; then
     echo "screenshots: the Start menu did not open for $name, skipping it" >&2
   else
-    frame "$tmp/menu.png" "$tmp/$name.png" $bx $by $bw $bh down
+    frame "$tmp/menu.png" "$tmp/$name.png" "$bx" "$by" "$bw" "$bh" down
     keep "$tmp/$name.png" "$name"
     if $typed && wanted search; then
       wtype "fi"
       sleep 1
       full "$tmp/typed.png"
-      frame "$tmp/typed.png" "$tmp/search.png" $bx $by $bw $bh down
+      frame "$tmp/typed.png" "$tmp/search.png" "$bx" "$by" "$bw" "$bh" down
       keep "$tmp/search.png" search
     fi
   fi
@@ -261,7 +261,7 @@ if wanted right-click; then
     read -r bx by bw bh <<<"$rect"
     sleep 0.3
     full "$tmp/rc.png"
-    crop_rect "$tmp/rc.png" "$tmp/right-click.png" $bx $by $bw $bh
+    crop_rect "$tmp/rc.png" "$tmp/right-click.png" "$bx" "$by" "$bw" "$bh"
     keep "$tmp/right-click.png" right-click
   else
     echo "screenshots: the Bar menu did not open, skipping it" >&2
@@ -280,7 +280,7 @@ if wanted pin-menu; then
     read -r bx by bw bh <<<"$rect"
     sleep 0.3
     full "$tmp/pm.png"
-    crop_rect "$tmp/pm.png" "$tmp/pin-menu.png" $bx $by $bw $bh
+    crop_rect "$tmp/pm.png" "$tmp/pin-menu.png" "$bx" "$by" "$bw" "$bh"
     keep "$tmp/pin-menu.png" pin-menu
   else
     echo "screenshots: found no Pin without Windows, skipping pin-menu" >&2
@@ -299,7 +299,7 @@ if wanted window-menu; then
     read -r bx by bw bh <<<"$rect"
     sleep 0.3
     full "$tmp/wm.png"
-    crop_rect "$tmp/wm.png" "$tmp/window-menu.png" $bx $by $bw $bh
+    crop_rect "$tmp/wm.png" "$tmp/window-menu.png" "$bx" "$by" "$bw" "$bh"
     keep "$tmp/window-menu.png" window-menu
   else
     echo "screenshots: the throwaway window's menu did not open, skipping window-menu" >&2
@@ -322,7 +322,7 @@ if wanted preview; then
   at $((mw / 2)) 200; sleep 0.5
   if item=$(wait_for '.items[] | select(.key == "group:class:startbar-screenshot") | [.x, .y, .width, .height] | @tsv'); then
     read -r x y w h <<<"$item"
-    spares=($(hyprctl clients -j | jq -r '.[] | select(.class == "startbar-screenshot") | .address'))
+    mapfile -t spares < <(hyprctl clients -j | jq -r '.[] | select(.class == "startbar-screenshot") | .address')
     # From the Dock's edge first: jumping straight onto an Item can lose the hover.
     at $((mw / 2)) $((mh - 2)); sleep 0.5
     at $((x + w / 2)) $((y + h / 2))
@@ -330,7 +330,7 @@ if wanted preview; then
       read -r bx by bw bh <<<"$rect"
       sleep 0.6
       full "$tmp/pv.png"
-      frame "$tmp/pv.png" "$tmp/preview.png" $bx $by $bw $bh down
+      frame "$tmp/pv.png" "$tmp/preview.png" "$bx" "$by" "$bw" "$bh" down
       keep "$tmp/preview.png" preview
     else
       echo "screenshots: the Preview did not open, skipping it" >&2

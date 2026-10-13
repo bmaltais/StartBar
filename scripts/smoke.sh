@@ -105,11 +105,12 @@ shot() {
 }
 
 # Lines the plugin itself logged since the run began, minus the shell's own
-# note that it noticed the checkout change.
+# note that it noticed the checkout change and quickshell's note that a
+# symlinked plugin directory (the usual dev setup) is outside the config folder.
 plugin_log() {
   journalctl --user -t omarchy-shell --since "$started" --no-pager 2>/dev/null |
     grep -F -e "$id" -e "$repo" -e "$installed" |
-    grep -v -F "Local plugin changed, reloading" || true
+    grep -v -F -e "Local plugin changed, reloading" -e "is outside of the config folder" || true
 }
 
 if $restart; then
