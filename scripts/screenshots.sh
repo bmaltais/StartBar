@@ -379,8 +379,10 @@ if wanted preview; then
     at $((mw / 2)) $((mh - 2)); sleep 0.5
     at $((x + w / 2)) $((y + h / 2))
     if rect=$(wait_for '.menus.preview | select(.width > 100 and .height > 50) | [.x, .y, .width, .height] | @tsv'); then
+      # The Preview slides up as it opens: read its place again once it has settled.
+      sleep 0.8
+      rect=$(wait_for '.menus.preview | select(.width > 100 and .height > 50) | [.x, .y, .width, .height] | @tsv') || true
       read -r bx by bw bh <<<"$rect"
-      sleep 0.6
       full "$tmp/pv.png"
       frame "$tmp/pv.png" "$tmp/preview.png" "$bx" "$by" "$bw" "$bh" down
       keep "$tmp/preview.png" preview
