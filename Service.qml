@@ -851,7 +851,7 @@ Item {
           radius: searchBox.radius
           blur: Style.space(6)
           offset.y: Style.space(1)
-          color: Qt.rgba(0, 0, 0, 0.3)
+          color: Qt.rgba(0, 0, 0, 0.22)
         }
 
         Rectangle {
@@ -860,7 +860,8 @@ Item {
           width: Math.min(Style.space(380), parent.width - Style.space(120))
           height: Style.space(34)
           radius: height / 2
-          color: Util.alpha(root.colPopupText, 0.05)
+          // Opaque, so the shadow behind it does not show through the box.
+          color: Qt.tint(root.colPopupBackground, Util.alpha(root.colPopupText, 0.05))
           border.width: 1
           border.color: Util.alpha(root.colPopupText, 0.12)
 
@@ -1712,6 +1713,10 @@ Item {
           menus: {
             item: ofPopup(contextMenu),
             bar: ofPopup(barMenu),
+            // Anchored to the Bar menu, so its place is relative to that window.
+            barSub: barSubMenu.visible ? rect(barMenu.relativeX + barSubMenu.relativeX + root.menuShadow,
+              barMenu.relativeY + barSubMenu.relativeY + root.menuShadow,
+              barSubMenu.implicitWidth - root.menuShadow * 2, barSubMenu.implicitHeight - root.menuShadow * 2) : null,
             preview: ofPopup(previewPopup),
             start: startMenu.visible ? rect(startMenu.x, startMenu.y, startMenu.width, startMenu.height) : null,
           },

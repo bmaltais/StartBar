@@ -373,7 +373,7 @@ Item {
       radius: searchBox.radius
       blur: Style.space(6)
       offset.y: Style.space(1)
-      color: Qt.rgba(0, 0, 0, 0.3)
+      color: Qt.rgba(0, 0, 0, 0.22)
     }
 
     Rectangle {
@@ -387,7 +387,10 @@ Item {
       // window rounding, which many setups (this one included) set to 0,
       // and a sharp search box looks out of place.
       radius: height / 2
-      color: Util.alpha(startMenu.colText, 0.05)
+      // Opaque (the faint tint laid on the menu's own colour, not left see-
+      // through): the shadow behind it is a whole blurred shape, and under a
+      // see-through box it would grey the inside of the box.
+      color: Qt.tint(startMenu.colBackground, Util.alpha(startMenu.colText, 0.05))
       border.width: 1
       border.color: Util.alpha(startMenu.colText, 0.12)
 
