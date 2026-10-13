@@ -126,37 +126,46 @@ test("resolveStartIcon: grid, an absolute image path, or an icon-theme name", ()
   assert.deepEqual(resolveStartIcon(""), { kind: "grid" });
 });
 
-const { barMenuRows } = require("../DockConfig.js");
+const { barMenuRows, barMenuLabels, barSubmenuLabels } = require("../DockConfig.js");
 
-test("barMenuRows lists the bar's options with the current choice checked", () => {
+// Every row, sections' children included.
+const everyRow = (rows) => rows.flatMap((r) => [r, ...(r.children || [])]);
+
+test("barMenuRows checks the current choice inside each section", () => {
   const rows = barMenuRows(effectiveTaskbar({ alignment: "left", colorScheme: "dark" }));
-  const byLabel = Object.fromEntries(rows.map((r) => [r.label, r]));
+  const section = (label) => rows.find((r) => r.label === label);
 
-  assert.equal(byLabel["Center icons"].checked, false);
-  assert.equal(byLabel["Left-align icons"].checked, true);
-  assert.equal(byLabel["Dark colors"].checked, true);
-  assert.equal(byLabel["Theme colors"].checked, false);
-  assert.equal(byLabel["Auto-hide"].checked, false);
-  assert.equal(byLabel["Start button"].checked, true);
+  const colors = Object.fromEntries(section("Colors").children.map((r) => [r.label, r.checked]));
+  assert.deepEqual(colors, { Theme: false, Dark: true, Light: false });
+  const align = Object.fromEntries(section("Icon alignment").children.map((r) => [r.label, r.checked]));
+  assert.deepEqual(align, { Left: true, Center: false });
+  assert.equal(rows.find((r) => r.label === "Auto-hide").checked, false);
 });
 
 test("each row's patch sets its own key; toggles flip the current value", () => {
-  const rows = barMenuRows(effectiveTaskbar({ showClock: true, autoHide: false }));
+  const rows = everyRow(barMenuRows(effectiveTaskbar({ showClock: true, autoHide: false })));
   const patch = (label) => rows.find((r) => r.label === label).patch;
 
-  assert.deepEqual(patch("Center icons"), { alignment: "center" });
-  assert.deepEqual(patch("Light colors"), { colorScheme: "light" });
+  assert.deepEqual(patch("Center"), { alignment: "center" });
+  assert.deepEqual(patch("Light"), { colorScheme: "light" });
   assert.deepEqual(patch("Auto-hide"), { autoHide: true });
   assert.deepEqual(patch("Clock"), { showClock: false });
-  assert.deepEqual(patch("Window previews"), { showPreviews: false });
-  assert.deepEqual(patch("Pointer follows preview click"), { previewWarpPointer: false });
-  assert.deepEqual(patch("Show window on preview hover"), { previewPeek: false });
+  assert.deepEqual(patch("Show previews"), { showPreviews: false });
+  assert.deepEqual(patch("Pointer follows click"), { previewWarpPointer: false });
+  assert.deepEqual(patch("Show window on hover"), { previewPeek: false });
   assert.deepEqual(patch("Workspace badge"), { showWorkspaceBadge: true });
   assert.deepEqual(patch("Group windows of one app"), { groupWindows: false });
-  assert.deepEqual(patch("Start menu opens on hover"), { startHoverOpen: true });
+  assert.deepEqual(patch("Open on hover"), { startHoverOpen: true });
   assert.deepEqual(patch("Transparent background"), { transparent: true });
-  assert.deepEqual(patch("Start button"), { showStart: false });
+  assert.deepEqual(patch("Show Start button"), { showStart: false });
   assert.equal(rows.some((r) => /style/i.test(r.label)), false);
+});
+
+test("the top level is short: sections and the everyday toggles, then Settings", () => {
+  const rows = barMenuRows(effectiveTaskbar({}));
+  assert.ok(rows.length <= 10, `${rows.length} top-level rows`);
+  assert.deepEqual(rows.filter((r) => r.children).map((r) => r.label), ["Icon alignment", "Colors", "Start button", "Window previews"]);
+  assert.equal(rows.some((r) => /Omarchy's dock/.test(r.label)), false);
 });
 
 test("groups are marked so the menu can draw a divider before each new one", () => {
@@ -164,34 +173,45 @@ test("groups are marked so the menu can draw a divider before each new one", () 
   const groups = rows.map((r) => r.group);
   assert.deepEqual(groups, [...groups].sort((a, b) => a - b));
   assert.ok(new Set(groups).size >= 3);
+  assert.notEqual(rows.find((r) => r.label === "Auto-hide").group, rows.find((r) => r.label === "Settings\u2026").group);
 });
 
 test("the menu can switch the Start button between the built-in menu and the Omarchy menu", () => {
-  const omarchy = barMenuRows(effectiveTaskbar({ startCommand: "omarchy-menu toggle apps" }));
-  assert.equal(omarchy.find((r) => r.label === "Built-in Start menu").checked, false);
-  assert.equal(omarchy.find((r) => r.label === "Omarchy menu on Start").checked, true);
-  assert.deepEqual(omarchy.find((r) => r.label === "Built-in Start menu").patch, { startCommand: "builtin" });
+  const start = (entry) => barMenuRows(effectiveTaskbar(entry)).find((r) => r.label === "Start button");
+  const omarchy = start({ startCommand: "omarchy-menu toggle apps" });
+  const kid = (section, label) => section.children.find((r) => r.label === label);
+  assert.equal(kid(omarchy, "Open the built-in menu").checked, false);
+  assert.equal(kid(omarchy, "Open the Omarchy menu").checked, true);
+  assert.deepEqual(kid(omarchy, "Open the built-in menu").patch, { startCommand: "builtin" });
 
-  const builtin = barMenuRows(effectiveTaskbar({}));
-  assert.equal(builtin.find((r) => r.label === "Built-in Start menu").checked, true);
-  assert.equal(builtin.find((r) => r.label === "Omarchy menu on Start").checked, false);
-  assert.deepEqual(builtin.find((r) => r.label === "Omarchy menu on Start").patch, { startCommand: "omarchy-menu toggle apps" });
+  const builtin = start({});
+  assert.equal(kid(builtin, "Open the built-in menu").checked, true);
+  assert.deepEqual(kid(builtin, "Open the Omarchy menu").patch, { startCommand: "omarchy-menu toggle apps" });
 });
 
-test("the Start menu rows form their own group, divided from the toggles below", () => {
-  const rows = barMenuRows(effectiveTaskbar({}));
-  const labels = rows.map((r) => r.label);
-  const group = (label) => rows.find((r) => r.label === label).group;
-  const startGroup = ["Start button", "Built-in Start menu", "Omarchy menu on Start", "Start menu opens on hover"];
+test("a row that depends on another setting is disabled while that one is off", () => {
+  const kids = (entry, label) => barMenuRows(effectiveTaskbar(entry)).find((r) => r.label === label).children;
+  const enabled = (list) => Object.fromEntries(list.map((r) => [r.label, r.enabled]));
 
-  for (const l of startGroup) assert.equal(group(l), group("Built-in Start menu"), l);
-  // contiguous, so one divider covers them
-  const at = startGroup.map((l) => labels.indexOf(l));
-  assert.equal(Math.max(...at) - Math.min(...at), startGroup.length - 1);
-  // and a different group from the colours above and the toggles below
-  assert.notEqual(group("Built-in Start menu"), group("Light colors"));
-  assert.notEqual(group("Built-in Start menu"), group("Auto-hide"));
-  assert.notEqual(group("Auto-hide"), group("Settings…"));
+  assert.deepEqual(enabled(kids({ showPreviews: false }, "Window previews")), {
+    "Show previews": true, "Show window on hover": false, "Pointer follows click": false,
+  });
+  assert.equal(enabled(kids({}, "Window previews"))["Show window on hover"], true);
+  const start = enabled(kids({ showStart: false }, "Start button"));
+  assert.deepEqual(Object.values(start), [true, false, false, false]);
+  assert.equal(enabled(kids({ startCommand: "omarchy-menu toggle apps" }, "Start button"))["Open on hover"], false);
+  assert.equal(enabled(kids({}, "Start button"))["Open on hover"], true);
+});
+
+test("barMenuLabels sizes the menu, barSubmenuLabels its submenus", () => {
+  const rows = barMenuRows(effectiveTaskbar({}));
+  const top = barMenuLabels(rows);
+  assert.ok(top.includes("Colors"));
+  assert.ok(top.includes("Settings\u2026"));
+  assert.equal(top.includes("Open the built-in menu"), false);
+  const sub = barSubmenuLabels(rows);
+  assert.ok(sub.includes("Open the built-in menu"));
+  assert.equal(sub.includes("Colors"), false);
 });
 
 const { longestLabel } = require("../DockConfig.js");

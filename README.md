@@ -110,8 +110,8 @@ Right-click an icon for its own menu. A pin with no windows offers the app's act
     <th>Settings window</th>
   </tr>
   <tr valign="top">
-    <td><img src="screenshots/right-click.png" alt="The bar's right-click menu: alignment, colours, Start menu, auto-hide, clock, previews and Settings" width="279"></td>
-    <td><img src="screenshots/settings.png" alt="The settings window, with a control for every option" width="520"></td>
+    <td><img src="screenshots/right-click.png" alt="The bar's right-click menu: sections for icon alignment, colours, the Start button and window previews, then toggles and Settings" width="250"></td>
+    <td><img src="screenshots/settings.png" alt="The settings window: a search box on top, the pages down the left, the chosen page's options on the right" width="560"></td>
   </tr>
 </table>
 

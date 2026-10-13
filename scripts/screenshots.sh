@@ -225,7 +225,7 @@ if wanted settings; then
   omarchy-shell -q "$id" settings
   sleep 1.5
   full "$tmp/s.png"
-  frame "$tmp/s.png" "$tmp/settings.png" $(((mw - 640) / 2)) $(((mh - 760) / 2)) 640 760
+  frame "$tmp/s.png" "$tmp/settings.png" $(((mw - 780) / 2)) $(((mh - 620) / 2)) 780 620
   keep "$tmp/settings.png" settings
   omarchy-shell -q "$id" closeSettings
   sleep 0.6
