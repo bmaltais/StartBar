@@ -118,6 +118,8 @@ test("search keeps the fields whose label, hint or page match every word, in any
   assert.ok(keysOf("clock").includes("showClock"));
   // a hint is searched too: "thumbnail" only appears in a hint
   assert.ok(keysOf("thumbnail").includes("previewPeek"));
+  // a choice's option labels are searched too: "maximized" only labels an option
+  assert.ok(keysOf("maximized").includes("newWindowWorkspace"));
   // a page title matches all its fields
   const start = searchSettings(settingsSchema(), "start menu");
   assert.deepEqual(start.map((g) => g.title), ["Start menu"]);

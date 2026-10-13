@@ -352,7 +352,7 @@ function settingsSchema() {
 // The settings window's search: the groups of `groups` (settingsSchema())
 // cut down to the fields matching `query`, groups with none dropped. Every
 // word of the query must appear, in any order and any case, in the field's
-// label, hint or group title, so "start" finds the whole Start menu page and
+// label, hint, choice-option label or group title, so "start" finds the whole Start menu page and
 // "delay hide" finds the hide delay. A blank query matches nothing here: the
 // window shows the chosen page then.
 function searchSettings(groups, query) {
@@ -361,7 +361,8 @@ function searchSettings(groups, query) {
   var found = [];
   for (var g = 0; g < groups.length; g++) {
     var fields = groups[g].fields.filter(function (field) {
-      var text = (field.label + " " + (field.hint || "") + " " + groups[g].title).toLowerCase();
+      var options = (field.options || []).map(function (option) { return option.label; }).join(" ");
+      var text = (field.label + " " + (field.hint || "") + " " + options + " " + groups[g].title).toLowerCase();
       return words.every(function (word) { return text.indexOf(word) !== -1; });
     });
     if (fields.length > 0) found.push({ title: groups[g].title, fields: fields });
