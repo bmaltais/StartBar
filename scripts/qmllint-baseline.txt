@@ -51,8 +51,6 @@ Service.qml	unqualified	previewAnchor
 Service.qml	unqualified	previewPopup
 Service.qml	unqualified	previewState
 Service.qml	unqualified	rect
-Service.qml	unqualified	resolveApp
-Service.qml	unqualified	resolveAppById
 Service.qml	unqualified	revealState
 Service.qml	unqualified	root
 Service.qml	unqualified	settingsColumn

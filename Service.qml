@@ -117,7 +117,7 @@ Item {
     property var taskbar: DockConfig.effectiveView(null).taskbar
     // A Placed Pin's own position (CONTEXT.md "Placed"), persisted here
     // the same way pins is. A Placed Window Item's lives only in
-    // dockState.windowPlacements — it has no business surviving a
+    // dockState.itemsState.windowPlacements — it has no business surviving a
     // restart — so it isn't part of this settings object at all.
     property var placements: []
     // The Start menu's own pinned list and recent apps, its custom Places
@@ -204,156 +204,64 @@ Item {
   QtObject {
     id: dockState
 
-    property var openedAtByAddress: ({})
-    property int nextOpenedAt: 0
-    // When a Window with no class yet was first seen, and whether any is
-    // being held back from the Dock for it (see refresh()).
-    property var firstSeenByAddress: ({})
+    // DockModel.refreshItems' state: Launch Order ranks, Windows held back
+    // for a class, this session's Placed Window Items (CONTEXT.md "Placed")
+    // and what the Dock last showed.
+    property var itemsState: DockModel.newItemsState()
     property bool holding: false
-    // A Placed Window Item's own position (CONTEXT.md "Placed"; DockModel.js
-    // comment on `placements`): kept only here, in memory, keyed by Window
-    // address exactly like openedAtByAddress, and pruned the same way on
-    // every refresh — once a Window's address drops out, its entry drops
-    // with it, so its Placed position doesn't linger for some later,
-    // unrelated Window that happens to reuse the same address.
-    property var windowPlacements: ({})
     property var items: []
     // HyprlandToplevel by Window address, for the taskbar's hover previews
     // (the Wayland handle ScreencopyView captures hangs off it).
     property var toplevelByAddress: ({})
     // Window titles by address, kept apart from `items` so a title change
     // (a browser tab switching, say) updates tooltips and previews without
-    // rebuilding the Items — see refresh().
+    // rebuilding the Items — see DockModel.refreshItems.
     property var titles: ({})
-    property string itemsSignature: ""
-
-    // The `placements` DockModel.buildDockItems applies (DockModel.js
-    // comment on `placements`): the permanent, persisted Placed Pins from
-    // settings, plus this session's Placed Window Items.
-    function placements() {
-      var combined = dockSettings.placements.slice()
-      for (let key in dockState.windowPlacements) {
-        combined.push({ key: key, index: dockState.windowPlacements[key] })
-      }
-      return combined
-    }
 
     function refresh() {
       if (root.dragInProgress) return
 
-      var toplevels = Hyprland.toplevels ? Hyprland.toplevels.values : []
-      var seenAddresses = {}
-      var windows = []
-      var handles = {}
-      var held = false
-
-      for (let i = 0; i < toplevels.length; i++) {
-        let toplevel = toplevels[i]
-        let address = toplevel.address
-        if (typeof address !== "string" || address.length === 0) continue
-
-        seenAddresses[address] = true
-        handles[address] = toplevel
-        if (!(address in dockState.openedAtByAddress)) {
-          dockState.openedAtByAddress[address] = dockState.nextOpenedAt++
-        }
-
-        let info = toplevel.lastIpcObject || {}
-        // A Window's class arrives a moment after the Window does. Until it
-        // does, its App is unknown, and the Window would show as a blank
-        // Letter Tile and then jump into its App's group, so it is held back
-        // (for a few seconds at most: a Window may really have no class).
-        if (!info.class) {
-          let firstSeen = dockState.firstSeenByAddress[address]
-          if (firstSeen === undefined) {
-            firstSeen = Date.now()
-            dockState.firstSeenByAddress[address] = firstSeen
-          }
-          if (Date.now() - firstSeen < root.classWaitMs) {
-            held = true
-            continue
-          }
-        }
-        windows.push({
-          id: address,
-          class: DockModel.clipText(info.class),
-          workspace: toplevel.workspace ? toplevel.workspace.name : String((info.workspace && info.workspace.name) || ""),
-          openedAt: dockState.openedAtByAddress[address],
-          title: DockModel.clipText(toplevel.title || info.title),
-          active: !!toplevel.activated,
-          attention: !!toplevel.urgent,
-          fullscreen: info.fullscreen || 0,
-          floating: !!info.floating,
-          pinned: !!info.pinned,
-        })
-      }
-
-      var keptOpenedAt = {}
-      for (let key in dockState.openedAtByAddress) {
-        if (seenAddresses[key]) keptOpenedAt[key] = dockState.openedAtByAddress[key]
-      }
-      dockState.openedAtByAddress = keptOpenedAt
-      var keptFirstSeen = {}
-      for (let seenKey in dockState.firstSeenByAddress) {
-        if (seenAddresses[seenKey]) keptFirstSeen[seenKey] = dockState.firstSeenByAddress[seenKey]
-      }
-      dockState.firstSeenByAddress = keptFirstSeen
-      dockState.holding = held
-      dockState.toplevelByAddress = handles
-
-      var titles = {}
-      for (let t = 0; t < windows.length; t++) titles[windows[t].id] = windows[t].title
-      dockState.titles = titles
-
-      // The Repeater below is fed a plain array, so assigning a new one
-      // destroys and recreates every Item delegate — including the one the
-      // pointer is on, which a hover preview is anchored to. A browser fires
-      // a stream of Hyprland events (title changes, tab activity) that
-      // change nothing the Dock shows, so only assign when the visible
-      // content differs. The signature leaves out `title` (tracked in
-      // dockState.titles) and reduces each App to its id.
-      var next = DockModel.buildDockItems(windows, resolveApp, dockSettings.pins, resolveAppById, dockState.placements(), !!(root.taskbar && root.taskbar.groupWindows))
-      // A Placed Window or Group Item lasts only while its Item exists.
-      var itemKeys = {}
-      for (let n = 0; n < next.length; n++) itemKeys[next[n].key] = true
-      var keptPlacements = {}
-      for (let placedKey in dockState.windowPlacements) {
-        if (itemKeys[placedKey]) keptPlacements[placedKey] = dockState.windowPlacements[placedKey]
-      }
-      dockState.windowPlacements = keptPlacements
-      var signature = JSON.stringify(next, function (key, value) {
-        if (key === "title") return undefined
-        if (key === "app") return value ? value.id : null
-        return value
+      var next = DockModel.refreshItems(dockState.itemsState, {
+        toplevels: Hyprland.toplevels ? Hyprland.toplevels.values : [],
+        now: Date.now(),
+        pins: dockSettings.pins,
+        pinPlacements: dockSettings.placements,
+        grouped: !!(root.taskbar && root.taskbar.groupWindows),
+        lookup: function (name) { return DesktopEntries.heuristicLookup(name) },
+        byId: function (appId) { return DesktopEntries.byId(appId) },
       })
-      if (signature === dockState.itemsSignature) return
-      dockState.itemsSignature = signature
-      dockState.items = next
-      dockState.syncItemModel(next)
+      dockState.itemsState = next.state
+      dockState.holding = next.held
+      dockState.toplevelByAddress = next.handles
+      dockState.titles = next.titles
+      if (!next.changed) return
+      dockState.items = next.items
+      dockState.syncItemModel(next.items)
     }
 
     // The Dock's Repeater runs over dockItemKeys, one row per Item key, and
     // each delegate looks its Item up in itemByKey. Replacing the Items
     // array instead would tear down and rebuild every delegate on any
     // reorder, so a drop made every icon flash as it loaded again. Here an
-    // Item that stays keeps its delegate, and a reorder is a `move`.
+    // Item that stays keeps its delegate, and a reorder is a `move`
+    // (DockModel.keyOps works out the steps).
     property var itemByKey: ({})
 
     function syncItemModel(next) {
       var byKey = {}
-      for (let n = 0; n < next.length; n++) byKey[next[n].key] = next[n]
-      for (let r = dockItemKeys.count - 1; r >= 0; r--) {
-        if (!byKey[dockItemKeys.get(r).key]) dockItemKeys.remove(r)
+      var nextKeys = []
+      for (let n = 0; n < next.length; n++) {
+        byKey[next[n].key] = next[n]
+        nextKeys.push(next[n].key)
       }
+      var current = []
+      for (let r = 0; r < dockItemKeys.count; r++) current.push(dockItemKeys.get(r).key)
       dockState.itemByKey = byKey
-      for (let i = 0; i < next.length; i++) {
-        if (i < dockItemKeys.count && dockItemKeys.get(i).key === next[i].key) continue
-        let at = -1
-        for (let j = i + 1; j < dockItemKeys.count; j++) {
-          if (dockItemKeys.get(j).key === next[i].key) { at = j; break }
-        }
-        if (at >= 0) dockItemKeys.move(at, i, 1)
-        else dockItemKeys.insert(i, { key: next[i].key })
+      var ops = DockModel.keyOps(current, nextKeys)
+      for (let o = 0; o < ops.length; o++) {
+        if (ops[o].op === "remove") dockItemKeys.remove(ops[o].at)
+        else if (ops[o].op === "move") dockItemKeys.move(ops[o].from, ops[o].to, 1)
+        else dockItemKeys.insert(ops[o].at, { key: ops[o].key })
       }
     }
   }
@@ -365,12 +273,12 @@ Item {
       // still a recently launched App: openwindow data is
       // "address,workspace,class,title".
       if (event.name === "openwindow") {
-        let cls = String(event.data).split(",")[2]
-        let app = cls ? root.resolveApp({ class: cls }) : null
+        let opened = DockModel.openedWindow(event.data)
+        let app = opened.class ? root.resolveApp({ class: opened.class }) : null
         if (app && app.id) dockSettings.apply({ type: "pushRecentApp", appId: app.id })
         // docs/SPEC.md "New window workspace"
         if (root.taskbar && root.taskbar.newWindowWorkspace !== "off") {
-          let command = DockHyprland.openOnOwnWorkspace(String(event.data).split(",")[0], root.taskbar.newWindowWorkspace)
+          let command = DockHyprland.openOnOwnWorkspace(opened.address, root.taskbar.newWindowWorkspace)
           if (command) Quickshell.execDetached(command)
         }
       }
@@ -462,24 +370,15 @@ Item {
     running: true
 
     onTriggered: {
-      var unresolved = dockState.holding || dockState.items.some(function (it) {
-        return it.kind === "window" && !it.app && !it.letter
-      })
+      var unresolved = DockModel.awaitingToplevels(dockState.items, dockState.holding)
       if (unresolved) Hyprland.refreshToplevels()
       // The wait for a class ends by the clock, not by an event.
       if (dockState.holding) dockState.refresh()
     }
   }
 
-  // How long a new Window may go without a class before it is shown anyway.
-  readonly property int classWaitMs: 3000
-
   function resolveApp(window) {
-    if (!window.class) return null
-    var app = DesktopEntries.heuristicLookup(window.class)
-    if (app) return app
-    var alias = DockModel.chromeAppClass(window.class)
-    return alias ? DesktopEntries.heuristicLookup(alias) || null : null
+    return DockModel.resolveApp(window.class, function (name) { return DesktopEntries.heuristicLookup(name) })
   }
 
   // App icons, for the Dock and the Start menu (IconResolver.qml): Qt's
@@ -552,20 +451,14 @@ Item {
   // "Placed"): DockModel.movedPlacements works out every Placed position
   // after the drop. The Pins' are persisted through dockSettings.apply
   // exactly like Pin/Unpin already is, so they survive a restart; the Window
-  // Items' go to dockState.windowPlacements directly.
+  // Items' go to dockState.itemsState (DockModel.dropPlaced does the split).
   function placeItem(item, targetIndex) {
-    var placements = DockModel.movedPlacements(dockState.items, dockState.placements(), item.key, targetIndex)
-    var windowPlacements = {}
-    var pinPlacements = []
-    for (let i = 0; i < placements.length; i++) {
-      if (placements[i].key.indexOf("pin:") === 0) pinPlacements.push(placements[i])
-      else windowPlacements[placements[i].key] = placements[i].index
-    }
-    dockState.windowPlacements = windowPlacements
+    var dropped = DockModel.dropPlaced(dockState.itemsState, dockState.items, dockSettings.placements, item.key, targetIndex)
+    dockState.itemsState = dropped.state
     // Shown now, not once the config file has been written and read back: the
     // Dock would otherwise sit in the old order for a moment after a drop.
-    dockSettings.placements = pinPlacements
-    dockSettings.apply({ type: "setPlacements", placements: pinPlacements })
+    dockSettings.placements = dropped.pins
+    dockSettings.apply({ type: "setPlacements", placements: dropped.pins })
     dockState.refresh()
   }
 
