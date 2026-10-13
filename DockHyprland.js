@@ -184,6 +184,38 @@ function peekCommit() {
   return argv(PEEK_LOCK.replace("\n", "; ") + "rm -f " + PEEK_STATE);
 }
 
+// With newWindowWorkspace on: a Window that opens tiled beside other Windows
+// moves to the lowest-numbered workspace with no Window on it, which is shown,
+// and is maximized or full screen there as the mode says ("normal" leaves it as it is). A floating, full screen or special-workspace Window
+// is left alone (dialogs, popups, Omarchy's minimized Windows), except that a
+// Window Omarchy's floating workspace mode floated (tag omarchy-mode-floated)
+// counts as tiled, since on such a workspace every Window floats. A Window
+// that is already alone only gets the mode. The lock keeps Windows opening
+// together (a restored session) from picking the same workspace.
+function openOnOwnWorkspace(address, mode) {
+  var normalized = normalizedAddress(address);
+  if (!normalized || ["normal", "maximized", "fullscreen"].indexOf(mode) < 0) return null;
+  var script = [
+    "addr=\"$1\"",
+    "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-newws.lock\"; flock 9",
+    "sleep 0.15",
+    "clients=$(hyprctl -j clients)",
+    "win=$(echo \"$clients\" | jq -c --arg a \"$addr\" 'first(.[] | select(.address == $a)) // empty')",
+    "[ -n \"$win\" ] || exit 0",
+    "echo \"$win\" | jq -e '(.floating and ((.tags // []) | index(\"omarchy-mode-floated\") | not)) or .fullscreen != 0 or .workspace.id < 1' >/dev/null && exit 0",
+    "here=$(echo \"$win\" | jq '.workspace.id')",
+    "others=$(echo \"$clients\" | jq --arg a \"$addr\" --argjson w \"$here\" '[.[] | select(.workspace.id == $w and .address != $a)] | length')",
+    "if [ \"$others\" -gt 0 ]; then",
+    "  used=$(echo \"$clients\" | jq -c --arg a \"$addr\" '[.[] | select(.workspace.id > 0 and .address != $a) | .workspace.id] | unique')",
+    "  ws=$(jq -n --argjson u \"$used\" 'first(range(1; 1000) | select(. as $i | $u | index($i) | not))')",
+    "  hyprctl dispatch \"hl.dsp.window.move({ workspace = \\\"$ws\\\", window = \\\"address:$addr\\\" })\" >/dev/null",
+    "fi",
+    "mode=" + mode,
+    "[ \"$mode\" = normal ] || hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$mode\\\", action = \\\"set\\\", window = \\\"address:$addr\\\" })\" >/dev/null",
+  ].join("\n");
+  return argv(script, normalized);
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     normalizedAddress: normalizedAddress,
@@ -195,5 +227,6 @@ if (typeof module !== "undefined" && module.exports) {
     peekWindow: peekWindow,
     peekRestore: peekRestore,
     peekCommit: peekCommit,
+    openOnOwnWorkspace: openOnOwnWorkspace,
   };
 }
