@@ -116,6 +116,8 @@ plugin_log() {
 if $restart; then
   echo "smoke: restarting the shell"
   omarchy restart shell >/dev/null 2>&1
+  # The old shell logs while it shuts down; what counts is what the new one logs.
+  started=$(date '+%Y-%m-%d %H:%M:%S')
   sleep 5
   if ! omarchy plugin list 2>/dev/null | grep -F "$id" | grep -q enabled; then
     echo "smoke: FAILED, $id is not enabled after the restart" >&2
