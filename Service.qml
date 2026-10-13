@@ -368,6 +368,11 @@ Item {
         let cls = String(event.data).split(",")[2]
         let app = cls ? root.resolveApp({ class: cls }) : null
         if (app && app.id) dockSettings.apply({ type: "pushRecentApp", appId: app.id })
+        // docs/SPEC.md "New window workspace"
+        if (root.taskbar && root.taskbar.newWindowWorkspace !== "off") {
+          let command = DockHyprland.openOnOwnWorkspace(String(event.data).split(",")[0], root.taskbar.newWindowWorkspace)
+          if (command) Quickshell.execDetached(command)
+        }
       }
       dockState.refresh()
     }

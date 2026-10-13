@@ -85,6 +85,8 @@ Stored in StartBar's entry in Omarchy's shell config (`~/.config/omarchy/shell.j
 
 - Omarchy dock: `hideOmarchyDock` is on by default. While it is on, StartBar disables Omarchy's own dock plugin (`omarchy-shell shell setPluginEnabled omarchy.dock false`) and enables it again when the setting goes off. It acts only when the setting changes, and on start when it is on, so a dock you disabled by hand stays disabled while the setting is off.
 
+- New window workspace: `newWindowWorkspace` is `off` by default; `normal`, `maximized` and `fullscreen` turn it on (a leftover `true` reads as `maximized`). While on, a Window that opens tiled on a workspace that already has Windows moves to the lowest-numbered workspace with no Window (which is shown) and is put in the chosen state there (`normal` leaves it as it is); a Window that opens alone only gets the state. Floating, full screen and special-workspace Windows are left alone, so dialogs and Omarchy's minimized Windows are unaffected; a Window that Omarchy's floating workspace mode floated counts as tiled. It acts on Hyprland's `openwindow` event, so only while the shell runs, and the Window shows briefly where it opened before it moves.
+
 A value that is missing or unusable falls back to its default. A leftover `style` key from the removed dock style ([ADR 0002](adr/0002-startbar-is-only-a-taskbar.md)) is ignored.
 
 ## Grouping

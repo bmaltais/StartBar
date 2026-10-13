@@ -119,6 +119,13 @@ function opacityOr(value, fallback) {
   return Math.max(0, Math.min(1, value));
 }
 
+// "off", or how a new Window is shown on its own workspace. A leftover true
+// from when this was a switch means "maximized".
+function newWindowWorkspaceOr(value) {
+  if (value === true) return "maximized";
+  return oneOf(value, ["off", "normal", "maximized", "fullscreen"], "off");
+}
+
 function effectiveTaskbar(entry) {
   var source = isPlainObject(entry) ? entry : {};
   return {
@@ -140,6 +147,7 @@ function effectiveTaskbar(entry) {
     groupWindows: booleanOr(source.groupWindows, true),
     startHoverOpen: booleanOr(source.startHoverOpen, false),
     hideOmarchyDock: booleanOr(source.hideOmarchyDock, true),
+    newWindowWorkspace: newWindowWorkspaceOr(source.newWindowWorkspace),
   };
 }
 
@@ -282,6 +290,11 @@ function settingsSchema() {
         { key: "hideDelayMs", label: "Hide delay", type: "int", min: 50, max: 3000, step: 50, unit: "ms", hint: "After the pointer leaves" },
         { key: "showClock", label: "Clock", type: "bool" },
         { key: "hideOmarchyDock", label: "Hide Omarchy's dock", type: "bool", hint: "Turns off the dock Omarchy shows on floating workspaces" },
+        {
+          key: "newWindowWorkspace", label: "New windows on their own workspace", type: "choice",
+          options: [{ value: "off", label: "Off" }, { value: "normal", label: "Normal" }, { value: "maximized", label: "Maximized" }, { value: "fullscreen", label: "Full screen" }],
+          hint: "A window that opens beside others moves to an empty workspace, shown this way",
+        },
         { key: "groupWindows", label: "Group windows of one app", type: "bool", hint: "One stacked icon per app; hover it to pick a window" },
         { key: "showPreviews", label: "Window previews", type: "bool", hint: "Hover thumbnails" },
         { key: "previewSlide", label: "Slide-up preview", type: "bool", hint: "The preview rises out of the Dock edge when it appears" },

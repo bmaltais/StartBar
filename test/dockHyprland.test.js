@@ -15,6 +15,9 @@ const all = {
   peekWindow: H.peekWindow(ADDR),
   peekRestore: H.peekRestore(),
   peekCommit: H.peekCommit(),
+  openOnOwnWorkspace: H.openOnOwnWorkspace(ADDR, "maximized"),
+  openOnOwnWorkspaceFullscreen: H.openOnOwnWorkspace(ADDR, "fullscreen"),
+  openOnOwnWorkspaceNormal: H.openOnOwnWorkspace(ADDR, "normal"),
 };
 for (const id of H.windowActionIds) all["windowAction " + id] = H.windowAction(id, ADDR);
 
@@ -109,3 +112,9 @@ for (const name of ["focusWindow", "focusWindowAndWarp"]) {
     assert.ok(script.indexOf('restore "$addr"') < script.indexOf("hl.dsp.focus({ window"));
   });
 }
+
+test("openOnOwnWorkspace refuses a mode it does not know", () => {
+  assert.equal(H.openOnOwnWorkspace(ADDR, "off"), null);
+  assert.equal(H.openOnOwnWorkspace(ADDR, "x; rm -rf ~"), null);
+  assert.equal(H.openOnOwnWorkspace(ADDR), null);
+});
