@@ -5,7 +5,8 @@
 #
 #   --only      just these: taskbar, start-menu, start-menu-light, start-menu-dark,
 #               search, settings, settings-windows, settings-search, right-click,
-#               right-click-submenu, pin-menu, window-menu, preview
+#               right-click-submenu, pin-menu, window-menu, preview, and hero (a GIF of
+#               a tour of the features; only when named, as it takes a minute)
 #   --install   copy the results over screenshots/ (default: leave them in --out
 #               for a look, and print what each would replace)
 #   --out DIR   where the images go (default: a new directory under $TMPDIR or /tmp)
@@ -65,6 +66,8 @@ if [[ $(readlink -f "$installed" 2>/dev/null) != "$repo" ]]; then
 fi
 
 wanted() { [[ -z $only || ,$only, == *,"$1",* ]]; }
+# Shots that only run when named.
+asked() { [[ ,$only, == *,"$1",* ]]; }
 
 out=${out:-${TMPDIR:-/tmp}/startbar-screenshots-$(date +%Y%m%d-%H%M%S)}
 mkdir -p "$out"
@@ -82,7 +85,10 @@ backup=$(mktemp)
 cp "$config" "$backup"
 spares=()
 
+recording_started=
 cleanup() {
+  # An interrupted hero run must not leave the screen recorder going.
+  [[ -n $recording_started ]] && OMARCHY_SCREENRECORD_DIR="${recdir:-/tmp}" omarchy-capture-screenrecording --stop-recording >/dev/null 2>&1 || true
   omarchy-shell -q "$id" closeStartMenu 2>/dev/null || true
   omarchy-shell -q "$id" closeSettings 2>/dev/null || true
   for address in "${spares[@]:-}"; do
@@ -387,9 +393,103 @@ if wanted preview; then
   at $((mw / 2)) 200
 fi
 
+# hero: a GIF touring the features, for the top of the README. Omarchy's own
+# screen recorder (omarchy-capture-screenrecording) films the monitor, cursor
+# included, while the real pointer and keys drive the tour; ffmpeg then crops it
+# to the region the tour uses and makes the GIF.
+# Hover a group of windows for its Preview; open the Start menu and type; the
+# Bar menu and one submenu; the settings window, a search, another page.
+if asked hero; then
+  rw=$((mw < 1380 ? mw : 1380)); rh=$((mh < 880 ? mh : 880))
+  recdir=$tmp/recording; mkdir -p "$recdir"
+
+  for n in one two; do
+    foot --app-id=startbar-screenshot --title="Window $n" sh -c "echo 'Window $n'; ls $repo | head -12; sleep 600" >/dev/null 2>&1 &
+  done
+  sleep 1; stash startbar-screenshot
+  mapfile -t spares < <(hyprctl clients -j | jq -r '.[] | select(.class == "startbar-screenshot") | .address')
+
+  # glide X Y: move the pointer there in small steps, so it is seen to travel.
+  gx=$((mw / 2)); gy=200
+  glide() {
+    local i
+    for i in 1 2 3 4 5 6; do
+      at $((gx + ($1 - gx) * i / 6)) $((gy + ($2 - gy) * i / 6)); sleep 0.03
+    done
+    gx=$1; gy=$2
+  }
+
+  at $gx $gy; sleep 0.5
+  OMARCHY_SCREENRECORD_DIR="$recdir" omarchy-capture-screenrecording --fullscreen >/dev/null 2>&1
+  recording_started=1
+  sleep 2.2
+
+  # 1. The Preview of a group of windows.
+  if item=$(wait_for '.items[] | select(.key == "group:class:startbar-screenshot") | [.x, .y, .width, .height] | @tsv'); then
+    read -r x y w h <<<"$item"
+    glide $((mw / 2)) $((mh - 2))
+    glide $((x + w / 2)) $((y + h / 2))
+    sleep 2.6
+    glide $((mw / 2)) 400
+  fi
+  sleep 0.6
+
+  # 2. The Start menu, and a search.
+  omarchy-shell -q "$id" startMenu
+  sleep 1.8
+  wtype -d 220 "fil"
+  sleep 2
+  omarchy-shell -q "$id" closeStartMenu
+  sleep 1
+
+  # 3. The Bar menu and a submenu.
+  glide $((mw * 45 / 100)) $((mh - 12)); sleep 0.5
+  "$pointer" right >/dev/null
+  if rect=$(wait_for '.menus.bar | select(.height > 100) | [.x, .y, .width, .height] | @tsv'); then
+    read -r bx by bw bh <<<"$rect"
+    sleep 1.2
+    glide $((bx + bw / 2)) $((by + 4 + 64 + 9 + 16))
+    sleep 2
+    glide $((bx + bw / 2)) $((by + 4 + 64 + 9 + 48))
+    sleep 1.6
+  fi
+  glide $((mw / 2)) 300; "$pointer" left >/dev/null
+  sleep 1
+
+  # 4. The settings window: a search, then another page.
+  omarchy-shell -q "$id" settings
+  sleep 1.6
+  glide $((mw / 2)) $((settings_y + 30)); "$pointer" left >/dev/null; sleep 0.4
+  wtype -d 220 "icon"
+  sleep 2.2
+  glide $((settings_x + 48)) $((settings_y + 163)); "$pointer" left >/dev/null
+  sleep 2
+  glide $((settings_x + 48)) $((settings_y + 123)); "$pointer" left >/dev/null
+  sleep 1.6
+  omarchy-shell -q "$id" closeSettings
+  sleep 1
+
+  OMARCHY_SCREENRECORD_DIR="$recdir" omarchy-capture-screenrecording --stop-recording >/dev/null 2>&1
+  recording_started=
+  video=$(find "$recdir" -name '*.mp4' ! -name '*-preview*' | sort | tail -1)
+  if [[ -z $video ]]; then
+    echo "screenshots: the screen recorder made no video, skipping hero.gif" >&2
+  else
+    echo "  hero: recorded $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$video") s"
+    # Cropped to the region the tour uses, 10 fps, 1200 px wide, 128 colours:
+    # small enough for a README. The first moments, while the recorder starts,
+    # are cut.
+    ffmpeg -loglevel error -y -ss 1.0 -i "$video" \
+      -vf "crop=$rw:$rh:0:$((mh - rh)),fps=10,scale=1200:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
+      -loop 0 "$out/hero.gif"
+    echo "  hero.gif $(du -h "$out/hero.gif" | cut -f1)"
+  fi
+  at $((mw / 2)) 200
+fi
+
 if $install; then
   echo "screenshots: installing into screenshots/"
-  cp "$out"/*.png "$repo/screenshots/"
+  find "$out" -maxdepth 1 \( -name '*.png' -o -name '*.gif' \) -exec cp -t "$repo/screenshots" {} +
   git -C "$repo" status --short screenshots
 else
   echo "screenshots: look at them in $out; --install copies them over screenshots/"

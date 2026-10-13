@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="StartBar: a taskbar with a Start menu for Omarchy" src="preview.png" />
+  <img alt="A tour of StartBar: window previews, the Start menu and its search, the right-click menu with a submenu, and the settings window with search" src="screenshots/hero.gif" width="900" />
 </p>
 
 <h1 align="center">StartBar</h1>
