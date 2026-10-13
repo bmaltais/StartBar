@@ -98,7 +98,7 @@ Item {
     resultList.currentIndex = result.state.resultIndex
     allList.currentIndex = result.state.allIndex
     startMenu.arm(result.timers)
-    for (var i = 0; i < result.effects.length; i++) startMenu.perform(result.effects[i])
+    for (let i = 0; i < result.effects.length; i++) startMenu.perform(result.effects[i])
     return result.handled
   }
 
@@ -157,8 +157,8 @@ Item {
   readonly property var allApps: {
     var values = DesktopEntries.applications.values
     var list = []
-    for (var i = 0; i < values.length; i++) {
-      var entry = values[i]
+    for (let i = 0; i < values.length; i++) {
+      let entry = values[i]
       list.push({
         id: entry.id,
         name: entry.name || entry.id,
@@ -252,15 +252,15 @@ Item {
   function syncPinTiles() {
     var apps = startMenu.pinnedApps
     var byId = {}
-    for (var n = 0; n < apps.length; n++) byId[apps[n].id] = apps[n]
-    for (var r = pinKeys.count - 1; r >= 0; r--) {
+    for (let n = 0; n < apps.length; n++) byId[apps[n].id] = apps[n]
+    for (let r = pinKeys.count - 1; r >= 0; r--) {
       if (!byId[pinKeys.get(r).id]) pinKeys.remove(r)
     }
     startMenu.pinnedById = byId
-    for (var i = 0; i < apps.length; i++) {
+    for (let i = 0; i < apps.length; i++) {
       if (i < pinKeys.count && pinKeys.get(i).id === apps[i].id) continue
-      var at = -1
-      for (var j = i + 1; j < pinKeys.count; j++) {
+      let at = -1
+      for (let j = i + 1; j < pinKeys.count; j++) {
         if (pinKeys.get(j).id === apps[i].id) { at = j; break }
       }
       if (at >= 0) pinKeys.move(at, i, 1)

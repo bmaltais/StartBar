@@ -1,6 +1,4 @@
-IconResolver.qml	block-scope-var-declaration	var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning 
 IconResolver.qml	confusing-expression-statement	Expression statement has no obvious effect.
-Service.qml	block-scope-var-declaration	var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning 
 Service.qml	import	Failed to import qs.Commons. Are your import paths set up properly?
 Service.qml	import	Failed to import qs.Ui. Are your import paths set up properly?
 Service.qml	import	PanelToolTip was not found. Did you add all imports and dependencies?
@@ -15,6 +13,8 @@ Service.qml	missing-property	Member "background" not found on type "QQuickColor"
 Service.qml	missing-property	Member "field" not found on type (component in Service.qml)::item with type QObject
 Service.qml	missing-property	Member "foreground" not found on type "QQuickColor"
 Service.qml	missing-property	Member "height" not found on type "QuickshellScreenInfo"
+Service.qml	missing-property	Member "key" not found on type "QQuickItem"
+Service.qml	missing-property	Member "modelData" not found on type "QQuickItem"
 Service.qml	missing-property	Member "muted" not found on type "QQuickColor"
 Service.qml	missing-property	Member "name" not found on type "QuickshellScreenInfo"
 Service.qml	missing-property	Member "popups" not found on type "QQuickColor"
@@ -43,8 +43,6 @@ Service.qml	unqualified	groupBlock
 Service.qml	unqualified	icon
 Service.qml	unqualified	listBox
 Service.qml	unqualified	listEditor
-Service.qml	unqualified	menuAnchor
-Service.qml	unqualified	menuColumn
 Service.qml	unqualified	onAnchoring
 Service.qml	unqualified	panel
 Service.qml	unqualified	previewAnchor
@@ -65,7 +63,6 @@ Service.qml	unqualified	switchEditor
 Service.qml	unqualified	textEditor
 Service.qml	unqualified	userDirsForSettings
 Service.qml	unresolved-type	Type rect is used but it is not resolved
-StartMenuView.qml	block-scope-var-declaration	var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning 
 StartMenuView.qml	missing-property	Member "accent" not found on type "QQuickColor"
 StartMenuView.qml	missing-property	Member "background" not found on type "QQuickColor"
 StartMenuView.qml	missing-property	Member "foreground" not found on type "QQuickColor"
