@@ -139,6 +139,7 @@ function effectiveTaskbar(entry) {
     showWorkspaceBadge: booleanOr(source.showWorkspaceBadge, false),
     groupWindows: booleanOr(source.groupWindows, true),
     startHoverOpen: booleanOr(source.startHoverOpen, false),
+    hideOmarchyDock: booleanOr(source.hideOmarchyDock, true),
   };
 }
 
@@ -220,6 +221,7 @@ function barMenuRows(taskbar) {
     toggle("Start menu opens on hover", "startHoverOpen", 2),
     toggle("Auto-hide", "autoHide", 3),
     toggle("Clock", "showClock", 3),
+    toggle("Hide Omarchy's dock", "hideOmarchyDock", 3),
     toggle("Window previews", "showPreviews", 3),
     toggle("Pointer follows preview click", "previewWarpPointer", 3),
     toggle("Show window on preview hover", "previewPeek", 3),
@@ -279,6 +281,7 @@ function settingsSchema() {
         { key: "revealDelayMs", label: "Reveal delay", type: "int", min: 50, max: 2000, step: 50, unit: "ms", hint: "Pointer rests on the edge this long" },
         { key: "hideDelayMs", label: "Hide delay", type: "int", min: 50, max: 3000, step: 50, unit: "ms", hint: "After the pointer leaves" },
         { key: "showClock", label: "Clock", type: "bool" },
+        { key: "hideOmarchyDock", label: "Hide Omarchy's dock", type: "bool", hint: "Turns off the dock Omarchy shows on floating workspaces" },
         { key: "groupWindows", label: "Group windows of one app", type: "bool", hint: "One stacked icon per app; hover it to pick a window" },
         { key: "showPreviews", label: "Window previews", type: "bool", hint: "Hover thumbnails" },
         { key: "previewSlide", label: "Slide-up preview", type: "bool", hint: "The preview rises out of the Dock edge when it appears" },

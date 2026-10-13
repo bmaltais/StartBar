@@ -43,6 +43,7 @@ test("bar defaults: always visible, left-aligned, theme colours, built-in Start 
     showWorkspaceBadge: false,
     groupWindows: true,
     startHoverOpen: false,
+    hideOmarchyDock: true,
   });
 });
 

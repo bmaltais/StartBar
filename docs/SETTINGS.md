@@ -41,6 +41,7 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 | `startHoverOpen` | `false` | With the built-in menu, resting the pointer on the Start button opens it after a moment; it closes when you leave; typing (or clicking its search box) keeps it open; moving to another icon closes it |
 | `startIcon` | `grid` | `grid` (drawn in QML), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path |
 | `showClock` | `false` | Clock at the right end |
+| `hideOmarchyDock` | `true` | Turn off Omarchy's own dock (the `omarchy.dock` plugin, shown on floating workspaces). Switching it on disables the plugin and switching it off enables it again; while it is off, a dock you disabled yourself stays disabled |
 | `showPreviews` | `true` | Hover thumbnails with a close button |
 | `previewSlide` | `true` | The hover preview rises out of the Dock edge when it appears; it still disappears at once |
 | `previewPeek` | `true` | Hovering a preview thumbnail focuses that window to show it (switching workspace if needed); a maximized or full-screen window covering it is un-maximized for the peek; moving away restores the focus, workspaces and maximized state; clicking keeps it |
