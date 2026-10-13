@@ -475,7 +475,11 @@ Item {
   readonly property int classWaitMs: 3000
 
   function resolveApp(window) {
-    return window.class ? DesktopEntries.heuristicLookup(window.class) || null : null
+    if (!window.class) return null
+    var app = DesktopEntries.heuristicLookup(window.class)
+    if (app) return app
+    var alias = DockModel.chromeAppClass(window.class)
+    return alias ? DesktopEntries.heuristicLookup(alias) || null : null
   }
 
   // App icons, for the Dock and the Start menu (IconResolver.qml): Qt's
