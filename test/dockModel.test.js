@@ -685,3 +685,14 @@ test("clipText caps a window's title or class and copes with non-strings", () =>
   assert.equal(clipText(null), "");
   assert.equal(clipText(42), "");
 });
+
+test("chromeAppClass maps a Chromium-family web app class to the chrome- one Omarchy's entries name", () => {
+  const { chromeAppClass } = require("../DockModel.js");
+  assert.equal(chromeAppClass("msedge-x.com__-Default"), "chrome-x.com__-Default");
+  assert.equal(chromeAppClass("brave-discord.com__channels_@me-Default"), "chrome-discord.com__channels_@me-Default");
+  assert.equal(chromeAppClass("chrome-x.com__-Default"), null);
+  assert.equal(chromeAppClass("msedge"), null);
+  assert.equal(chromeAppClass("microsoft-edge"), null);
+  assert.equal(chromeAppClass(""), null);
+  assert.equal(chromeAppClass(undefined), null);
+});

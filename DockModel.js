@@ -389,8 +389,21 @@ function clipText(text, max) {
   return s.length > limit ? s.slice(0, limit) : s;
 }
 
+// A Chromium-family browser's web app Window (Omarchy's Super+Space "X",
+// "YouTube"...) is classed "<browser>-<host>__<path>-<profile>", but Omarchy's
+// own desktop entries always say StartupWMClass=chrome-..., whatever the
+// browser. So an Edge web app's "msedge-x.com__-Default" matches nothing until
+// it is looked up as "chrome-x.com__-Default". null for any other class.
+var BROWSER_APP_CLASS = /^(?:msedge|microsoft-edge|brave|vivaldi|opera|helium|google-chrome|chromium)-([^_]+__.*)$/;
+
+function chromeAppClass(windowClass) {
+  var match = BROWSER_APP_CLASS.exec(String(windowClass || ""));
+  return match ? "chrome-" + match[1] : null;
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
+    chromeAppClass: chromeAppClass,
     MAX_WINDOW_TEXT: MAX_WINDOW_TEXT,
     clipText: clipText,
     buildDockItems: buildDockItems,
