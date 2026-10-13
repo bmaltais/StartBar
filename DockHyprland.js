@@ -27,6 +27,19 @@ function argv(script, arg) {
 var RAISE = "raise() { hyprctl -j clients | jq -e --arg a \"$1\" '.[] | select(.address == $a and .floating)' >/dev/null "
   + "&& hyprctl dispatch \"hl.dsp.window.alter_zorder({ mode = \\\"top\\\", window = \\\"address:$1\\\" })\" >/dev/null; }; ";
 
+// Omarchy's window mode minimizes a Window by moving it to the special
+// workspace "special:minimized", where focusing it does not bring it back. A
+// shell function: `restore ADDRESS` moves such a Window to the workspace in
+// front of the user, without animating it in, and does nothing for any other.
+var RESTORE = "restore() { "
+  + "hyprctl -j clients | jq -e --arg a \"$1\" '.[] | select(.address == $a and .workspace.name == \"special:minimized\")' >/dev/null || return 0; "
+  + "ws=$(hyprctl -j monitors | jq -r 'first(.[] | select(.focused) | .activeWorkspace.id) // empty'); "
+  + "[ \"${ws:-0}\" -ge 1 ] 2>/dev/null || return 0; "
+  + "hyprctl dispatch \"hl.dsp.window.set_prop({ prop = \\\"no_anim\\\", value = \\\"1\\\", window = \\\"address:$1\\\" })\" >/dev/null; "
+  + "hyprctl dispatch \"hl.dsp.window.move({ workspace = \\\"$ws\\\", window = \\\"address:$1\\\" })\" >/dev/null; "
+  + "(sleep 0.4; hyprctl dispatch \"hl.dsp.window.set_prop({ prop = \\\"no_anim\\\", value = \\\"unset\\\", window = \\\"address:$1\\\" })\" >/dev/null) & "
+  + "}; ";
+
 // Focusing can warp the pointer: toggle cursor:no_warps around a dispatch and
 // put the old value back.
 var NO_WARPS = "orig=false; hyprctl -j getoption cursor:no_warps | grep -q '\"bool\": true' && orig=true; "
@@ -66,6 +79,8 @@ function focusWindow(address) {
   var script = "addr=\"$1\"; "
     + NO_WARPS
     + RAISE
+    + RESTORE
+    + "restore \"$addr\"; "
     + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\"; "
     + "raise \"$addr\"; "
     + WARPS_BACK;
@@ -81,6 +96,8 @@ function focusWindowAndWarp(address) {
   if (!normalized) return null;
   var script = "addr=\"$1\"; "
     + RAISE
+    + RESTORE
+    + "restore \"$addr\"; "
     + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\" >/dev/null; "
     + "raise \"$addr\"; "
     + "sleep 0.1; "

@@ -101,3 +101,11 @@ test("restore puts back state and focus, commit only drops the state", () => {
   assert.match(commit, /flock 9; rm -f /);
   assert.doesNotMatch(commit, /hyprctl/);
 });
+
+for (const name of ["focusWindow", "focusWindowAndWarp"]) {
+  test(`${name} brings a Window minimized to special:minimized back before focusing it`, () => {
+    const script = scriptOf(all[name]);
+    assert.match(script, /special:minimized/);
+    assert.ok(script.indexOf('restore "$addr"') < script.indexOf("hl.dsp.focus({ window"));
+  });
+}
