@@ -41,6 +41,8 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 | `startHoverOpen` | `false` | With the built-in menu, resting the pointer on the Start button opens it after a moment; it closes when you leave; typing (or clicking its search box) keeps it open; moving to another icon closes it |
 | `startIcon` | `grid` | `grid` (drawn in QML), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path |
 | `showClock` | `false` | Clock at the right end |
+| `hideOmarchyDock` | `true` | Turn off Omarchy's own dock (the `omarchy.dock` plugin, shown on floating workspaces). Switching it on disables the plugin and switching it off enables it again; while it is off, a dock you disabled yourself stays disabled |
+| `newWindowWorkspace` | `off` | `off`, `normal`, `maximized` or `fullscreen`. Otherwise a Window that opens tiled beside other Windows moves to the lowest-numbered empty workspace and is shown that way there (`normal` leaves its state alone). Floating Windows Omarchy did not float itself, and full screen ones, are left alone. A leftover `true` reads as `maximized` |
 | `showPreviews` | `true` | Hover thumbnails with a close button |
 | `previewSlide` | `true` | The hover preview rises out of the Dock edge when it appears; it still disappears at once |
 | `previewPeek` | `true` | Hovering a preview thumbnail focuses that window to show it (switching workspace if needed); a maximized or full-screen window covering it is un-maximized for the peek; moving away restores the focus, workspaces and maximized state; clicking keeps it |
@@ -73,12 +75,12 @@ It is the one part of the Dock that takes keyboard focus, and only while open.
 
 ### Settings window
 
-Right-click an empty part of the bar and choose **Settings…** (or run `omarchy-shell io.github.bmaltais.startbar settings`, handy for a keybinding) to open a window with a widget for every option in the tables above: switches, choice buttons, steppers, a slider for opacity, text fields, and an editor for the Start menu's Places folders. Changes apply instantly and are saved to `shell.json`. "Reset to defaults" (click twice) puts every setting back; your Pins and Start menu pins are kept.
+Right-click an empty part of the bar and choose **Settings…** (or run `omarchy-shell io.github.bmaltais.startbar settings`, handy for a keybinding) to open a window with a widget for every option in the tables above, with pages listed down the left (Taskbar, Windows, Start menu), a search box centred at the top to find a setting by typing, and options that depend on another one dimmed while it is off: switches, choice buttons, steppers, a slider for opacity, text fields, and an editor for the Start menu's Places folders. Changes apply instantly and are saved to `shell.json`. "Reset to defaults" (click twice) puts every setting back; your Pins and Start menu pins are kept.
 
 ### Menus
 
 - **Right-click an icon**: Pin/Unpin, New Window and the app's own actions; for a window, Maximize/Restore, Full screen/Exit full screen, Float/Tile, and when floating Center and Pin on top; Move to scratchpad; then the app and Pin/Unpin; and last, Close window (Close all windows for a group). The menu stays open until you pick a row, click outside it, or move the pointer off it.
-- **Right-click the bar** (an empty part) opens a menu of the common options (alignment, colours, Start menu, auto-hide, clock, previews...). Its last row, **Settings…**, opens the full settings window.
+- **Right-click the bar** (an empty part) opens a short menu: Icon alignment, Colors, Start button and Window previews are sections that open a submenu beside them, and the everyday toggles follow (auto-hide, clock, group windows, workspace badge, transparent background). Its last row, **Settings…**, opens the full settings window.
 
 ## Pinning
 

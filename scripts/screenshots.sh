@@ -4,7 +4,9 @@
 #   scripts/screenshots.sh [--only NAME,NAME] [--install] [--out DIR] [--monitor NAME] [--no-restart]
 #
 #   --only      just these: taskbar, start-menu, start-menu-light, start-menu-dark,
-#               search, settings, right-click, pin-menu, window-menu, preview
+#               search, settings, settings-windows, settings-search, right-click,
+#               right-click-submenu, pin-menu, window-menu, preview, and hero (a GIF of
+#               a tour of the features; only when named, as it takes a minute)
 #   --install   copy the results over screenshots/ (default: leave them in --out
 #               for a look, and print what each would replace)
 #   --out DIR   where the images go (default: a new directory under $TMPDIR or /tmp)
@@ -64,6 +66,8 @@ if [[ $(readlink -f "$installed" 2>/dev/null) != "$repo" ]]; then
 fi
 
 wanted() { [[ -z $only || ,$only, == *,"$1",* ]]; }
+# Shots that only run when named.
+asked() { [[ ,$only, == *,"$1",* ]]; }
 
 out=${out:-${TMPDIR:-/tmp}/startbar-screenshots-$(date +%Y%m%d-%H%M%S)}
 mkdir -p "$out"
@@ -81,7 +85,10 @@ backup=$(mktemp)
 cp "$config" "$backup"
 spares=()
 
+recording_started=
 cleanup() {
+  # An interrupted hero run must not leave the screen recorder going.
+  [[ -n $recording_started ]] && OMARCHY_SCREENRECORD_DIR="${recdir:-/tmp}" omarchy-capture-screenrecording --stop-recording >/dev/null 2>&1 || true
   omarchy-shell -q "$id" closeStartMenu 2>/dev/null || true
   omarchy-shell -q "$id" closeSettings 2>/dev/null || true
   for address in "${spares[@]:-}"; do
@@ -114,8 +121,8 @@ shell_layout() { omarchy-shell "$id" layout 2>/dev/null; }
 # wait_for FILTER: run a jq filter (ending in @tsv) over the layout until it gives
 # something, up to 4 s, and print it space-separated. Fails if it never does.
 wait_for() {
-  local out i
-  for i in $(seq 1 40); do
+  local out
+  for _ in $(seq 1 40); do
     out=$(shell_layout | jq -re "$1 // empty" 2>/dev/null | tr '\t' ' ') || out=""
     if [[ -n $out ]]; then echo "$out"; return 0; fi
     sleep 0.1
@@ -141,8 +148,8 @@ frame() {
 # stash CLASS: move that app's windows to a workspace of their own, away from the
 # one being shot, so they appear in the Dock without covering the wallpaper.
 stash() {
-  local address i
-  for i in $(seq 1 30); do
+  local address
+  for _ in $(seq 1 30); do
     hyprctl clients -j | jq -e --arg c "$1" '.[] | select(.class == $c)' >/dev/null && break
     sleep 0.1
   done
@@ -203,13 +210,13 @@ start_menu() {
   if [[ -z $box ]]; then
     echo "screenshots: the Start menu did not open for $name, skipping it" >&2
   else
-    frame "$tmp/menu.png" "$tmp/$name.png" $bx $by $bw $bh down
+    frame "$tmp/menu.png" "$tmp/$name.png" "$bx" "$by" "$bw" "$bh" down
     keep "$tmp/$name.png" "$name"
     if $typed && wanted search; then
       wtype "fi"
       sleep 1
       full "$tmp/typed.png"
-      frame "$tmp/typed.png" "$tmp/search.png" $bx $by $bw $bh down
+      frame "$tmp/typed.png" "$tmp/search.png" "$bx" "$by" "$bw" "$bh" down
       keep "$tmp/search.png" search
     fi
   fi
@@ -221,14 +228,43 @@ if wanted start-menu-light; then start_menu light start-menu-light; fi
 if wanted start-menu-dark; then start_menu dark start-menu-dark; fi
 override "$readme_state"
 
+# The settings window's frame is 780x620, centred; its page list is at x+48 and
+# its search box at the top centre (Service.qml, settingsWindow).
+settings_x=$(((mw - 780) / 2))
+settings_y=$(((mh - 620) / 2))
+settings_shot() { frame "$tmp/s.png" "$tmp/$1.png" "$settings_x" "$settings_y" 780 620; keep "$tmp/$1.png" "$1"; }
+settings_page() { at $((settings_x + 48)) $((settings_y + $1)); sleep 0.3; "$pointer" left >/dev/null; sleep 0.6; }
+
+# Changing shell.json while the window is open closes it, so each shot opens it
+# afresh, after any change.
+open_settings() { omarchy-shell -q "$id" settings; sleep 1.5; }
+close_settings() { omarchy-shell -q "$id" closeSettings; sleep 0.6; }
+
 if wanted settings; then
-  omarchy-shell -q "$id" settings
-  sleep 1.5
-  full "$tmp/s.png"
-  frame "$tmp/s.png" "$tmp/settings.png" $(((mw - 640) / 2)) $(((mh - 760) / 2)) 640 760
-  keep "$tmp/settings.png" settings
-  omarchy-shell -q "$id" closeSettings
-  sleep 0.6
+  open_settings
+  settings_page 123   # it opens on the page it was last on: choose the first
+  full "$tmp/s.png"; settings_shot settings
+  close_settings
+fi
+
+if wanted settings-windows; then
+  # With previews off, the options that follow them are dimmed and indented.
+  override "$(jq -c '. + {showPreviews: false}' <<<"$readme_state")"
+  open_settings
+  settings_page 163
+  full "$tmp/s.png"; settings_shot settings-windows
+  close_settings
+  override "$readme_state"
+fi
+
+if wanted settings-search; then
+  open_settings
+  # Click into the search box so the keys reach the window, then type.
+  at $((mw / 2)) $((settings_y + 30)); sleep 0.3; "$pointer" left >/dev/null; sleep 0.3
+  wtype "icon"
+  sleep 1
+  full "$tmp/s.png"; settings_shot settings-search
+  close_settings
 fi
 
 # Where things are comes from the shell itself: `omarchy-shell <id> layout` gives
@@ -252,7 +288,7 @@ open_item_menu() {
 
 # Bar menu: right click on the bar away from any Item, with auto-hide on as in
 # the image, so the Dock is revealed by the pointer first.
-if wanted right-click; then
+if wanted right-click || wanted right-click-submenu; then
   override "$(jq -c '. + {autoHide: true}' <<<"$readme_state")"
   at $((mw / 2)) $((mh - 2)); sleep 1.2
   at $((mw * 6 / 10)) $((mh - 12)); sleep 0.5
@@ -261,8 +297,24 @@ if wanted right-click; then
     read -r bx by bw bh <<<"$rect"
     sleep 0.3
     full "$tmp/rc.png"
-    crop_rect "$tmp/rc.png" "$tmp/right-click.png" $bx $by $bw $bh
+    crop_rect "$tmp/rc.png" "$tmp/right-click.png" "$bx" "$by" "$bw" "$bh"
     keep "$tmp/right-click.png" right-click
+    if wanted right-click-submenu; then
+      # Rest on the Start button row, the third: two 32 px rows, the 9 px gap
+      # before a new group, then half a row, after the menu's 4 px padding.
+      at $((bx + bw / 2)) $((by + 4 + 64 + 9 + 16)); sleep 0.3
+      at $((bx + bw / 2 + 3)) $((by + 4 + 64 + 9 + 16)); sleep 0.8
+      if sub=$(wait_for '.menus.barSub | [.x, .y, .width, .height] | @tsv'); then
+        read -r sx sy sw sh <<<"$sub"
+        full "$tmp/rcs.png"
+        ux=$((bx < sx ? bx : sx)); uy=$((by < sy ? by : sy))
+        ur=$((bx + bw > sx + sw ? bx + bw : sx + sw)); ub=$((by + bh > sy + sh ? by + bh : sy + sh))
+        crop_rect "$tmp/rcs.png" "$tmp/right-click-submenu.png" "$ux" "$uy" $((ur - ux)) $((ub - uy))
+        keep "$tmp/right-click-submenu.png" right-click-submenu
+      else
+        echo "screenshots: the submenu did not open, skipping it" >&2
+      fi
+    fi
   else
     echo "screenshots: the Bar menu did not open, skipping it" >&2
   fi
@@ -280,7 +332,7 @@ if wanted pin-menu; then
     read -r bx by bw bh <<<"$rect"
     sleep 0.3
     full "$tmp/pm.png"
-    crop_rect "$tmp/pm.png" "$tmp/pin-menu.png" $bx $by $bw $bh
+    crop_rect "$tmp/pm.png" "$tmp/pin-menu.png" "$bx" "$by" "$bw" "$bh"
     keep "$tmp/pin-menu.png" pin-menu
   else
     echo "screenshots: found no Pin without Windows, skipping pin-menu" >&2
@@ -299,7 +351,7 @@ if wanted window-menu; then
     read -r bx by bw bh <<<"$rect"
     sleep 0.3
     full "$tmp/wm.png"
-    crop_rect "$tmp/wm.png" "$tmp/window-menu.png" $bx $by $bw $bh
+    crop_rect "$tmp/wm.png" "$tmp/window-menu.png" "$bx" "$by" "$bw" "$bh"
     keep "$tmp/window-menu.png" window-menu
   else
     echo "screenshots: the throwaway window's menu did not open, skipping window-menu" >&2
@@ -322,15 +374,17 @@ if wanted preview; then
   at $((mw / 2)) 200; sleep 0.5
   if item=$(wait_for '.items[] | select(.key == "group:class:startbar-screenshot") | [.x, .y, .width, .height] | @tsv'); then
     read -r x y w h <<<"$item"
-    spares=($(hyprctl clients -j | jq -r '.[] | select(.class == "startbar-screenshot") | .address'))
+    mapfile -t spares < <(hyprctl clients -j | jq -r '.[] | select(.class == "startbar-screenshot") | .address')
     # From the Dock's edge first: jumping straight onto an Item can lose the hover.
     at $((mw / 2)) $((mh - 2)); sleep 0.5
     at $((x + w / 2)) $((y + h / 2))
     if rect=$(wait_for '.menus.preview | select(.width > 100 and .height > 50) | [.x, .y, .width, .height] | @tsv'); then
+      # The Preview slides up as it opens: read its place again once it has settled.
+      sleep 0.8
+      rect=$(wait_for '.menus.preview | select(.width > 100 and .height > 50) | [.x, .y, .width, .height] | @tsv') || true
       read -r bx by bw bh <<<"$rect"
-      sleep 0.6
       full "$tmp/pv.png"
-      frame "$tmp/pv.png" "$tmp/preview.png" $bx $by $bw $bh down
+      frame "$tmp/pv.png" "$tmp/preview.png" "$bx" "$by" "$bw" "$bh" down
       keep "$tmp/preview.png" preview
     else
       echo "screenshots: the Preview did not open, skipping it" >&2
@@ -341,9 +395,103 @@ if wanted preview; then
   at $((mw / 2)) 200
 fi
 
+# hero: a GIF touring the features, for the top of the README. Omarchy's own
+# screen recorder (omarchy-capture-screenrecording) films the monitor, cursor
+# included, while the real pointer and keys drive the tour; ffmpeg then crops it
+# to the region the tour uses and makes the GIF.
+# Hover a group of windows for its Preview; open the Start menu and type; the
+# Bar menu and one submenu; the settings window, a search, another page.
+if asked hero; then
+  rw=$((mw < 1380 ? mw : 1380)); rh=$((mh < 880 ? mh : 880))
+  recdir=$tmp/recording; mkdir -p "$recdir"
+
+  for n in one two; do
+    foot --app-id=startbar-screenshot --title="Window $n" sh -c "echo 'Window $n'; ls $repo | head -12; sleep 600" >/dev/null 2>&1 &
+  done
+  sleep 1; stash startbar-screenshot
+  mapfile -t spares < <(hyprctl clients -j | jq -r '.[] | select(.class == "startbar-screenshot") | .address')
+
+  # glide X Y: move the pointer there in small steps, so it is seen to travel.
+  gx=$((mw / 2)); gy=200
+  glide() {
+    local i
+    for i in 1 2 3 4 5 6; do
+      at $((gx + ($1 - gx) * i / 6)) $((gy + ($2 - gy) * i / 6)); sleep 0.03
+    done
+    gx=$1; gy=$2
+  }
+
+  at $gx $gy; sleep 0.5
+  OMARCHY_SCREENRECORD_DIR="$recdir" omarchy-capture-screenrecording --fullscreen >/dev/null 2>&1
+  recording_started=1
+  sleep 2.2
+
+  # 1. The Preview of a group of windows.
+  if item=$(wait_for '.items[] | select(.key == "group:class:startbar-screenshot") | [.x, .y, .width, .height] | @tsv'); then
+    read -r x y w h <<<"$item"
+    glide $((mw / 2)) $((mh - 2))
+    glide $((x + w / 2)) $((y + h / 2))
+    sleep 2.6
+    glide $((mw / 2)) 400
+  fi
+  sleep 0.6
+
+  # 2. The Start menu, and a search.
+  omarchy-shell -q "$id" startMenu
+  sleep 1.8
+  wtype -d 220 "fil"
+  sleep 2
+  omarchy-shell -q "$id" closeStartMenu
+  sleep 1
+
+  # 3. The Bar menu and a submenu.
+  glide $((mw * 45 / 100)) $((mh - 12)); sleep 0.5
+  "$pointer" right >/dev/null
+  if rect=$(wait_for '.menus.bar | select(.height > 100) | [.x, .y, .width, .height] | @tsv'); then
+    read -r bx by bw bh <<<"$rect"
+    sleep 1.2
+    glide $((bx + bw / 2)) $((by + 4 + 64 + 9 + 16))
+    sleep 2
+    glide $((bx + bw / 2)) $((by + 4 + 64 + 9 + 48))
+    sleep 1.6
+  fi
+  glide $((mw / 2)) 300; "$pointer" left >/dev/null
+  sleep 1
+
+  # 4. The settings window: a search, then another page.
+  omarchy-shell -q "$id" settings
+  sleep 1.6
+  glide $((mw / 2)) $((settings_y + 30)); "$pointer" left >/dev/null; sleep 0.4
+  wtype -d 220 "icon"
+  sleep 2.2
+  glide $((settings_x + 48)) $((settings_y + 163)); "$pointer" left >/dev/null
+  sleep 2
+  glide $((settings_x + 48)) $((settings_y + 123)); "$pointer" left >/dev/null
+  sleep 1.6
+  omarchy-shell -q "$id" closeSettings
+  sleep 1
+
+  OMARCHY_SCREENRECORD_DIR="$recdir" omarchy-capture-screenrecording --stop-recording >/dev/null 2>&1
+  recording_started=
+  video=$(find "$recdir" -name '*.mp4' ! -name '*-preview*' | sort | tail -1)
+  if [[ -z $video ]]; then
+    echo "screenshots: the screen recorder made no video, skipping hero.gif" >&2
+  else
+    echo "  hero: recorded $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$video") s"
+    # Cropped to the region the tour uses, 10 fps, 1200 px wide, 128 colours:
+    # small enough for a README. The first moments, while the recorder starts,
+    # are cut.
+    ffmpeg -loglevel error -y -ss 1.0 -i "$video" \
+      -vf "crop=$rw:$rh:0:$((mh - rh)),fps=10,scale=1200:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
+      -loop 0 "$out/hero.gif"
+    echo "  hero.gif $(du -h "$out/hero.gif" | cut -f1)"
+  fi
+  at $((mw / 2)) 200
+fi
+
 if $install; then
   echo "screenshots: installing into screenshots/"
-  cp "$out"/*.png "$repo/screenshots/"
+  find "$out" -maxdepth 1 \( -name '*.png' -o -name '*.gif' \) -exec cp -t "$repo/screenshots" {} +
   git -C "$repo" status --short screenshots
 else
   echo "screenshots: look at them in $out; --install copies them over screenshots/"

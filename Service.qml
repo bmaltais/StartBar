@@ -149,6 +149,18 @@ Item {
       dockSettings.recentApps = view.recentApps
       dockSettings.startPlaces = view.startPlaces
       dockSettings.values = view.values
+      dockSettings.syncOmarchyDock(view.taskbar.hideOmarchyDock)
+    }
+
+    // docs/SPEC.md "Omarchy dock": hideOmarchyDock (on by default) turns the omarchy.dock plugin
+    // off and on through the shell. It acts on a change only (and on the first
+    // read when hiding), so a dock disabled by hand stays so while the setting is off.
+    property var omarchyDockHidden: null
+    function syncOmarchyDock(hide) {
+      var before = dockSettings.omarchyDockHidden
+      dockSettings.omarchyDockHidden = hide
+      if (before === hide || (before === null && !hide)) return
+      Quickshell.execDetached(["omarchy-shell", "shell", "setPluginEnabled", "omarchy.dock", hide ? "false" : "true"])
     }
 
     function apply(intent) {
@@ -220,7 +232,7 @@ Item {
     // settings, plus this session's Placed Window Items.
     function placements() {
       var combined = dockSettings.placements.slice()
-      for (var key in dockState.windowPlacements) {
+      for (let key in dockState.windowPlacements) {
         combined.push({ key: key, index: dockState.windowPlacements[key] })
       }
       return combined
@@ -235,9 +247,9 @@ Item {
       var handles = {}
       var held = false
 
-      for (var i = 0; i < toplevels.length; i++) {
-        var toplevel = toplevels[i]
-        var address = toplevel.address
+      for (let i = 0; i < toplevels.length; i++) {
+        let toplevel = toplevels[i]
+        let address = toplevel.address
         if (typeof address !== "string" || address.length === 0) continue
 
         seenAddresses[address] = true
@@ -246,13 +258,13 @@ Item {
           dockState.openedAtByAddress[address] = dockState.nextOpenedAt++
         }
 
-        var info = toplevel.lastIpcObject || {}
+        let info = toplevel.lastIpcObject || {}
         // A Window's class arrives a moment after the Window does. Until it
         // does, its App is unknown, and the Window would show as a blank
         // Letter Tile and then jump into its App's group, so it is held back
         // (for a few seconds at most: a Window may really have no class).
         if (!info.class) {
-          var firstSeen = dockState.firstSeenByAddress[address]
+          let firstSeen = dockState.firstSeenByAddress[address]
           if (firstSeen === undefined) {
             firstSeen = Date.now()
             dockState.firstSeenByAddress[address] = firstSeen
@@ -277,12 +289,12 @@ Item {
       }
 
       var keptOpenedAt = {}
-      for (var key in dockState.openedAtByAddress) {
+      for (let key in dockState.openedAtByAddress) {
         if (seenAddresses[key]) keptOpenedAt[key] = dockState.openedAtByAddress[key]
       }
       dockState.openedAtByAddress = keptOpenedAt
       var keptFirstSeen = {}
-      for (var seenKey in dockState.firstSeenByAddress) {
+      for (let seenKey in dockState.firstSeenByAddress) {
         if (seenAddresses[seenKey]) keptFirstSeen[seenKey] = dockState.firstSeenByAddress[seenKey]
       }
       dockState.firstSeenByAddress = keptFirstSeen
@@ -290,7 +302,7 @@ Item {
       dockState.toplevelByAddress = handles
 
       var titles = {}
-      for (var t = 0; t < windows.length; t++) titles[windows[t].id] = windows[t].title
+      for (let t = 0; t < windows.length; t++) titles[windows[t].id] = windows[t].title
       dockState.titles = titles
 
       // The Repeater below is fed a plain array, so assigning a new one
@@ -303,9 +315,9 @@ Item {
       var next = DockModel.buildDockItems(windows, resolveApp, dockSettings.pins, resolveAppById, dockState.placements(), !!(root.taskbar && root.taskbar.groupWindows))
       // A Placed Window or Group Item lasts only while its Item exists.
       var itemKeys = {}
-      for (var n = 0; n < next.length; n++) itemKeys[next[n].key] = true
+      for (let n = 0; n < next.length; n++) itemKeys[next[n].key] = true
       var keptPlacements = {}
-      for (var placedKey in dockState.windowPlacements) {
+      for (let placedKey in dockState.windowPlacements) {
         if (itemKeys[placedKey]) keptPlacements[placedKey] = dockState.windowPlacements[placedKey]
       }
       dockState.windowPlacements = keptPlacements
@@ -329,15 +341,15 @@ Item {
 
     function syncItemModel(next) {
       var byKey = {}
-      for (var n = 0; n < next.length; n++) byKey[next[n].key] = next[n]
-      for (var r = dockItemKeys.count - 1; r >= 0; r--) {
+      for (let n = 0; n < next.length; n++) byKey[next[n].key] = next[n]
+      for (let r = dockItemKeys.count - 1; r >= 0; r--) {
         if (!byKey[dockItemKeys.get(r).key]) dockItemKeys.remove(r)
       }
       dockState.itemByKey = byKey
-      for (var i = 0; i < next.length; i++) {
+      for (let i = 0; i < next.length; i++) {
         if (i < dockItemKeys.count && dockItemKeys.get(i).key === next[i].key) continue
-        var at = -1
-        for (var j = i + 1; j < dockItemKeys.count; j++) {
+        let at = -1
+        for (let j = i + 1; j < dockItemKeys.count; j++) {
           if (dockItemKeys.get(j).key === next[i].key) { at = j; break }
         }
         if (at >= 0) dockItemKeys.move(at, i, 1)
@@ -353,9 +365,14 @@ Item {
       // still a recently launched App: openwindow data is
       // "address,workspace,class,title".
       if (event.name === "openwindow") {
-        var cls = String(event.data).split(",")[2]
-        var app = cls ? root.resolveApp({ class: cls }) : null
+        let cls = String(event.data).split(",")[2]
+        let app = cls ? root.resolveApp({ class: cls }) : null
         if (app && app.id) dockSettings.apply({ type: "pushRecentApp", appId: app.id })
+        // docs/SPEC.md "New window workspace"
+        if (root.taskbar && root.taskbar.newWindowWorkspace !== "off") {
+          let command = DockHyprland.openOnOwnWorkspace(String(event.data).split(",")[0], root.taskbar.newWindowWorkspace)
+          if (command) Quickshell.execDetached(command)
+        }
       }
       dockState.refresh()
     }
@@ -536,7 +553,7 @@ Item {
     var placements = DockModel.movedPlacements(dockState.items, dockState.placements(), item.key, targetIndex)
     var windowPlacements = {}
     var pinPlacements = []
-    for (var i = 0; i < placements.length; i++) {
+    for (let i = 0; i < placements.length; i++) {
       if (placements[i].key.indexOf("pin:") === 0) pinPlacements.push(placements[i])
       else windowPlacements[placements[i].key] = placements[i].index
     }
@@ -624,14 +641,14 @@ Item {
   function focusNextInGroup(item) {
     var windows = item.windows || []
     var at = -1
-    for (var i = 0; i < windows.length; i++) if (windows[i].active) at = i
+    for (let i = 0; i < windows.length; i++) if (windows[i].active) at = i
     var next = windows[(at + 1) % windows.length]
     if (next) root.focusWindow(next.id)
   }
 
   function windowTooltipText(item) {
     if (item.count > 1) {
-      var name = (item.app && item.app.name) || item.window.class || ""
+      let name = (item.app && item.app.name) || item.window.class || ""
       return name + "\n" + item.count + " windows"
     }
     return (dockState.titles[item.window.id] || item.window.title || item.window.class || "") + "\nWorkspace: " + (item.badge || "")
@@ -650,7 +667,7 @@ Item {
   // from a click on a particular monitor's bar.
   function focusedScreen() {
     var name = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""
-    for (var i = 0; i < Quickshell.screens.length; i++) {
+    for (let i = 0; i < Quickshell.screens.length; i++) {
       if (Quickshell.screens[i].name === name) return Quickshell.screens[i]
     }
     return null
@@ -682,7 +699,7 @@ Item {
     // JSON (see `layout` in the panel). For the scripts that drive the pointer.
     function layout(): string {
       var name = root.focusedScreenName()
-      for (var i = 0; i < panels.instances.length; i++) {
+      for (let i = 0; i < panels.instances.length; i++) {
         if (panels.instances[i].screen && panels.instances[i].screen.name === name) {
           return JSON.stringify(panels.instances[i].layout())
         }
@@ -702,6 +719,16 @@ Item {
 
     readonly property var values: dockSettings.values
     property bool confirmingReset: false
+    // The page shown: an index into DockConfig.settingsSchema().
+    property int page: 0
+    // What is typed in the search box; while it is not blank the right side
+    // lists the matching fields of every page instead of the chosen page.
+    property string query: ""
+    readonly property bool searching: settingsWindow.query.trim() !== ""
+    readonly property var schema: DockConfig.settingsSchema()
+    readonly property var shownGroups: settingsWindow.searching
+      ? DockConfig.searchSettings(settingsWindow.schema, settingsWindow.query)
+      : [settingsWindow.schema[settingsWindow.page]]
 
     screen: root.settingsScreen
     visible: false
@@ -711,10 +738,48 @@ Item {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
     exclusionMode: ExclusionMode.Ignore
 
-    implicitWidth: Style.space(640) + root.menuShadow * 2
-    implicitHeight: Math.min(Style.space(760), (root.settingsScreen ? root.settingsScreen.height : 900) - Style.space(80)) + root.menuShadow * 2
+    // The window covers the whole screen, transparent, and only the frame
+    // takes input (`mask`), so the clicks around it reach the desktop. The
+    // frame sits at posX, posY inside it; dragging the title bar moves it
+    // there at once, with no round trip to the compositor (moving a
+    // layer-shell window by its margins lags the pointer and the drag
+    // wobbles). It opens centred, on the screen it was opened from.
+    readonly property real boxWidth: Style.space(780) + root.menuShadow * 2
+    readonly property real boxHeight: Math.min(Style.space(620), (root.settingsScreen ? root.settingsScreen.height : 900) - Style.space(80)) + root.menuShadow * 2
+    property real posX: 0
+    property real posY: 0
+    anchors.left: true
+    anchors.right: true
+    anchors.top: true
+    anchors.bottom: true
+    mask: Region { item: settingsFrame }
 
-    onVisibleChanged: if (!visible) settingsWindow.confirmingReset = false
+    function centre() {
+      var sw = root.settingsScreen ? root.settingsScreen.width : 1920
+      var sh = root.settingsScreen ? root.settingsScreen.height : 1080
+      settingsWindow.posX = Math.max(0, (sw - settingsWindow.boxWidth) / 2)
+      settingsWindow.posY = Math.max(0, (sh - settingsWindow.boxHeight) / 2)
+    }
+    // Keeps the frame on the screen: at least the title bar stays reachable.
+    function moveBy(dx, dy) {
+      var sw = root.settingsScreen ? root.settingsScreen.width : 1920
+      var sh = root.settingsScreen ? root.settingsScreen.height : 1080
+      var grab = Style.space(60)
+      settingsWindow.posX = Math.max(grab - settingsWindow.boxWidth, Math.min(sw - grab, settingsWindow.posX + dx))
+      settingsWindow.posY = Math.max(-root.menuShadow, Math.min(sh - grab, settingsWindow.posY + dy))
+    }
+
+    onVisibleChanged: {
+      if (visible) {
+        settingsWindow.centre()
+        settingsWindow.query = ""
+        settingsSearch.forceActiveFocus()
+      } else {
+        settingsWindow.confirmingReset = false
+      }
+    }
+    onPageChanged: settingsFlick.contentY = 0
+    onQueryChanged: settingsFlick.contentY = 0
 
     function commit(key, value) {
       dockSettings.apply({ type: "setSetting", key: key, value: value })
@@ -742,14 +807,20 @@ Item {
 
     Rectangle {
       id: settingsFrame
-      anchors.fill: parent
-      anchors.margins: root.menuShadow
+      x: settingsWindow.posX + root.menuShadow
+      y: settingsWindow.posY + root.menuShadow
+      width: settingsWindow.boxWidth - root.menuShadow * 2
+      height: settingsWindow.boxHeight - root.menuShadow * 2
       radius: root.menuRadius
       color: root.colPopupBackground
       border.width: Style.normalBorderWidth
       border.color: root.colHairline
       focus: true
-      Keys.onEscapePressed: settingsWindow.visible = false
+      // Escape clears a search first, then closes the window.
+      Keys.onEscapePressed: {
+        if (settingsWindow.searching) settingsWindow.query = ""
+        else settingsWindow.visible = false
+      }
 
       // Header
       Item {
@@ -757,18 +828,85 @@ Item {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: Style.space(52)
+        height: Style.space(60)
 
-        Text {
-          textFormat: Text.PlainText
-          anchors.left: parent.left
-          anchors.leftMargin: Style.spacing.lg
-          anchors.verticalCenter: parent.verticalCenter
-          text: "Taskbar settings"
-          color: root.colPopupText
-          font.family: Style.font.family
-          font.pixelSize: Style.font.body + 3
-          font.bold: true
+        // Drag the title bar to move the window. The window moves with the
+        // pointer, so the pointer's place in it stays put and each move is
+        // the distance from where the press was.
+        MouseArea {
+          anchors.fill: parent
+          cursorShape: pressed ? Qt.ClosedHandCursor : Qt.ArrowCursor
+          property real pressX: 0
+          property real pressY: 0
+          onPressed: function (mouse) { pressX = mouse.x; pressY = mouse.y }
+          onPositionChanged: function (mouse) {
+            if (pressed) settingsWindow.moveBy(mouse.x - pressX, mouse.y - pressY)
+          }
+        }
+
+        // The search box, centred in the title bar, drawn like the Start
+        // menu's: a pill with the same fill, outline, magnifier and shadow.
+        RectangularShadow {
+          anchors.fill: searchBox
+          radius: searchBox.radius
+          blur: Style.space(6)
+          offset.y: Style.space(1)
+          color: Qt.rgba(0, 0, 0, 0.22)
+        }
+
+        Rectangle {
+          id: searchBox
+          anchors.centerIn: parent
+          width: Math.min(Style.space(380), parent.width - Style.space(120))
+          height: Style.space(34)
+          radius: height / 2
+          // Opaque, so the shadow behind it does not show through the box.
+          color: Qt.tint(root.colPopupBackground, Util.alpha(root.colPopupText, 0.05))
+          border.width: 1
+          border.color: Util.alpha(root.colPopupText, 0.12)
+
+          Text {
+            textFormat: Text.PlainText
+            id: searchIcon
+            anchors.left: parent.left
+            anchors.leftMargin: Style.spacing.lg + 2
+            anchors.verticalCenter: parent.verticalCenter
+            text: "\uDB80\uDF49"
+            color: Util.alpha(root.colPopupText, 0.7)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body + 4
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            visible: settingsSearch.text === ""
+            anchors.left: searchIcon.right
+            anchors.leftMargin: Style.spacing.md
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Find a setting"
+            color: Util.alpha(root.colPopupText, 0.5)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+
+          PlainField {
+            id: settingsSearch
+            anchors.fill: parent
+            anchors.leftMargin: searchIcon.x + searchIcon.width + Style.spacing.md
+            anchors.rightMargin: Style.spacing.md
+            maxLength: 64
+            color: root.colPopupText
+            fontFamily: Style.font.family
+            fontPixelSize: Style.font.body
+            text: settingsWindow.query
+            onTextChanged: if (settingsWindow.query !== settingsSearch.text) settingsWindow.query = settingsSearch.text
+          }
+
+          // The query is also cleared by Escape, which lives outside the box.
+          Connections {
+            target: settingsWindow
+            function onQueryChanged() { if (settingsSearch.text !== settingsWindow.query) settingsSearch.text = settingsWindow.query }
+          }
         }
 
         Rectangle {
@@ -798,14 +936,121 @@ Item {
         }
       }
 
-      // Body: scrolls when the screen is short.
-      Flickable {
-        id: settingsFlick
+      // Left side, as in the Windows 11 settings: one item per page, one
+      // under the other.
+      Item {
+        id: settingsSide
         anchors.top: settingsHeader.bottom
         anchors.bottom: settingsFooter.top
         anchors.left: parent.left
-        anchors.right: parent.right
         anchors.leftMargin: Style.spacing.lg
+        width: Style.space(190)
+
+        // The window's name, on the row of the page heading beside it.
+        Text {
+          textFormat: Text.PlainText
+          id: settingsTitle
+          anchors.top: parent.top
+          anchors.left: parent.left
+          anchors.right: parent.right
+          height: Style.space(40)
+          verticalAlignment: Text.AlignVCenter
+          elide: Text.ElideRight
+          text: "Taskbar settings"
+          color: root.colPopupText
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body + 3
+          font.bold: true
+        }
+
+        Column {
+          anchors.top: settingsTitle.bottom
+          anchors.topMargin: Style.spacing.sm
+          anchors.left: parent.left
+          anchors.right: parent.right
+          spacing: Style.space(2)
+
+          Repeater {
+            model: settingsWindow.schema
+
+            delegate: Rectangle {
+              id: navItem
+              required property var modelData
+              required property int index
+              readonly property bool current: !settingsWindow.searching && settingsWindow.page === navItem.index
+              width: parent.width
+              height: Style.space(38)
+              radius: root.menuRowRadius
+              color: navItem.current
+                ? Util.alpha(root.colAccent, 0.22)
+                : (navMouse.containsMouse ? Style.hoverFillFor(root.colForeground, root.colAccent) : "transparent")
+
+              // The mark beside the current page.
+              Rectangle {
+                visible: navItem.current
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(3)
+                anchors.verticalCenter: parent.verticalCenter
+                width: Style.space(3)
+                height: Style.space(16)
+                radius: width / 2
+                color: root.colAccent
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(16)
+                anchors.verticalCenter: parent.verticalCenter
+                text: navItem.modelData.title
+                color: root.colPopupText
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                font.bold: navItem.current
+              }
+
+              MouseArea {
+                id: navMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  settingsWindow.query = ""
+                  settingsWindow.page = navItem.index
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // The heading of the right side: the page, or what a search found.
+      Text {
+        textFormat: Text.PlainText
+        id: settingsHeading
+        anchors.top: settingsHeader.bottom
+        anchors.left: settingsSide.right
+        anchors.leftMargin: Style.spacing.lg * 2
+        anchors.right: parent.right
+        anchors.rightMargin: Style.spacing.lg
+        height: Style.space(40)
+        verticalAlignment: Text.AlignVCenter
+        elide: Text.ElideRight
+        text: settingsWindow.searching ? "Search results" : settingsWindow.schema[settingsWindow.page].title
+        color: root.colPopupText
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body + 8
+        font.bold: true
+      }
+
+      // Body: scrolls when the screen is short.
+      Flickable {
+        id: settingsFlick
+        anchors.top: settingsHeading.bottom
+        anchors.bottom: settingsFooter.top
+        anchors.left: settingsSide.right
+        anchors.right: parent.right
+        anchors.leftMargin: Style.spacing.lg * 2
         anchors.rightMargin: Style.spacing.lg
         contentHeight: settingsColumn.implicitHeight
         clip: true
@@ -816,22 +1061,37 @@ Item {
           width: settingsFlick.width
           spacing: Style.spacing.xs
 
+          Text {
+            textFormat: Text.PlainText
+            visible: settingsWindow.searching && settingsWindow.shownGroups.length === 0
+            width: settingsColumn.width
+            wrapMode: Text.WordWrap
+            topPadding: Style.spacing.md
+            text: "No settings match \u201C" + settingsWindow.query.trim() + "\u201D."
+            color: Util.alpha(root.colPopupText, 0.7)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+
           Repeater {
-            model: DockConfig.settingsSchema()
+            model: settingsWindow.shownGroups
 
             delegate: Column {
               id: groupBlock
               required property var modelData
+              required property int index
               width: settingsColumn.width
 
+              // Search results come from several pages: say which.
               Text {
                 textFormat: Text.PlainText
+                visible: settingsWindow.searching
                 topPadding: Style.spacing.md
                 bottomPadding: Style.spacing.xs
                 text: groupBlock.modelData.title
-                color: root.colPopupText
+                color: Util.alpha(root.colPopupText, 0.7)
                 font.family: Style.font.family
-                font.pixelSize: Style.font.body
+                font.pixelSize: Style.font.caption
                 font.bold: true
               }
 
@@ -844,8 +1104,13 @@ Item {
                   readonly property var field: fieldRow.modelData
                   readonly property var value: settingsWindow.values[fieldRow.field.key]
                   readonly property bool stacked: fieldRow.field.type === "list"
+                  // A field that follows another setting is dimmed and
+                  // inert while that one is off, and indented under it.
+                  readonly property bool live: DockConfig.fieldEnabled(fieldRow.field, settingsWindow.values)
+                  readonly property real indent: fieldRow.field.enabledWhen ? Style.space(16) : 0
 
                   width: groupBlock.width
+                  opacity: fieldRow.live ? 1 : 0.4
                   height: fieldRow.stacked
                     ? labelColumn.implicitHeight + editorLoader.height + Style.spacing.md * 2
                     : Math.max(labelColumn.implicitHeight, editorLoader.height) + Style.spacing.md * 2
@@ -863,7 +1128,8 @@ Item {
                     anchors.top: parent.top
                     anchors.topMargin: Style.spacing.md
                     anchors.left: parent.left
-                    width: fieldRow.stacked ? parent.width : parent.width - editorLoader.width - Style.spacing.md
+                    anchors.leftMargin: fieldRow.indent
+                    width: (fieldRow.stacked ? parent.width : parent.width - editorLoader.width - Style.spacing.md) - fieldRow.indent
 
                     Text {
                       textFormat: Text.PlainText
@@ -889,6 +1155,7 @@ Item {
 
                   Loader {
                     id: editorLoader
+                    enabled: fieldRow.live
                     anchors.right: parent.right
                     anchors.verticalCenter: fieldRow.stacked ? undefined : parent.verticalCenter
                     anchors.bottom: fieldRow.stacked ? parent.bottom : undefined
@@ -1234,7 +1501,7 @@ Item {
         function seedFromDefaults() {
           var places = StartMenu.effectivePlaces(dockSettings.startPlaces, userDirsForSettings.text(), Quickshell.env("HOME") || "")
           var paths = []
-          for (var i = 0; i < places.length; i++) paths.push(places[i].path)
+          for (let i = 0; i < places.length; i++) paths.push(places[i].path)
           listBox.commit(paths)
         }
 
@@ -1430,10 +1697,10 @@ Item {
             w.implicitWidth - root.menuShadow * 2, w.implicitHeight - root.menuShadow * 2) : null
         }
         var items = []
-        for (var i = 0; i < repeater.count; i++) {
-          var it = repeater.itemAt(i)
+        for (let i = 0; i < repeater.count; i++) {
+          let it = repeater.itemAt(i)
           if (!it || !it.modelData) continue
-          var r = ofItem(it)
+          let r = ofItem(it)
           r.key = it.key
           r.kind = it.modelData.kind
           r.appId = root.menuAppId(it.modelData) || ""
@@ -1446,6 +1713,10 @@ Item {
           menus: {
             item: ofPopup(contextMenu),
             bar: ofPopup(barMenu),
+            // Anchored to the Bar menu, so its place is relative to that window.
+            barSub: barSubMenu.visible ? rect(barMenu.relativeX + barSubMenu.relativeX + root.menuShadow,
+              barMenu.relativeY + barSubMenu.relativeY + root.menuShadow,
+              barSubMenu.implicitWidth - root.menuShadow * 2, barSubMenu.implicitHeight - root.menuShadow * 2) : null,
             preview: ofPopup(previewPopup),
             start: startMenu.visible ? rect(startMenu.x, startMenu.y, startMenu.width, startMenu.height) : null,
           },
@@ -1734,7 +2005,7 @@ Item {
         property bool dropping: false
 
         function indexOfKey(items, key) {
-          for (var i = 0; i < items.length; i++) {
+          for (let i = 0; i < items.length; i++) {
             if (items[i].key === key) return i
           }
           return -1
@@ -1788,7 +2059,7 @@ Item {
             dragGhost.visible = false
             root.unpinFromDrag(root.menuAppId(item))
           } else {
-            var slot = decision.action === "reorder" ? decision.index : from
+            let slot = decision.action === "reorder" ? decision.index : from
             dockRow.settlingKey = item.key
             settleX.to = dockRow.x + slot * (dockRow.itemWidth + dockRow.spacing)
             settleY.to = dockRow.dragHomeY
@@ -2196,7 +2467,7 @@ Item {
           // handler sends its own event and reads the state as it now is.
           previewState.model = result.state
           previewState.arm(result.timers)
-          for (var i = 0; i < result.effects.length; i++) previewState.perform(result.effects[i])
+          for (let i = 0; i < result.effects.length; i++) previewState.perform(result.effects[i])
         }
 
         function arm(timers) {
@@ -2230,7 +2501,7 @@ Item {
           // The anchor only moves for an Item that can have a Preview: a Pin
           // hovered while another Item's is up must not drag that one along.
           if (enabled && !root.dragInProgress) {
-            var point = delegate.mapToItem(panel.contentItem, delegate.width / 2, 0)
+            let point = delegate.mapToItem(panel.contentItem, delegate.width / 2, 0)
             previewState.anchorX = point.x
             previewState.anchorY = point.y
           }
@@ -2306,7 +2577,7 @@ Item {
         onLiveWindowsChanged: windowIds = DockPreview.windowIds(windowIds, liveWindows)
 
         function windowFor(id) {
-          for (var i = 0; i < liveWindows.length; i++) if (liveWindows[i].id === id) return liveWindows[i]
+          for (let i = 0; i < liveWindows.length; i++) if (liveWindows[i].id === id) return liveWindows[i]
           return { id: id }
         }
         readonly property int thumbWidth: {
@@ -2609,37 +2880,82 @@ Item {
       }
 
 
-      // The bar's quick menu: right click on the bar
-      // itself. Rows come from DockConfig.barMenuRows; choosing one writes
-      // its patch through the same write-back Pin/Unpin uses, so the bar
-      // updates live. Closes on any choice or an outside click, and holds
-      // the bar Revealed while open, like the Item context menu.
+      // The bar's quick menu: right click on the bar itself. Rows come from
+      // DockConfig.barMenuRows; choosing one writes its patch through the
+      // same write-back Pin/Unpin uses, so the bar updates live. A section
+      // row (Colors, Start button...) opens its choices in a second popup
+      // beside it, barSubMenu, as a traditional submenu does. Closes on any
+      // choice or an outside click, and holds the bar Revealed while open,
+      // like the Item context menu.
       PopupWindow {
         id: barMenu
 
         property real pointX: 0
         readonly property int menuMargin: Style.spacing.xs
+        // The section whose submenu is open ("" for none), and where its
+        // row is in this window; both reset when the menu closes.
+        property string openSection: ""
+        property real openRowY: 0
         readonly property var rows: DockConfig.barMenuRows(root.taskbar)
-        // Sized to its longest label (plus the check column and padding), so
-        // nothing is cut off however long a row's label is; never narrower
-        // than a comfortable minimum.
+        readonly property var openRows: {
+          for (let i = 0; i < barMenu.rows.length; i++) {
+            if (barMenu.rows[i].children && barMenu.rows[i].label === barMenu.openSection) return barMenu.rows[i].children
+          }
+          return []
+        }
+        // Sized to its longest label (plus the check column, the value and
+        // chevron of a section, and padding), so nothing is cut off however
+        // long a row's label is; never narrower than a comfortable minimum.
         readonly property int rowWidth: Math.max(Style.space(190),
           Math.ceil(barMenuMetrics.advanceWidth) + Style.space(22) + Style.space(12) * 2 + root.menuPad * 2 + Style.space(12))
+        readonly property int subRowWidth: Math.max(Style.space(170),
+          Math.ceil(barSubMetrics.advanceWidth) + Style.space(22) + Style.space(12) * 2 + root.menuPad * 2 + Style.space(12))
 
         TextMetrics {
           id: barMenuMetrics
           font.family: Style.font.family
           font.pixelSize: Style.font.body
-          text: DockConfig.longestLabel(barMenu.rows)
+          text: DockConfig.longestLabel(DockConfig.barMenuLabels(barMenu.rows))
         }
 
-        function close() { barMenu.visible = false }
+        TextMetrics {
+          id: barSubMetrics
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          text: DockConfig.longestLabel(DockConfig.barSubmenuLabels(barMenu.rows))
+        }
+
+        function close() {
+          barSubClose.stop()
+          barMenu.openSection = ""
+          barMenu.visible = false
+        }
         function openAt(x) {
           barMenu.pointX = x
+          barMenu.openSection = ""
           barMenu.visible = true
+        }
+        // The pointer is on a row: a section opens its submenu, any other
+        // row closes the one open. Leaving a row toward the submenu must not
+        // close it, so a close waits a moment and entering the submenu
+        // cancels it.
+        function hoverRow(row, rowY) {
+          if (row.children) {
+            barSubClose.stop()
+            barMenu.openRowY = rowY
+            barMenu.openSection = row.label
+          } else if (barMenu.openSection !== "") {
+            barSubClose.restart()
+          }
         }
         // The menu sits just above the bar.
         readonly property real frameTop: panel.height - root.taskbar.barHeight
+
+        Timer {
+          id: barSubClose
+          interval: 250
+          onTriggered: barMenu.openSection = ""
+        }
 
         grabFocus: true
         visible: false
@@ -2657,9 +2973,12 @@ Item {
         }
 
         implicitWidth: rowWidth + root.menuShadow * 2
-        implicitHeight: barMenuColumn.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
+        implicitHeight: barMenuLoader.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
 
-        onVisibleChanged: revealState.set("barMenu", barMenu.visible)
+        onVisibleChanged: {
+          revealState.set("barMenu", barMenu.visible || barSubMenu.visible)
+          if (!barMenu.visible) barMenu.openSection = ""
+        }
         onClosed: barMenu.close()
 
         RectangularShadow {
@@ -2680,82 +2999,216 @@ Item {
           border.width: Style.normalBorderWidth
           border.color: root.colHairline
 
-          Column {
-            id: barMenuColumn
+          Loader {
+            id: barMenuLoader
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.margins: root.menuPad
+            sourceComponent: barMenuList
+            onLoaded: {
+              item.rows = Qt.binding(function () { return barMenu.rows })
+              item.openLabel = Qt.binding(function () { return barMenu.openSection })
+              item.rowsTop = Qt.binding(function () { return root.menuShadow + root.menuPad })
+            }
 
-            Repeater {
-              model: barMenu.rows
+            Connections {
+              target: barMenuLoader.item
+              ignoreUnknownSignals: true
+              function onHovered(row, y) { barMenu.hoverRow(row, y) }
+              function onChosen(row) { barMenu.choose(row) }
+            }
+          }
+        }
 
-              delegate: Item {
-                id: barRow
-                required property var modelData
-                required property int index
+        // A row was clicked: write its setting, or open the Settings window.
+        // Close first so the menu never lingers over the window it opens.
+        function choose(row) {
+          if (row.enabled === false) return
+          barMenu.close()
+          if (row.action === "settings") root.openSettings(panel.screen)
+          else dockSettings.apply({ type: "setSettings", patch: row.patch })
+        }
+      }
 
-                readonly property bool newGroup: index > 0 && barMenu.rows[index - 1].group !== modelData.group
+      // The submenu: a popup of its own, anchored to the Bar menu, level
+      // with the section row it belongs to, on its right (or its left when
+      // the screen has no room).
+      PopupWindow {
+        id: barSubMenu
 
-                width: barMenuColumn.width
-                height: root.menuRowHeight + (newGroup ? root.menuPad * 2 + 1 : 0)
+        grabFocus: true
+        visible: barMenu.visible && barMenu.openRows.length > 0
+        color: "transparent"
+        anchor.window: barMenu
+        anchor.adjustment: PopupAdjustment.Flip | PopupAdjustment.Slide
+        anchor.edges: Edges.Top | Edges.Right
+        anchor.gravity: Edges.Bottom | Edges.Right
+        anchor.rect.width: 1
+        anchor.rect.height: 1
+        anchor.onAnchoring: {
+          // Frame to frame: the submenu's frame starts where the menu's ends,
+          // and its first row lines up with the section's.
+          anchor.rect.x = barMenu.implicitWidth - root.menuShadow * 2 - 1
+          anchor.rect.y = barMenu.openRowY - root.menuPad - root.menuShadow
+        }
 
-                Rectangle {
-                  visible: barRow.newGroup
-                  anchors.top: parent.top
-                  anchors.topMargin: root.menuPad
+        implicitWidth: barMenu.subRowWidth + root.menuShadow * 2
+        implicitHeight: barSubLoader.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
+
+        onVisibleChanged: {
+          revealState.set("barMenu", barMenu.visible || barSubMenu.visible)
+          if (visible) barSubMenu.anchor.updateAnchor()
+        }
+        onImplicitHeightChanged: if (visible) barSubMenu.anchor.updateAnchor()
+
+        HoverHandler {
+          onHoveredChanged: if (hovered) barSubClose.stop()
+        }
+
+        RectangularShadow {
+          anchors.fill: barSubFrame
+          radius: barSubFrame.radius
+          blur: root.menuShadow
+          offset.y: Style.space(4)
+          spread: 0
+          color: Qt.rgba(0, 0, 0, 0.6)
+        }
+
+        Rectangle {
+          id: barSubFrame
+          anchors.fill: parent
+          anchors.margins: root.menuShadow
+          radius: root.menuRadius
+          color: root.colPopupBackground
+          border.width: Style.normalBorderWidth
+          border.color: root.colHairline
+
+          Loader {
+            id: barSubLoader
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: root.menuPad
+            sourceComponent: barMenuList
+            onLoaded: {
+              item.rows = Qt.binding(function () { return barMenu.openRows })
+              item.openLabel = ""
+              item.rowsTop = 0
+            }
+
+            Connections {
+              target: barSubLoader.item
+              ignoreUnknownSignals: true
+              function onChosen(row) { barMenu.choose(row) }
+            }
+          }
+        }
+      }
+
+      // The rows of a Bar menu popup (the menu, or a submenu): a column of
+      // rows with a divider before each new group. `hovered(row, y)` says
+      // where the pointer is (y in the popup window); `chosen(row)` is a
+      // click on a row that is not a section.
+      Component {
+        id: barMenuList
+
+        Column {
+          id: barList
+          property var rows: []
+          property string openLabel: ""
+          property real rowsTop: 0
+          signal hovered(var row, real y)
+          signal chosen(var row)
+
+          Repeater {
+            model: barList.rows
+
+            delegate: Item {
+              id: barRow
+              required property var modelData
+              required property int index
+
+              readonly property bool newGroup: barRow.index > 0 && barList.rows[barRow.index - 1].group !== barRow.modelData.group
+              readonly property bool isSection: !!barRow.modelData.children
+              readonly property bool live: barRow.modelData.enabled !== false
+              readonly property bool open: barRow.isSection && barRow.modelData.label === barList.openLabel
+
+              width: barList.width
+              height: root.menuRowHeight + (barRow.newGroup ? root.menuPad * 2 + 1 : 0)
+
+              Rectangle {
+                visible: barRow.newGroup
+                anchors.top: parent.top
+                anchors.topMargin: root.menuPad
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 1
+                color: root.colHairline
+              }
+
+              Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: root.menuRowHeight
+                radius: root.menuRowRadius
+                color: (barRowMouse.containsMouse && barRow.live) || barRow.open
+                  ? Style.hoverFillFor(root.colForeground, previewPopup.accentColor)
+                  : "transparent"
+
+                Text {
+                  textFormat: Text.PlainText
                   anchors.left: parent.left
-                  anchors.right: parent.right
-                  height: 1
-                  color: root.colHairline
+                  anchors.leftMargin: Style.space(12)
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: barRow.modelData.checked ? "\u2713" : ""
+                  color: previewPopup.textColor
+                  opacity: barRow.live ? 1 : 0.4
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
                 }
 
-                Rectangle {
-                  anchors.bottom: parent.bottom
-                  width: parent.width
-                  height: root.menuRowHeight
-                  radius: root.menuRowRadius
-                  color: barRowMouse.containsMouse ? Style.hoverFillFor(root.colForeground, previewPopup.accentColor) : "transparent"
+                Text {
+                  textFormat: Text.PlainText
+                  anchors.left: parent.left
+                  anchors.right: barRow.isSection ? sectionChevron.left : parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  anchors.leftMargin: Style.space(12) + Style.space(22)
+                  anchors.rightMargin: Style.space(12)
+                  elide: Text.ElideRight
+                  text: barRow.modelData.label
+                  color: previewPopup.textColor
+                  opacity: barRow.live ? 1 : 0.4
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                }
 
-                  Text {
-                    textFormat: Text.PlainText
-                    anchors.left: parent.left
-                    anchors.leftMargin: Style.space(12)
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: barRow.modelData.checked ? "\u2713" : ""
-                    color: previewPopup.textColor
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                  }
+                // A section's chevron, pointing at its submenu.
+                Text {
+                  textFormat: Text.PlainText
+                  id: sectionChevron
+                  visible: barRow.isSection
+                  anchors.right: parent.right
+                  anchors.rightMargin: Style.space(12)
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "\u25B8"
+                  color: previewPopup.textColor
+                  opacity: 0.7
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                }
 
-                  Text {
-                    textFormat: Text.PlainText
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Style.space(12) + Style.space(22)
-                    anchors.rightMargin: Style.space(12)
-                    elide: Text.ElideRight
-                    text: barRow.modelData.label
-                    color: previewPopup.textColor
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                  }
-
-                  MouseArea {
-                    id: barRowMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                      // The Settings row opens the full window; every other
-                      // row writes its setting. Close first so the menu never
-                      // lingers over the window it opens.
-                      var row = barRow.modelData
-                      barMenu.close()
-                      if (row.action === "settings") root.openSettings(panel.screen)
-                      else dockSettings.apply({ type: "setSettings", patch: row.patch })
-                    }
+                MouseArea {
+                  id: barRowMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: barRow.live ? Qt.PointingHandCursor : Qt.ArrowCursor
+                  onEntered: barList.hovered(barRow.modelData, barList.rowsTop + barRow.y + parent.y)
+                  // A section also opens on a click, for a pointer that
+                  // never "enters" (touch, a keyboard-driven one).
+                  onClicked: {
+                    if (barRow.isSection) barList.hovered(barRow.modelData, barList.rowsTop + barRow.y + parent.y)
+                    else barList.chosen(barRow.modelData)
                   }
                 }
               }
@@ -2811,10 +3264,10 @@ Item {
           if (contextMenu.forPreview) {
             // Live, so a state that changes while the menu is open (or a
             // peek being put back) is reflected in the labels.
-            var win = previewPopup.windowFor(contextMenu.previewWindowId)
-            var previewRows = []
-            var winStates = DockModel.windowActions(win)
-            for (var s = 0; s < winStates.length; s++) {
+            let win = previewPopup.windowFor(contextMenu.previewWindowId)
+            let previewRows = []
+            let winStates = DockModel.windowActions(win)
+            for (let s = 0; s < winStates.length; s++) {
               previewRows.push({
                 label: winStates[s].label,
                 enabled: true,
@@ -2841,9 +3294,9 @@ Item {
           // then a row with its icon and name that starts it, then
           // "Unpin from taskbar".
           if (item.kind === "pin") {
-            var pinRows = []
-            var pinActions = item.app && item.app.actions ? item.app.actions : []
-            for (var a = 0; a < pinActions.length; a++) {
+            let pinRows = []
+            let pinActions = item.app && item.app.actions ? item.app.actions : []
+            for (let a = 0; a < pinActions.length; a++) {
               pinRows.push({
                 label: pinActions[a].name,
                 enabled: true,
@@ -2871,7 +3324,7 @@ Item {
           }
           var list = []
           var appActions = item.app && item.app.actions ? item.app.actions : []
-          for (var i = 0; i < appActions.length; i++) {
+          for (let i = 0; i < appActions.length; i++) {
             list.push({
               label: appActions[i].name,
               enabled: true,
@@ -2880,8 +3333,8 @@ Item {
             })
           }
           if (item.kind === "window" && !(item.count > 1)) {
-            var states = DockModel.windowActions(item.window)
-            for (var j = 0; j < states.length; j++) {
+            let states = DockModel.windowActions(item.window)
+            for (let j = 0; j < states.length; j++) {
               list.push({
                 label: states[j].label,
                 enabled: true,
@@ -2919,7 +3372,7 @@ Item {
             group: 3,
             trigger: function () {
               var windows = grouped ? item.windows : [item.window]
-              for (var w = 0; w < windows.length; w++) root.closeWindow(windows[w].id)
+              for (let w = 0; w < windows.length; w++) root.closeWindow(windows[w].id)
             },
           })
           return list
@@ -2989,7 +3442,7 @@ Item {
 
           onAnchoring: {
             if (contextMenu.forPreview) {
-              var px = Math.max(contextMenu.menuMargin,
+              let px = Math.max(contextMenu.menuMargin,
                 Math.min(contextMenu.previewPointX, panel.width - contextMenu.implicitWidth - contextMenu.menuMargin))
               menuAnchor.rect.x = Math.round(px - root.menuShadow)
               menuAnchor.rect.y = Math.round(Math.max(contextMenu.menuMargin, contextMenu.previewPointY - contextMenu.implicitHeight + root.menuShadow))
