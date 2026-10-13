@@ -149,6 +149,18 @@ Item {
       dockSettings.recentApps = view.recentApps
       dockSettings.startPlaces = view.startPlaces
       dockSettings.values = view.values
+      dockSettings.syncOmarchyDock(view.taskbar.hideOmarchyDock)
+    }
+
+    // docs/SPEC.md "Omarchy dock": hideOmarchyDock (on by default) turns the omarchy.dock plugin
+    // off and on through the shell. It acts on a change only (and on the first
+    // read when hiding), so a dock disabled by hand stays so while the setting is off.
+    property var omarchyDockHidden: null
+    function syncOmarchyDock(hide) {
+      var before = dockSettings.omarchyDockHidden
+      dockSettings.omarchyDockHidden = hide
+      if (before === hide || (before === null && !hide)) return
+      Quickshell.execDetached(["omarchy-shell", "shell", "setPluginEnabled", "omarchy.dock", hide ? "false" : "true"])
     }
 
     function apply(intent) {
