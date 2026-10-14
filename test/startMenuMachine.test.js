@@ -408,10 +408,11 @@ test("the account and power buttons toggle their own overlay and replace an app 
 test("the power and account rows name the command each runs, and choosing one closes the menu", () => {
   const power = S.overlayRows({ kind: "power" }, ctxFor());
   assert.deepEqual(power.map((r) => r.label), ["Sleep", "Restart", "Shut down"]);
-  assert.deepEqual(power[2].action, { type: "run", command: "omarchy-system-shutdown" });
+  assert.deepEqual(power.map((r) => r.action.command), ["systemctl suspend", "omarchy-system reboot", "omarchy-system shutdown"]);
+  assert.deepEqual(power[2].action, { type: "run", command: "omarchy-system shutdown" });
   const user = S.overlayRows({ kind: "user" }, ctxFor());
   assert.deepEqual(user.map((r) => r.label), ["Lock", "Sign out"]);
-  assert.deepEqual(user.map((r) => r.action.command), ["omarchy-system-lock", "omarchy-system-logout"]);
+  assert.deepEqual(user.map((r) => r.action.command), ["omarchy-system-lock", "omarchy-system logout"]);
 
   const open = feed([{ type: "toggleOverlay", kind: "power" }], {}, clickOpened().state).state;
   const chosen = feed([{ type: "choose", row: power[0] }], {}, open);
