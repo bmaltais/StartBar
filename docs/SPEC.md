@@ -27,7 +27,7 @@ What StartBar does today. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); 
 
 ## The bar
 
-- Full-width along the bottom (or the top, left or right edge, see "The Dock's position"), `barHeight` (48) tall, with `opacity` (0.9) or `transparent` (icons only).
+- Full-width along the bottom (or the top, left or right edge, see "The Dock's position"), `barHeight` (48) tall, with `opacity` (0.9) or `transparent` (icons only). While Omarchy's bar is Glassy (`bar.background` in `shell.json`), the Dock's opacity is at most 0.35 and the Start menu's card is see-through (0.6), and StartBar asks Hyprland to blur behind both (a layer rule on `omarchy-startbar`, set at start and after a config reload; it has no effect while Hyprland's blur is off). Menus, Previews and the settings window stay solid: Hyprland does not blur those surfaces.
 - Icons are `iconSize` (48) at most and also fit inside the bar (`barHeight - 20`), so with the defaults they are 28px.
 - `alignment`: `left` (default, changed from `center` 2026-10-10) or `center` for the group of Start button and Items.
 - Start button (`showStart`, on) at the start of that group. It runs `startCommand`, which is `builtin` by default and opens the Start menu; any other value is run as a command, such as `omarchy-menu toggle apps` for the Omarchy menu. `startIcon` is `grid` (drawn by the plugin, the default), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path.
@@ -55,6 +55,7 @@ What StartBar does today. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); 
 ## Input
 
 - Focusing a floating Window from the Dock (a click on its Item or Preview) also raises it above other floating Windows (added 2026-10-11): Hyprland's focus alone leaves it underneath, focused but hidden. Tiled Windows are not raised. A peek raises a floating Window too, since a peek of one left under another would show nothing; it stays raised after the peek is put back, because Hyprland has no way to put the order back.
+- Workaround (added 2026-10-14, may need revisiting if Hyprland or Omarchy stops leaving them): a floating Window that sits outside every monitor (left behind when its monitor went away) is centered on its monitor when its Preview opens (so the thumbnail has something to show) and when it is focused from the Dock, so a click on its Item or Preview shows it. A Window with at least 64x32 px on some monitor, and any tiled Window, is left where it is. It only happens when a Preview opens or a Window is picked, never on a monitor change or when a Window opens, and there is no setting.
 - Left click on a Window Item: focus the Window, switching workspace and monitor as needed; a special-workspace Window is toggled into view. Clicking the Active Window's Item does nothing.
 - Left click on a Pin with no Windows: launch the App.
 - Middle click on any Item with a resolvable App: launch a new instance.
@@ -103,7 +104,7 @@ A value that is missing or unusable falls back to its default. A leftover `style
 Optional, on by default (`groupWindows`, which can be turned off; also a row in the bar's right-click menu and in the settings window). Modelled on the Windows taskbar. The "one Window Item per Window" rule above holds while it is off.
 
 - Windows of one App (Windows with no App group by window class) become a single Group Item, in the slot Launch Order or the App's Pin gives them. The icon has copies of itself stacked behind it, offset to the right and smaller (at most two), and the running indicator shows one dot per Window (at most three). The Group Item is highlighted when any of its Windows is the Active Window, and tinted when any is in Attention. Its workspace badge shows only when all its Windows are on one workspace.
-- Hover: the preview popup shows one thumbnail per Window in a row, each with title and close button; the Active Window's is outlined. Thumbnails shrink to fit the screen. Clicking a thumbnail focuses that Window; closing one leaves the popup up for the rest, and the last one closing takes it away. With `showPreviews` off the tooltip gives the App name and Window count.
+- Hover: the preview popup shows one thumbnail per Window in a row, each with title and close button; the Active Window's is outlined. Thumbnails shrink to fit the screen. Clicking a thumbnail, its title or the space around them focuses that Window (only the close button closes it); closing one leaves the popup up for the rest, and the last one closing takes it away. With `showPreviews` off the tooltip gives the App name and Window count.
 - Left click on a Group Item does nothing (pick from the preview, as on Windows), except with previews off, where it focuses the Window after the Active one. Middle click launches a new instance.
 - Right click: the App's actions, and the App row with Pin/Unpin, as for any Item; the Window-state rows are left out; "Close all windows" replaces "Close window".
 - Placed: a Group Item's position is kept until the App's last Window closes. Dragging it moves the whole group, and dragging a pinned App's group out unpins the App.

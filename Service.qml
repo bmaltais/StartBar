@@ -88,6 +88,12 @@ Item {
   // of its own: the popups are this much larger on every side and the menu
   // is drawn inset, with the anchor moved out by the same amount.
   readonly property int menuShadow: Style.space(14)
+  // Omarchy's Glassy bar (shell.json bar.background): the bar and the Start
+  // menu turn see-through, and Hyprland blurs what is behind them
+  // (DockHyprland.glassRule). The bar is as clear as Omarchy's own, 0.35 at
+  // most. The menus, Previews and settings window stay solid: they are separate
+  // surfaces Hyprland does not blur, so the Windows behind would show through.
+  readonly property bool glassy: dockSettings.glassy
   readonly property color colHairline: Util.alpha(colPopupText, 0.12)
   readonly property color colRowHover: Util.alpha(colPopupText, 0.08)
 
@@ -112,11 +118,15 @@ Item {
     readonly property string pluginId: root.shell && root.shell.pluginId ? root.shell.pluginId : "io.github.bmaltais.startbar"
     property var rawEntry: null
     property var pendingEntry: null
+    // False until shell.json has been read once; before that, values are the
+    // defaults, and the settings window waits rather than show them.
+    property bool loaded: false
     property int iconSize: DockConfig.DEFAULT_ICON_SIZE
     property int revealDelayMs: DockConfig.DEFAULT_REVEAL_DELAY_MS
     property int hideDelayMs: DockConfig.DEFAULT_HIDE_DELAY_MS
     property var pins: []
     property var taskbar: DockConfig.effectiveView(null).taskbar
+    property bool glassy: false
     // A Placed Pin's own position (CONTEXT.md "Placed"), persisted here
     // the same way pins is. A Placed Window Item's lives only in
     // dockState.itemsState.windowPlacements — it has no business surviving a
@@ -145,6 +155,7 @@ Item {
       dockSettings.revealDelayMs = view.settings.revealDelayMs
       dockSettings.hideDelayMs = view.settings.hideDelayMs
       dockSettings.taskbar = view.taskbar
+      dockSettings.glassy = !!(shellConfig && shellConfig.bar && shellConfig.bar.background === "glassy")
       dockSettings.pins = view.pins
       dockSettings.placements = view.placements
       dockSettings.startPins = view.startPins
@@ -152,6 +163,7 @@ Item {
       dockSettings.startPlaces = view.startPlaces
       dockSettings.values = view.values
       dockSettings.syncOmarchyDock(view.taskbar.hideOmarchyDock)
+      dockSettings.loaded = true
     }
 
     // docs/SPEC.md "Omarchy dock": hideOmarchyDock (on by default) turns the omarchy.dock plugin
@@ -271,6 +283,7 @@ Item {
   Connections {
     target: Hyprland
     function onRawEvent(event) {
+      if (event.name === "configreloaded") Quickshell.execDetached(DockHyprland.glassRule())
       // An App started any other way (Super+Space, a Pin, a terminal) is
       // still a recently launched App: openwindow data is
       // "address,workspace,class,title".
@@ -310,6 +323,7 @@ Item {
   // no Windows opened since the last shell restart). Hyprland.refreshToplevels()
   // force-fetches the missing data via `hyprctl -j clients`.
   Component.onCompleted: {
+    Quickshell.execDetached(DockHyprland.glassRule())
     // A peek the last shell never got to undo (it restarted mid-hover).
     root.peekRestore()
     Hyprland.refreshToplevels()
@@ -415,6 +429,11 @@ Item {
 
   function focusWindow(address) {
     var command = DockHyprland.focusWindow(address)
+    if (command) Quickshell.execDetached(command)
+  }
+
+  function rescueWindows(addresses) {
+    var command = DockHyprland.rescueWindows(addresses)
     if (command) Quickshell.execDetached(command)
   }
 
@@ -584,13 +603,13 @@ Item {
   function openSettings(screen) {
     var target = screen || root.focusedScreen()
     if (target) root.settingsScreen = target
-    settingsWindow.visible = true
+    settingsWindow.wanted = true
   }
 
   IpcHandler {
     target: "io.github.bmaltais.startbar"
     function settings(): void { root.openSettings(null) }
-    function closeSettings(): void { settingsWindow.visible = false }
+    function closeSettings(): void { settingsWindow.wanted = false }
     // For a Super-key binding: `omarchy-shell io.github.bmaltais.startbar startMenu`.
     function startMenu(): void { root.startMenuRequested(root.focusedScreenName(), "toggle") }
     function closeStartMenu(): void { root.startMenuRequested(root.focusedScreenName(), "close") }
@@ -629,8 +648,11 @@ Item {
       ? DockConfig.searchSettings(settingsWindow.schema, settingsWindow.query)
       : [settingsWindow.schema[settingsWindow.page]]
 
+    // Asked to be open; shown only once the settings have been read, so the
+    // fields never appear with defaults and then change.
+    property bool wanted: false
     screen: root.settingsScreen
-    visible: false
+    visible: settingsWindow.wanted && dockSettings.loaded
     color: "transparent"
     WlrLayershell.namespace: "omarchy-startbar-settings"
     WlrLayershell.layer: WlrLayer.Overlay
@@ -718,7 +740,7 @@ Item {
       // Escape clears a search first, then closes the window.
       Keys.onEscapePressed: {
         if (settingsWindow.searching) settingsWindow.query = ""
-        else settingsWindow.visible = false
+        else settingsWindow.wanted = false
       }
 
       // Header
@@ -830,7 +852,7 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: settingsWindow.visible = false
+            onClicked: settingsWindow.wanted = false
           }
         }
       }
@@ -1220,6 +1242,11 @@ Item {
         height: implicitHeight
         radius: height / 2
         color: sw.value ? root.colAccent : Util.alpha(root.colPopupText, 0.25)
+        // The Loader hands over the real value just after this is created;
+        // animating only once that has settled keeps the knob from sliding
+        // into place when the window opens.
+        property bool settled: false
+        Component.onCompleted: Qt.callLater(function () { sw.settled = true })
 
         Rectangle {
           width: parent.height - 6
@@ -1229,7 +1256,7 @@ Item {
           x: sw.value ? parent.width - width - 3 : 3
           color: root.colPopupBackground
 
-          Behavior on x { NumberAnimation { duration: 100 } }
+          Behavior on x { enabled: sw.settled; NumberAnimation { duration: 100 } }
         }
 
         MouseArea {
@@ -1826,7 +1853,7 @@ Item {
         y: panel.geo.bar.y
         width: panel.geo.bar.width
         height: panel.geo.bar.height
-        color: root.taskbar.transparent ? "transparent" : Util.alpha(root.colBackground, root.taskbar.opacity)
+        color: root.taskbar.transparent ? "transparent" : Util.alpha(root.colBackground, root.glassy ? Math.min(root.taskbar.opacity, 0.35) : root.taskbar.opacity)
 
         HoverHandler {
           onHoveredChanged: revealState.set("bar", hovered)
@@ -2674,6 +2701,8 @@ Item {
 
         onVisibleChanged: {
           revealState.set("preview", previewPopup.visible)
+          // A Window outside every monitor would show a blank thumbnail.
+          if (visible) root.rescueWindows(previewPopup.windowIds)
           previewSlideAnim.stop()
           if (visible && root.taskbar.previewSlide) previewSlideAnim.start()
           else slide = 1
@@ -2776,12 +2805,18 @@ Item {
                     onHoveredChanged: previewPopup.peekHover(cell.win, hovered)
                   }
 
-                  // Right click anywhere on the cell: this Window's menu. Left
-                  // clicks fall through to the thumbnail and close button.
+                  // Anywhere on the cell: a left click picks this Window (the
+                  // title and the padding too, not only the thumbnail), a right
+                  // click opens its menu. The close button and the thumbnail
+                  // sit above and take their own clicks first.
                   MouseArea {
                     anchors.fill: parent
-                    acceptedButtons: Qt.RightButton
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
                     onClicked: function (mouse) {
+                      if (mouse.button === Qt.LeftButton) {
+                        previewPopup.focusPicked(cell.win)
+                        return
+                      }
                       var at = mapToItem(previewPopup.contentItem, mouse.x, mouse.y)
                       previewPopup.openMenu(cell, previewAnchor.rect.x + at.x, previewAnchor.rect.y + at.y)
                     }
@@ -2921,6 +2956,7 @@ Item {
         dockGap: panel.popupGap
         settings: dockSettings
         scheme: root.scheme
+        glassy: root.glassy
         panelWidth: panel.width
         panelHeight: panel.height
         buttonX: startButton.x

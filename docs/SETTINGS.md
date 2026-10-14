@@ -36,7 +36,7 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 | `groupWindows` | `true` | One stacked icon per app with two or more windows; hover it to pick a window from the previews |
 | `barHeight` | `48` | Bar height in px |
 | `edgeSpacing` | `12` | Space in px at the start of the bar before the Start button, and between the bar and the menus and previews that rise from it (the Start menu's side margin matches it) |
-| `opacity` | `0.9` | Bar background opacity, 0 to 1 |
+| `opacity` | `0.9` | Bar background opacity, 0 to 1 (at most 0.35 while Omarchy's bar is Glassy) |
 | `transparent` | `false` | No bar background, icons only |
 | `colorScheme` | `theme` | `theme` (follow Omarchy), `dark` or `light`; applies to the bar, the Start menu, the menus and the previews |
 | `showStart` | `true` | Show the Start button |

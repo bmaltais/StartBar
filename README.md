@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="A tour of StartBar: window previews, the Start menu and its search, the right-click menu with a submenu, and the settings window with search" src="screenshots/hero.gif" width="900" />
+  <img alt="A tour of StartBar: window previews, launching an app from the Start menu, the right-click menu with a submenu, the settings window with search, and the Dock on the left in the light scheme" src="screenshots/hero.gif" width="900" />
 </p>
 
 <h1 align="center">StartBar</h1>
@@ -18,6 +18,8 @@
   <a href="#update-and-remove">Update and remove</a> ·
   <a href="#contributing">Contributing</a>
 </p>
+
+> **Omarchy 4.5:** StartBar is compatible with the windowed mode coming in Omarchy 4.5.
 
 ## Install
 

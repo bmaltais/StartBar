@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Compose preview.png, the marketplace's picture of StartBar, from the shots in
 # screenshots/: the Start menu, the settings window, the Bar menu with a
-# submenu open, a hover Preview and the Dock, on a dark gradient with the name.
+# submenu open, a hover Preview and the Dock, on a dark gradient with the name
+# and a badge for the Omarchy release it is compatible with.
 #
 #   scripts/make-preview.sh [OUT]      (default: preview.png at the repo root)
 #
@@ -45,12 +46,22 @@ magick "$shots/right-click-submenu.png" -alpha set \
   -compose DstIn -composite -trim +repage -resize 92% "$work/r.png"
 shadow "$work/r.png" "$work/menus.png"
 
+# The badge above the name: a pill sized to its text.
+magick -background none -fill '#e8dcff' -font "$font" -pointsize 21 \
+  label:"Compatible with Omarchy 4.5 windowed mode" -trim +repage "$work/badge-text.png"
+bw=$(( $(magick identify -format %w "$work/badge-text.png") + 36 ))
+bh=$(( $(magick identify -format %h "$work/badge-text.png") + 18 ))
+magick -size "${bw}x${bh}" xc:none -fill 'rgba(255,255,255,0.13)' -draw "roundrectangle 0,0 $((bw - 1)),$((bh - 1)) $((bh / 2)),$((bh / 2))" \
+  -stroke 'rgba(205,188,245,0.45)' -strokewidth 1 -fill none -draw "roundrectangle 0,0 $((bw - 1)),$((bh - 1)) $((bh / 2)),$((bh / 2))" \
+  "$work/badge-text.png" -gravity center -compose over -composite "$work/badge.png"
+
 magick -size 1600x900 radial-gradient:'#2a1650-#0a0816' \
   \( -size 1100x1100 radial-gradient:'rgba(226,72,128,0.55)-rgba(226,72,128,0)' \) -geometry +900-420 -compose plus -composite \
   \( -size 1000x1000 radial-gradient:'rgba(86,120,255,0.40)-rgba(86,120,255,0)' \) -geometry -380+420 -compose plus -composite \
   -compose over \
   -font "$font" -fill white -pointsize 84 -annotate +72+150 "StartBar" \
   -fill '#cdbcf5' -pointsize 30 -annotate +76+205 "A taskbar with a Start menu for Omarchy" \
+  "$work/badge.png" -geometry +76+30 -composite \
   "$work/settings.png" -geometry +836+60 -composite \
   "$work/start.png" -geometry +50+236 -composite \
   "$work/preview.png" -geometry +650+640 -composite \
