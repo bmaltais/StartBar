@@ -25,6 +25,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "StartMenu.js" as StartMenu
+import "DockPlacement.js" as DockPlacement
 
 Item {
   id: startMenu
@@ -32,6 +33,8 @@ Item {
   // What this needs from outside. The panel binds these where it
   // instantiates the menu; nothing here reaches for `root` or `panel`.
   required property var taskbar        // DockConfig taskbar view: startCommand, startHoverOpen, alignment, barHeight
+  required property var edge           // DockGeometry.edge(): which edge of the screen the Dock is on
+  required property real dockGap       // the space between the card and the bar
   required property var settings       // dockSettings: startPins, recentApps, startPlaces, pins, apply(intent)
   property var scheme: null            // DockConfig.schemeColors: a fixed dark/light palette, null to follow the theme
   readonly property color colBackground: scheme ? scheme.background : Color.popups.background
@@ -43,6 +46,7 @@ Item {
   required property real panelWidth
   required property real panelHeight
   required property real buttonX       // the Start button's x, for left-aligned icons
+  required property real buttonY       // its y, for the left Dock
   required property bool buttonHovered // the pointer is on the Start button
   required property var icons          // IconResolver: icons.source(name) is an Image source
   signal launchRequested(var entry)    // launch this desktop entry
@@ -333,16 +337,26 @@ Item {
   // Zero-sized while closed, so the panel's input mask (which goes by
   // item geometry) takes nothing from the windows beneath.
   readonly property real fullWidth: Style.space(600) + startMenu.placesWidth
-  readonly property real fullHeight: Math.min(Style.space(640), Math.max(Style.space(240), startMenu.panelHeight - startMenu.taskbar.barHeight - startMenu.menuMargin * 2))
+  // The space the Dock leaves: the height less a bar along the bottom or top.
+  readonly property real fullHeight: Math.min(Style.space(640), Math.max(Style.space(240),
+    DockPlacement.startMenuRoom(startMenu.edge, startMenu.panelHeight, startMenu.taskbar.barHeight, startMenu.menuMargin, startMenu.dockGap)))
   width: startMenu.open ? startMenu.fullWidth : 0
   height: startMenu.open ? startMenu.fullHeight : 0
-  // Centred icons: the menu is centred on the screen. Left-aligned: its
-  // left edge lines up with the Start button. Either way it stays on screen.
-  readonly property real anchorX: startMenu.taskbar.alignment === "left"
-    ? startMenu.buttonX
-    : (startMenu.panelWidth - startMenu.fullWidth) / 2
-  x: Math.round(Math.max(startMenu.menuMargin, Math.min(startMenu.anchorX, startMenu.panelWidth - startMenu.fullWidth - startMenu.menuMargin)))
-  y: Math.round(Math.max(startMenu.menuMargin, startMenu.panelHeight - startMenu.taskbar.barHeight - startMenu.fullHeight - startMenu.menuMargin))
+  // Where the card stands: beside the Dock, lined up with the Start button
+  // (left-aligned icons) or centred on the screen, and on screen
+  // (DockPlacement.startMenu).
+  readonly property var place: DockPlacement.startMenu({
+    edge: startMenu.edge,
+    alignment: startMenu.taskbar.alignment,
+    button: { x: startMenu.buttonX, y: startMenu.buttonY },
+    size: { width: startMenu.fullWidth, height: startMenu.fullHeight },
+    panel: { width: startMenu.panelWidth, height: startMenu.panelHeight },
+    barHeight: startMenu.taskbar.barHeight,
+    margin: startMenu.menuMargin,
+    gap: startMenu.dockGap,
+  })
+  x: startMenu.place.x
+  y: startMenu.place.y
 
   RectangularShadow {
     visible: startMenu.open

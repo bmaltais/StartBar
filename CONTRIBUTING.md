@@ -42,6 +42,8 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 | `DockModel.js` | Which Items the Dock shows and in what order: Launch Order, Pins, Placed. It also takes Hyprland's toplevels to Items (`refreshItems`: Launch Order ranks, Windows held back until they have a class, App lookup, what changed) and decides where a drop is stored (`dropPlaced`: a Pin's position for settings, a Window's or Group's in memory). Tests give it plain objects shaped like the toplevels |
 | `DockConfig.js` | Settings: defaults, the effective view of the config entry, and every change to it |
 | `DockInteraction.js` | Reveal and hide (one hold per holder: strip, dock, menus, Start menu, drag), and where a dragged Item lands |
+| `DockGeometry.js` | Where the bar and what stands on it sit on each of the four edges (`layout`: the bar, Reveal Strip, Start button, clock and Items as rectangles; `iconSize`; `slot` and `dots` for an Item's icon and running dots). The QML binds to these instead of choosing per edge |
+| `DockPlacement.js` | Where popups stand for the Dock's edge: a Preview and the Item menu beside their Item, the Bar menu beside the bar, its submenu, the Start menu (`beside`, `barTarget`, `submenu`, `startMenu`, `slide`) |
 | `DockHyprland.js` | How to ask Hyprland for each thing the Dock wants: focus, raise, close, Window-state rows, Peek. Returns the command; tests run `bash -n` over every script |
 | `DockIcons.js` | Finding an App's icon file when Qt's lookup has missed: the command that searches the icon directories, which file is best, and when to search again |
 | `IconResolver.qml` | The QML side of `DockIcons.js`, one instance shared by the Dock and the Start menu: `source(name)` is Qt's icon path, else a found file, else "" while it searches |
@@ -68,6 +70,7 @@ It is one long file. Search for these names:
 | `barMenu` | The Bar menu |
 | `dockState` | Holds what `DockModel.refreshItems` returns and calls it on every Hyprland event; `placeItem` stores a drop through `DockModel.dropPlaced` |
 | `dockRow` | The Items, drag and drop |
+| `panel.geo`, `panel.edge` | Where everything on the Dock sits (`DockGeometry.layout`) and which edge it is on |
 
 ### Checks
 

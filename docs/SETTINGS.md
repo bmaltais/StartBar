@@ -26,13 +26,16 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 | Key | Default | Description |
 | --- | --- | --- |
 | `alignment` | `left` | `left` or `center` for the Start button and icons |
-| `autoHide` | `false` | Hide the bar until the pointer rests on the bottom edge |
+| `position` | `bottom` | `bottom`, `top`, `left` or `right`: the screen edge the bar sits on |
+| `autoHide` | `false` | Hide the bar until the pointer rests on the bar's screen edge |
+| `reserveSpace` | `false` | With auto-hide off: windows (maximized ones included) stop at the Dock instead of running under it |
 | `revealDelayMs` | `200` | With auto-hide: how long the pointer must rest on the Reveal Strip before the bar shows, in ms |
 | `hideDelayMs` | `300` | With auto-hide: how long after the pointer leaves the bar before it hides, in ms |
 | `iconSize` | `48` | Largest icon size in px; icons are also limited to `barHeight - 20` and shrink further to fit when there are many windows |
 | `showWorkspaceBadge` | `false` | Workspace number or name over each window's icon |
 | `groupWindows` | `true` | One stacked icon per app with two or more windows; hover it to pick a window from the previews |
 | `barHeight` | `48` | Bar height in px |
+| `edgeSpacing` | `12` | Space in px at the start of the bar before the Start button, and between the bar and the menus and previews that rise from it (the Start menu's side margin matches it) |
 | `opacity` | `0.9` | Bar background opacity, 0 to 1 |
 | `transparent` | `false` | No bar background, icons only |
 | `colorScheme` | `theme` | `theme` (follow Omarchy), `dark` or `light`; applies to the bar, the Start menu, the menus and the previews |
@@ -80,7 +83,7 @@ Right-click an empty part of the bar and choose **Settings…** (or run `omarchy
 ### Menus
 
 - **Right-click an icon**: Pin/Unpin, New Window and the app's own actions; for a window, Maximize/Restore, Full screen/Exit full screen, Float/Tile, and when floating Center and Pin on top; Move to scratchpad; then the app and Pin/Unpin; and last, Close window (Close all windows for a group). The menu stays open until you pick a row, click outside it, or move the pointer off it.
-- **Right-click the bar** (an empty part) opens a short menu: Icon alignment, Colors, Start button and Window previews are sections that open a submenu beside them, and the everyday toggles follow (auto-hide, clock, group windows, workspace badge, transparent background). Its last row, **Settings…**, opens the full settings window.
+- **Right-click the bar** (an empty part) opens a short menu: Icon alignment, Position, Colors, Start button and Window previews are sections that open a submenu beside them, and the everyday toggles follow (auto-hide, clock, group windows, workspace badge, transparent background). Its last row, **Settings…**, opens the full settings window.
 
 ## Pinning
 

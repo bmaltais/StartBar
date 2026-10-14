@@ -91,7 +91,7 @@ Changes apply as you make them. There are two ways in.
 
 ### Right-click the bar
 
-The common options, kept short: icon alignment, colours, the Start button and window previews open a submenu beside them, and the everyday toggles (auto-hide, clock, group windows, workspace badge, transparent background) sit below. Options that mean nothing while another is off are dimmed. The last row, **Settings…**, opens the full window.
+The common options, kept short: icon alignment, position (bottom, top, left or right), colours, the Start button and window previews open a submenu beside them, and the everyday toggles (auto-hide, clock, group windows, workspace badge, transparent background) sit below. Options that mean nothing while another is off are dimmed. The last row, **Settings…**, opens the full window.
 
 <img src="screenshots/right-click-submenu.png" alt="The bar's right-click menu with the Start button submenu open" width="440">
 
