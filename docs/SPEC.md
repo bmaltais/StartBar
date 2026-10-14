@@ -27,7 +27,7 @@ What StartBar does today. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); 
 
 ## The bar
 
-- Full-width along the bottom (or the top, left or right edge, see "The Dock's position"), `barHeight` (48) tall, with `opacity` (0.9) or `transparent` (icons only).
+- Full-width along the bottom (or the top, left or right edge, see "The Dock's position"), `barHeight` (48) tall, with `opacity` (0.9) or `transparent` (icons only). While Omarchy's bar is Glassy (`bar.background` in `shell.json`), the Dock's opacity is at most 0.35 and the Start menu's card is see-through (0.6), and StartBar asks Hyprland to blur behind both (a layer rule on `omarchy-startbar`, set at start and after a config reload; it has no effect while Hyprland's blur is off). Menus, Previews and the settings window stay solid: Hyprland does not blur those surfaces.
 - Icons are `iconSize` (48) at most and also fit inside the bar (`barHeight - 20`), so with the defaults they are 28px.
 - `alignment`: `left` (default, changed from `center` 2026-10-10) or `center` for the group of Start button and Items.
 - Start button (`showStart`, on) at the start of that group. It runs `startCommand`, which is `builtin` by default and opens the Start menu; any other value is run as a command, such as `omarchy-menu toggle apps` for the Omarchy menu. `startIcon` is `grid` (drawn by the plugin, the default), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path.

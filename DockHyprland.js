@@ -247,6 +247,16 @@ function openOnOwnWorkspace(address, mode) {
   return argv(script, normalized);
 }
 
+// Omarchy's Glassy look blurs what is behind a see-through surface, but only
+// for the layer surfaces its own rules name. This names ours (the Dock and
+// Start menu, and the settings window) so a glassy StartBar is blurred the
+// same way. It is inert while Hyprland's blur is off. Named, so running it
+// again replaces the rule; a `hyprctl reload` drops it, so it is run again then.
+function glassRule() {
+  return argv("hyprctl eval 'hl.layer_rule({ name = \"startbar-glass\", match = { namespace = \"^omarchy-startbar\" }, "
+    + "blur = true, ignore_alpha = 0.3 })' >/dev/null");
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     normalizedAddress: normalizedAddress,
@@ -260,5 +270,6 @@ if (typeof module !== "undefined" && module.exports) {
     peekRestore: peekRestore,
     peekCommit: peekCommit,
     openOnOwnWorkspace: openOnOwnWorkspace,
+    glassRule: glassRule,
   };
 }

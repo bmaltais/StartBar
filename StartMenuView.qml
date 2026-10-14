@@ -38,6 +38,8 @@ Item {
   required property var settings       // dockSettings: startPins, recentApps, startPlaces, pins, apply(intent)
   property var scheme: null            // DockConfig.schemeColors: a fixed dark/light palette, null to follow the theme
   readonly property color colBackground: scheme ? scheme.background : Color.popups.background
+  property bool glassy: false          // Omarchy's Glassy bar: the card is see-through (Service.qml `glassy`)
+  readonly property color colSurface: glassy ? Util.alpha(colBackground, Math.min(colBackground.a, 0.6)) : colBackground
   readonly property color colText: scheme ? scheme.foreground : Color.popups.text
   readonly property color colBorder: scheme ? scheme.border : Color.popups.border
   readonly property color colForeground: scheme ? scheme.foreground : Color.foreground
@@ -371,7 +373,7 @@ Item {
     id: card
     anchors.fill: parent
     radius: Math.max(Style.cornerRadius, Style.space(8))
-    color: startMenu.colBackground
+    color: startMenu.colSurface
     border.width: Style.normalBorderWidth
     border.color: Util.alpha(startMenu.colText, 0.12)
     clip: true
@@ -1336,7 +1338,7 @@ Item {
       width: Style.space(190)
       height: overlayColumn.implicitHeight + Style.space(4) * 2
       radius: Math.max(Style.cornerRadius, Style.space(8))
-      color: startMenu.colBackground
+      color: startMenu.colSurface
       border.width: Style.normalBorderWidth
       border.color: Util.alpha(startMenu.colText, 0.12)
       readonly property bool system: startMenu.overlayKind === "power" || startMenu.overlayKind === "user"
