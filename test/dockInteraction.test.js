@@ -129,3 +129,16 @@ test("dropping outside unpins a pinned Item and snaps an unpinned one back", () 
 test("dropping with no drag in progress does nothing", () => {
   assert.deepEqual(DI.dragDrop(DI.initialDrag(), { x: 200, y: 530 }, row, 40, { pinned: true }), { action: "none" });
 });
+
+test("onAxis hands a column's drag to the rules along x, and leaves a row's alone", () => {
+  const ghost = { x: 10, y: 200 };
+  const row = { x: 4, y: 40, width: 50, height: 300 };
+  assert.deepEqual(DI.onAxis(false, ghost, row), { ghost, row });
+  assert.deepEqual(DI.onAxis(true, ghost, row), {
+    ghost: { x: 200, y: 10 },
+    row: { x: 40, y: 4, width: 300, height: 50 },
+  });
+  const d = DI.dragStart("pin:a", 0);
+  const f = DI.onAxis(true, { x: 20, y: 40 + 2 * 50 + 10 }, { x: 4, y: 40, width: 50, height: 200 });
+  assert.equal(DI.dragMove(d, f.ghost, f.row, 50, 40, 4).to, 2);
+});

@@ -114,6 +114,16 @@ function slotShift(drag, index, step) {
   return 0;
 }
 
+// The drag rules above work along x and across y. A column of Items runs the
+// other way, so for it they are given the ghost and row with x and y swapped.
+function onAxis(vertical, ghost, row) {
+  if (!vertical) return { ghost: ghost, row: row };
+  return {
+    ghost: { x: ghost.y, y: ghost.x },
+    row: { x: row.y, y: row.x, width: row.height, height: row.width },
+  };
+}
+
 function isOutsideRow(ghost, row, iconSize) {
   var margin = iconSize / 2;
   return ghost.y < row.y - margin || ghost.y > row.y + row.height + margin;
@@ -149,6 +159,7 @@ if (typeof module !== "undefined" && module.exports) {
     dragActive: dragActive,
     dragStart: dragStart,
     dragMove: dragMove,
+    onAxis: onAxis,
     isOutsideRow: isOutsideRow,
     clampGhostX: clampGhostX,
     slotShift: slotShift,

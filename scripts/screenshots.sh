@@ -104,7 +104,7 @@ trap cleanup EXIT
 
 # The state the README images show: left-aligned icons, theme colours, the
 # built-in Start menu, previews on with the peek, no clock, no badge.
-readme_state='{"alignment":"left","colorScheme":"theme","showStart":true,"startCommand":"builtin","startHoverOpen":false,"showClock":false,"showWorkspaceBadge":false,"transparent":false,"groupWindows":true,"showPreviews":true,"previewPeek":true,"previewWarpPointer":false,"autoHide":false}'
+readme_state='{"alignment":"left","colorScheme":"theme","showStart":true,"startCommand":"builtin","startHoverOpen":false,"showClock":false,"showWorkspaceBadge":false,"transparent":false,"groupWindows":true,"showPreviews":true,"previewPeek":true,"previewWarpPointer":false,"autoHide":false,"position":"bottom","reserveSpace":false,"edgeSpacing":12}'
 
 override() {
   local tmp

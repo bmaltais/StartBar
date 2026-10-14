@@ -5,8 +5,12 @@ Service.qml	import	PanelToolTip was not found. Did you add all imports and depen
 Service.qml	import	Warnings occurred while importing module "qs.Commons":
 Service.qml	import	Warnings occurred while importing module "qs.Ui":
 Service.qml	missing-property	Could not find property "adjustment".
+Service.qml	missing-property	Could not find property "bottom".
 Service.qml	missing-property	Could not find property "edges".
 Service.qml	missing-property	Could not find property "gravity".
+Service.qml	missing-property	Could not find property "left".
+Service.qml	missing-property	Could not find property "right".
+Service.qml	missing-property	Could not find property "top".
 Service.qml	missing-property	Could not find property "window".
 Service.qml	missing-property	Member "accent" not found on type "QQuickColor"
 Service.qml	missing-property	Member "background" not found on type "QQuickColor"
@@ -14,6 +18,7 @@ Service.qml	missing-property	Member "field" not found on type (component in Serv
 Service.qml	missing-property	Member "foreground" not found on type "QQuickColor"
 Service.qml	missing-property	Member "height" not found on type "QuickshellScreenInfo"
 Service.qml	missing-property	Member "key" not found on type "QQuickItem"
+Service.qml	missing-property	Member "mirrored" not found on type (component in Service.qml)::item with type QObject
 Service.qml	missing-property	Member "modelData" not found on type "QQuickItem"
 Service.qml	missing-property	Member "muted" not found on type "QQuickColor"
 Service.qml	missing-property	Member "name" not found on type "QuickshellScreenInfo"

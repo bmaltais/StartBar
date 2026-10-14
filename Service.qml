@@ -18,6 +18,8 @@ import "DockModel.js" as DockModel
 import "DockConfig.js" as DockConfig
 import "StartMenu.js" as StartMenu
 import "DockInteraction.js" as DockInteraction
+import "DockGeometry.js" as DockGeometry
+import "DockPlacement.js" as DockPlacement
 import "DockPreview.js" as DockPreview
 import "DockHyprland.js" as DockHyprland
 
@@ -948,7 +950,9 @@ Item {
         anchors.left: settingsSide.right
         anchors.right: parent.right
         anchors.leftMargin: Style.spacing.lg * 2
-        anchors.rightMargin: Style.spacing.lg
+        // Room for the scroll bar's gutter, always: sizing the body by whether
+        // it scrolls would change its width, and with it its height.
+        anchors.rightMargin: Style.spacing.lg + settingsScrollBar.gutter
         contentHeight: settingsColumn.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -1086,6 +1090,58 @@ Item {
           }
 
           Item { width: 1; height: Style.spacing.md }
+        }
+      }
+
+      // A scroll bar for the body, there only while the page has more than
+      // fits, so a page that scrolls is seen to: a track down the window's
+      // right edge and a thumb as long as the visible share of the page. Drag
+      // the thumb or click the track; the wheel scrolls the body itself.
+      // (Hand-drawn like the rest of the window: no native controls.)
+      Item {
+        id: settingsScrollBar
+        readonly property int gutter: Style.spacing.lg + Style.spacing.xs
+        readonly property real extent: settingsFlick.contentHeight - settingsFlick.height
+        visible: settingsScrollBar.extent > 1
+        anchors.top: settingsFlick.top
+        anchors.bottom: settingsFlick.bottom
+        anchors.right: parent.right
+        anchors.rightMargin: Style.spacing.lg
+        width: Style.spacing.md
+
+        Rectangle {
+          anchors.fill: parent
+          radius: width / 2
+          color: Util.alpha(root.colPopupText, 0.08)
+        }
+
+        Rectangle {
+          id: scrollThumb
+          width: parent.width
+          radius: width / 2
+          height: Math.min(parent.height, Math.max(Style.space(28), parent.height * settingsFlick.height / settingsFlick.contentHeight))
+          y: settingsScrollBar.extent > 0
+            ? (parent.height - height) * settingsFlick.contentY / settingsScrollBar.extent : 0
+          color: Util.alpha(root.colPopupText, scrollMouse.pressed ? 0.55 : (scrollMouse.containsMouse ? 0.4 : 0.28))
+        }
+
+        MouseArea {
+          id: scrollMouse
+          // A wider target than the thin bar.
+          anchors.fill: parent
+          anchors.leftMargin: -Style.spacing.sm
+          anchors.rightMargin: -Style.spacing.lg
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+
+          function scrollTo(pointerY) {
+            var room = settingsScrollBar.height - scrollThumb.height
+            if (room <= 0) return
+            var top = Math.max(0, Math.min(pointerY - scrollThumb.height / 2, room))
+            settingsFlick.contentY = top / room * settingsScrollBar.extent
+          }
+          onPressed: function (mouse) { scrollMouse.scrollTo(mouse.y) }
+          onPositionChanged: function (mouse) { if (scrollMouse.pressed) scrollMouse.scrollTo(mouse.y) }
         }
       }
 
@@ -1521,6 +1577,39 @@ Item {
     }
   }
 
+  // reserveSpace (SPEC.md "The bar"): an invisible window on the Dock's edge
+  // whose exclusive zone keeps tiled and maximized windows clear of the bar.
+  // On the Overlay layer so Hyprland arranges it after the Omarchy bar and
+  // the panel below: on a lower layer it would claim the edge first, pushing
+  // the Omarchy bar down and squeezing the panel by its own zone. It has no
+  // input region, so being the topmost layer costs nothing.
+  Variants {
+    model: Quickshell.screens
+
+    PanelWindow {
+      id: reserveWindow
+      required property var modelData
+      screen: modelData
+      visible: root.taskbar.reserveSpace && !root.autoHide
+      color: "transparent"
+      mask: Region {}
+
+      WlrLayershell.namespace: "omarchy-startbar-reserve"
+      WlrLayershell.layer: WlrLayer.Overlay
+      exclusiveZone: root.taskbar.barHeight
+
+      anchors {
+        left: !reserveWindow.edge.right
+        right: !reserveWindow.edge.left
+        top: !reserveWindow.edge.bottom
+        bottom: !reserveWindow.edge.top
+      }
+      readonly property var edge: DockGeometry.edge(root.taskbar.position)
+      implicitWidth: edge.vertical ? root.taskbar.barHeight : 0
+      implicitHeight: edge.vertical ? 0 : root.taskbar.barHeight
+    }
+  }
+
   Variants {
     id: panels
     model: Quickshell.screens
@@ -1554,6 +1643,17 @@ Item {
         right: true
       }
 
+      // With reserveSpace the window above keeps the bar's room clear of this
+      // one as well, which would leave the Dock floating beside an empty
+      // strip: a negative margin on the Dock's own edge takes the room back.
+      readonly property real reserved: root.taskbar.reserveSpace && !root.autoHide ? root.taskbar.barHeight : 0
+      margins {
+        top: panel.edge.top ? -panel.reserved : 0
+        bottom: panel.edge.bottom ? -panel.reserved : 0
+        left: panel.edge.left ? -panel.reserved : 0
+        right: panel.edge.right ? -panel.reserved : 0
+      }
+
       // The input region is the union of the Reveal Strip and the Dock
       // itself: whichever one the Row's slide currently makes zero-area
       // simply contributes nothing, so this holds for both Dock states.
@@ -1570,6 +1670,36 @@ Item {
       // Whether the Dock/bar is on screen: always, unless it auto-hides, in
       // which case it follows the Revealed state.
       readonly property bool shown: !root.autoHide || revealState.revealed
+
+      // The Dock's edge (SPEC.md "The Dock's position") and where everything
+      // on it sits: DockGeometry.js decides, the rectangles below are bound to
+      // it. `reveal` is 0 while the Dock is Hidden and 1 at rest; the slide is
+      // this one animation, so every element moves together.
+      readonly property var edge: DockGeometry.edge(root.taskbar.position)
+      property real reveal: panel.shown ? 1 : 0
+      Behavior on reveal {
+        NumberAnimation { duration: root.slideDurationMs; easing.type: Easing.InOutCubic }
+      }
+      // `edgeSpacing` (12): the space before the Start button at the bar's start
+      // and, the same, between a popup's card and the bar it rises from, as on
+      // Windows 11 (SPEC.md "The Dock's position"); the Start menu's side margin
+      // is the Start button's, so the two match.
+      readonly property real edgePad: root.taskbar.edgeSpacing
+      readonly property real popupGap: panel.edgePad
+      readonly property var geo: DockGeometry.layout({
+        position: root.taskbar.position,
+        alignment: root.taskbar.alignment,
+        barHeight: root.taskbar.barHeight,
+        panelWidth: panel.width,
+        panelHeight: panel.height,
+        shown: panel.reveal,
+        autoHide: root.autoHide,
+        revealStripHeight: root.revealStripHeight,
+        edgePad: panel.edgePad,
+        start: { size: startButton.width },
+        clock: { visible: clock.visible, width: clock.width, height: clock.height },
+        row: { width: dockRow.width, height: dockRow.height },
+      })
 
       // Where everything is on this monitor, in pixels from its top-left
       // corner, for `omarchy-shell <id> layout` (scripts/screenshots.sh and
@@ -1611,7 +1741,10 @@ Item {
             item: ofPopup(contextMenu),
             bar: ofPopup(barMenu),
             // Anchored to the Bar menu, so its place is relative to that window.
-            barSub: barSubMenu.visible ? rect(barMenu.relativeX + barSubMenu.relativeX + root.menuShadow,
+            // (On the right Dock it opens on the menu's left: relativeX is where its
+            // anchor sits, and the window extends leftward from there.)
+            barSub: barSubMenu.visible ? rect(barMenu.relativeX + barSubMenu.relativeX + root.menuShadow
+              - (barSubMenu.opening.opensLeft ? barSubMenu.implicitWidth : 0),
               barMenu.relativeY + barSubMenu.relativeY + root.menuShadow,
               barSubMenu.implicitWidth - root.menuShadow * 2, barSubMenu.implicitHeight - root.menuShadow * 2) : null,
             preview: ofPopup(previewPopup),
@@ -1625,10 +1758,10 @@ Item {
       // keeps clear of the bar's exclusive zone (see exclusionMode above).
       Item {
         id: revealStrip
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: root.autoHide ? root.revealStripHeight : 0
+        x: panel.geo.strip.x
+        y: panel.geo.strip.y
+        width: panel.geo.strip.width
+        height: panel.geo.strip.height
 
         HoverHandler {
           onHoveredChanged: revealState.set("strip", hovered)
@@ -1686,16 +1819,14 @@ Item {
       // it auto-hides.
       Rectangle {
         id: bar
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: panel.shown ? 0 : -height
-        height: root.taskbar.barHeight
+        // Placed by x/y, not anchors, in this and the Items below: swapping
+        // anchors with the edge leaves both set for a moment, and Qt then
+        // sizes an Item from them (a Row's height went negative).
+        x: panel.geo.bar.x
+        y: panel.geo.bar.y
+        width: panel.geo.bar.width
+        height: panel.geo.bar.height
         color: root.taskbar.transparent ? "transparent" : Util.alpha(root.colBackground, root.taskbar.opacity)
-
-        Behavior on anchors.bottomMargin {
-          NumberAnimation { duration: root.slideDurationMs; easing.type: Easing.InOutCubic }
-        }
 
         HoverHandler {
           onHoveredChanged: revealState.set("bar", hovered)
@@ -1707,16 +1838,18 @@ Item {
         TapHandler {
           acceptedButtons: Qt.RightButton
           onTapped: function (eventPoint) {
-            barMenu.openAt(revealStrip.mapToItem(panel.contentItem, eventPoint.position.x, 0).x)
+            var at = bar.mapToItem(panel.contentItem, eventPoint.position.x, eventPoint.position.y)
+            barMenu.openAt(at.x, at.y)
           }
         }
 
         Rectangle {
           visible: !root.taskbar.transparent
-          anchors.top: parent.top
-          anchors.left: parent.left
-          anchors.right: parent.right
-          height: 1
+          // The bar's 1 px edge facing the screen.
+          x: panel.geo.border.x
+          y: panel.geo.border.y
+          width: panel.geo.border.width
+          height: panel.geo.border.height
           color: Util.alpha(root.colBorder, 0.6)
         }
       }
@@ -1730,14 +1863,9 @@ Item {
         width: visible ? root.taskbar.barHeight - 8 : 0
         height: width
         radius: Style.cornerRadius
-        x: dockRow.x - dockRow.startReserve
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: panel.shown ? (root.taskbar.barHeight - height) / 2 : -height
+        x: panel.geo.start.x
+        y: panel.geo.start.y
         color: startMouse.containsMouse ? Util.alpha(root.colForeground, 0.12) : "transparent"
-
-        Behavior on anchors.bottomMargin {
-          NumberAnimation { duration: root.slideDurationMs; easing.type: Easing.InOutCubic }
-        }
 
         readonly property var iconSpec: DockConfig.resolveStartIcon(root.taskbar.startIcon)
 
@@ -1808,19 +1936,21 @@ Item {
         visible: root.taskbar.showClock
         width: visible ? clockLabel.implicitWidth : 0
         height: clockLabel.implicitHeight
-        anchors.right: parent.right
-        anchors.rightMargin: 16
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: panel.shown ? (root.taskbar.barHeight - height) / 2 : -height
+        // Placed by x/y, not anchors: swapping the anchors with the edge made
+        // Qt report an anchor loop against this Item's own height.
+        x: panel.geo.clock.x
+        y: panel.geo.clock.y
 
         Text {
           textFormat: Text.PlainText
           id: clockLabel
-          horizontalAlignment: Text.AlignRight
+          horizontalAlignment: panel.edge.vertical ? Text.AlignHCenter : Text.AlignRight
           color: root.colForeground
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
-          text: Qt.formatTime(clockTimer.now, Locale.ShortFormat) + "\n" + Qt.formatDate(clockTimer.now, Locale.ShortFormat)
+          // The column is only barHeight wide: a short date there.
+          text: (panel.edge.vertical ? Qt.formatTime(clockTimer.now, "hh:mm") : Qt.formatTime(clockTimer.now, Locale.ShortFormat)) + "\n"
+            + (panel.edge.vertical ? Qt.formatDate(clockTimer.now, "d MMM") : Qt.formatDate(clockTimer.now, Locale.ShortFormat))
         }
 
         Timer {
@@ -1834,28 +1964,19 @@ Item {
         }
       }
 
-      Row {
+      // A row of Items, or a column of them on a side Dock. A Grid so one
+      // item does both (a single column, or a single row).
+      Grid {
         id: dockRow
 
-        anchors.bottom: parent.bottom
-        // Centred vertically in the bar. Hidden parks the Row below the
-        // visible edge without unmapping the panel itself; Revealed rests it
-        // in the bar. Slides between the two over slideDurationMs.
-        anchors.bottomMargin: panel.shown ? (root.taskbar.barHeight - height) / 2 : -height
+        readonly property bool vertical: panel.edge.vertical
+        columns: dockRow.vertical ? 1 : Math.max(1, repeater.count)
         spacing: 2
 
-        // Horizontal placement: the Start button and the Items form
-        // one group, centred or pushed to the left edge.
-        readonly property real startReserve: startButton.visible ? startButton.width + 4 : 0
-        readonly property real clockReserve: clock.visible ? clock.width + 32 : 0
-        readonly property real edgePad: 12
-        x: root.taskbar.alignment === "left"
-          ? dockRow.edgePad + dockRow.startReserve
-          : (panel.width - (dockRow.startReserve + dockRow.width)) / 2 + dockRow.startReserve
-
-        Behavior on anchors.bottomMargin {
-          NumberAnimation { duration: root.slideDurationMs; easing.type: Easing.InOutCubic }
-        }
+        // Hidden parks the Items beyond the visible edge without unmapping the
+        // panel itself; Revealed rests them in the bar (DockGeometry.js).
+        x: panel.geo.row.x
+        y: panel.geo.row.y
 
         HoverHandler {
           onHoveredChanged: revealState.set("dock", hovered)
@@ -1864,24 +1985,35 @@ Item {
         TapHandler {
           acceptedButtons: Qt.RightButton
           onTapped: function (eventPoint) {
-            barMenu.openAt(dockRow.mapToItem(panel.contentItem, eventPoint.position.x, 0).x)
+            var at = dockRow.mapToItem(panel.contentItem, eventPoint.position.x, eventPoint.position.y)
+            barMenu.openAt(at.x, at.y)
           }
         }
 
-        // Icons are at most iconSize and fit inside the bar; each Item has
-        // side padding for a roomier hit area; itemWidth is what one Item
-        // occupies, and everything that steps through the Row uses it.
-        readonly property int baseIconSize: Math.max(16, Math.min(root.iconSize, root.taskbar.barHeight - 20))
+        // Icons are at most iconSize and fit inside the bar and, with many
+        // Items, its length (DockGeometry.iconSize); each Item has side padding
+        // for a roomier hit area. `slot` is where the icon and the dots stand in
+        // an Item; itemLength is what one Item occupies along the bar, and
+        // everything that steps through it uses it.
         readonly property int pad: 16
-        readonly property real maxWidth: Math.max(0, panel.width - edgePad * 2 - 2 * (startReserve + clockReserve))
-        readonly property int iconSize: {
-          var count = repeater.count
-          if (count <= 0) return baseIconSize
-          var available = Math.max(0, maxWidth - spacing * Math.max(0, count - 1))
-          var natural = (baseIconSize + pad) * count
-          return natural <= available ? baseIconSize : Math.max(16, Math.floor(available / count) - pad)
-        }
+        readonly property int iconSize: DockGeometry.iconSize({
+          position: root.taskbar.position,
+          panelWidth: panel.width,
+          panelHeight: panel.height,
+          barHeight: root.taskbar.barHeight,
+          iconSize: root.iconSize,
+          pad: dockRow.pad,
+          spacing: dockRow.spacing,
+          edgePad: panel.edgePad,
+          count: repeater.count,
+          start: { size: startButton.width },
+          clock: { visible: clock.visible, width: clock.width, height: clock.height },
+        })
         readonly property int itemWidth: iconSize + pad
+        readonly property var slot: DockGeometry.slot(root.taskbar.position, dockRow.iconSize, Style.spacing.xxs)
+        readonly property int itemLength: dockRow.vertical ? dockRow.slot.height : dockRow.itemWidth
+        // The distance between two Items' slots along the bar.
+        readonly property real step: itemLength + spacing
 
         // Drag to reorder (docs/SPEC.md "Input"; CONTEXT.md "Placed"). The
         // dragged Item's own delegate stays put in the Repeater (so every
@@ -1914,11 +2046,13 @@ Item {
         // children of it (see dragGhost below).
         function updateDragPreview() {
           if (!dockRow.dragKey) return
-          dockRow.drag = DockInteraction.dragMove(dockRow.drag, dockRow.ghostCenter(), dockRow.rect(),
-            dockRow.itemWidth + dockRow.spacing, dockRow.iconSize, dockState.items.length)
-          dragGhost.x = DockInteraction.clampGhostX(dragProbe.x, dockRow.rect(),
-            dockRow.itemWidth + dockRow.spacing, dockState.items.length)
-          dragGhost.y = dragProbe.y
+          var f = DockInteraction.onAxis(dockRow.vertical, dockRow.ghostCenter(), dockRow.rect())
+          dockRow.drag = DockInteraction.dragMove(dockRow.drag, f.ghost, f.row,
+            dockRow.step, dockRow.iconSize, dockState.items.length)
+          var along = DockInteraction.clampGhostX(dockRow.vertical ? dragProbe.y : dragProbe.x, f.row,
+            dockRow.step, dockState.items.length)
+          dragGhost.x = dockRow.vertical ? dragProbe.x : along
+          dragGhost.y = dockRow.vertical ? along : dragProbe.y
         }
 
         // Where the pointer has taken the Item, not where the ghost is
@@ -1941,7 +2075,8 @@ Item {
         // placeItem/unpinFromDrag triggers isn't the one dockState.refresh's
         // own drag guard skips.
         function finishDrag(item) {
-          var decision = DockInteraction.dragDrop(dockRow.drag, dockRow.ghostCenter(), dockRow.rect(),
+          var f = DockInteraction.onAxis(dockRow.vertical, dockRow.ghostCenter(), dockRow.rect())
+          var decision = DockInteraction.dragDrop(dockRow.drag, f.ghost, f.row,
             dockRow.iconSize, { pinned: item.kind === "pin" || !!item.pinned })
 
           var from = dockRow.drag.from
@@ -1958,8 +2093,8 @@ Item {
           } else {
             let slot = decision.action === "reorder" ? decision.index : from
             dockRow.settlingKey = item.key
-            settleX.to = dockRow.x + slot * (dockRow.itemWidth + dockRow.spacing)
-            settleY.to = dockRow.dragHomeY
+            settleX.to = dockRow.vertical ? dockRow.dragHomeX : dockRow.x + slot * dockRow.step
+            settleY.to = dockRow.vertical ? dockRow.y + slot * dockRow.step : dockRow.dragHomeY
             dragGhost.scale = 1
             settle.restart()
             if (decision.action === "reorder") root.placeItem(item, decision.index)
@@ -1970,6 +2105,7 @@ Item {
         // The Item whose ghost is still settling into its slot, and where the
         // ghost's top edge rests (where the Item's own was when pressed).
         property string settlingKey: ""
+        property real dragHomeX: 0
         property real dragHomeY: 0
 
         Repeater {
@@ -2000,16 +2136,19 @@ Item {
             // Items the dragged one has passed step aside by one slot, and a
             // pressed Item shrinks a little before it is lifted.
             property real dragShift: dockRow.dragKey !== ""
-              ? DockInteraction.slotShift(dockRow.drag, dockItem.index, dockRow.itemWidth + dockRow.spacing) : 0
+              ? DockInteraction.slotShift(dockRow.drag, dockItem.index, dockRow.step) : 0
             Behavior on dragShift {
               enabled: !dockRow.dropping
               NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
             }
-            transform: Translate { x: dockItem.dragShift }
+            transform: Translate {
+              x: dockRow.vertical ? 0 : dockItem.dragShift
+              y: dockRow.vertical ? dockItem.dragShift : 0
+            }
             scale: (mouseArea.pressedButtons & Qt.LeftButton) && dockRow.dragKey === "" ? 0.88 : 1
             Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
             width: dockRow.itemWidth
-            height: icon.height + runningDot.height + Style.spacing.xxs
+            height: dockRow.slot.height
 
             // The Active Window's highlight and the Attention tint (SPEC.md
             // "Indicators"): CONTEXT.md says the Window Item itself is
@@ -2073,7 +2212,10 @@ Item {
             Item {
               id: icon
               anchors.top: parent.top
+              // The icon's place in its Item leaves room for the dots beside it.
+              anchors.topMargin: dockRow.slot.iconTopMargin
               anchors.horizontalCenter: parent.horizontalCenter
+              anchors.horizontalCenterOffset: dockRow.slot.iconOffset
               width: dockRow.iconSize
               height: dockRow.iconSize
 
@@ -2159,6 +2301,7 @@ Item {
                   var origin = dockItem.mapToItem(dockRow.parent, 0, 0)
                   dragProbe.x = origin.x
                   dragProbe.y = origin.y
+                  dockRow.dragHomeX = origin.x
                   dockRow.dragHomeY = origin.y
                   settle.stop()
                   dockRow.settlingKey = ""
@@ -2238,13 +2381,17 @@ Item {
             // only Item without it.
             // A Group Item shows up to three dots, one per Window; the
             // Active Window's is the wide accent pill.
-            Row {
+            // Where they stand depends on the Dock's edge: under the icons on
+            // the bottom Dock, above them on the top one, and in a column
+            // beside them on the left and right.
+            Grid {
               id: runningDot
               visible: !dockItem.isPin
-              anchors.top: icon.bottom
-              anchors.topMargin: Style.spacing.xxs
-              anchors.horizontalCenter: parent.horizontalCenter
-              height: 3
+              columns: dockRow.vertical ? 1 : 3
+              readonly property var place: DockGeometry.dots(root.taskbar.position, dockItem.width,
+                { y: icon.y, height: icon.height }, { width: runningDot.width, height: runningDot.height }, Style.spacing.xxs)
+              x: runningDot.place.x
+              y: runningDot.place.y
               spacing: 3
 
               Repeater {
@@ -2253,12 +2400,16 @@ Item {
                 Rectangle {
                   required property int index
                   readonly property bool lead: index === 0
-                  width: lead && dockItem.active ? 16 : 6
-                  height: 3
-                  radius: height / 2
+                  readonly property real length: lead && dockItem.active ? 16 : 6
+                  width: dockRow.vertical ? 3 : length
+                  height: dockRow.vertical ? length : 3
+                  radius: 1.5
                   color: lead && dockItem.active ? root.colAccent : root.colForeground
 
                   Behavior on width {
+                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+                  }
+                  Behavior on height {
                     NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
                   }
                 }
@@ -2346,8 +2497,7 @@ Item {
 
         // Where the hovered Item is, in panel coordinates, captured at hover
         // time so the popup never depends on the delegate staying alive.
-        property real anchorX: 0
-        property real anchorY: 0
+        property var anchorRect: ({ x: 0, y: 0, width: 0, height: 0 })
         property var model: DockPreview.initial()
         readonly property var hoveredItem: previewState.model.hovered
         readonly property var shownItem: previewState.model.shown
@@ -2398,9 +2548,8 @@ Item {
           // The anchor only moves for an Item that can have a Preview: a Pin
           // hovered while another Item's is up must not drag that one along.
           if (enabled && !root.dragInProgress) {
-            let point = delegate.mapToItem(panel.contentItem, delegate.width / 2, 0)
-            previewState.anchorX = point.x
-            previewState.anchorY = point.y
+            let origin = delegate.mapToItem(panel.contentItem, 0, 0)
+            previewState.anchorRect = { x: origin.x, y: origin.y, width: delegate.width, height: delegate.height }
           }
           previewState.send({ type: "hoverStart", item: delegate.modelData, enabled: enabled, dragging: root.dragInProgress })
         }
@@ -2449,7 +2598,7 @@ Item {
       // it is up (e.g. the row reflows).
       Connections {
         target: previewState
-        function onAnchorXChanged() {
+        function onAnchorRectChanged() {
           if (previewPopup.visible) previewPopup.anchor.updateAnchor()
         }
       }
@@ -2479,7 +2628,7 @@ Item {
         }
         readonly property int thumbWidth: {
           var n = Math.max(1, windowIds.length)
-          var room = panel.width - Style.spacing.xs * 2 - Style.spacing.sm * 2 - root.menuShadow * 2 - (Style.spacing.xs * 2 + Style.spacing.xs) * n
+          var room = panel.width - (panel.edge.vertical ? root.taskbar.barHeight : 0) - Style.spacing.xs * 2 - Style.spacing.sm * 2 - root.menuShadow * 2 - (Style.spacing.xs * 2 + Style.spacing.xs) * n
           return Math.max(Style.space(80), Math.min(Style.space(220), Math.floor(room / n)))
         }
         readonly property int thumbHeight: Math.round(thumbWidth * 124 / 220)
@@ -2542,15 +2691,19 @@ Item {
           rect.height: 1
 
           onAnchoring: {
-            var x = previewState.anchorX - previewPopup.implicitWidth / 2
-            x = Math.max(Style.spacing.xs, Math.min(x, panel.width - previewPopup.implicitWidth - Style.spacing.xs))
-            previewAnchor.rect.x = Math.round(x)
-            previewAnchor.rect.y = Math.round(Math.max(Style.spacing.xs, previewState.anchorY - previewPopup.implicitHeight - Style.spacing.xs + root.menuShadow))
+            // Beside the Item, clear of the bar's edge, on the side facing into
+            // the screen (DockPlacement.alongBar, .beside).
+            var at = DockPlacement.beside(panel.edge, DockPlacement.alongBar(panel.edge, previewState.anchorRect, panel.geo.bar),
+              { width: previewPopup.implicitWidth, height: previewPopup.implicitHeight },
+              { width: panel.width, height: panel.height }, Style.spacing.xs, root.menuShadow, panel.popupGap)
+            previewAnchor.rect.x = Math.round(at.x)
+            previewAnchor.rect.y = Math.round(at.y)
           }
         }
 
         // 0 → 1 as the popup slides up into place; snaps to 1 when off.
         property real slide: 1
+        readonly property var slideStep: DockPlacement.slide(panel.edge)
         NumberAnimation {
           id: previewSlideAnim
           target: previewPopup
@@ -2578,14 +2731,15 @@ Item {
 
           Rectangle {
             id: previewCard
-            x: root.menuShadow
+            // Slides out of the Dock's edge (DockPlacement.slide).
+            x: root.menuShadow + previewPopup.slideStep.x * (1 - previewPopup.slide) * (width + root.menuShadow)
             width: parent.width - root.menuShadow * 2
             height: parent.height - root.menuShadow * 2
             radius: root.menuRadius
             color: root.colPopupBackground
             border.width: Style.normalBorderWidth
             border.color: root.colHairline
-            y: root.menuShadow + (1 - previewPopup.slide) * (height + root.menuShadow)
+            y: root.menuShadow + previewPopup.slideStep.y * (1 - previewPopup.slide) * (height + root.menuShadow)
 
             HoverHandler {
               onHoveredChanged: previewState.popupHover(hovered)
@@ -2763,11 +2917,14 @@ Item {
         z: 50
 
         taskbar: root.taskbar
+        edge: panel.edge
+        dockGap: panel.popupGap
         settings: dockSettings
         scheme: root.scheme
         panelWidth: panel.width
         panelHeight: panel.height
         buttonX: startButton.x
+        buttonY: startButton.y
         buttonHovered: startMouse.containsMouse
         icons: root.icons
 
@@ -2788,6 +2945,7 @@ Item {
         id: barMenu
 
         property real pointX: 0
+        property real pointY: 0
         readonly property int menuMargin: Style.spacing.xs
         // The section whose submenu is open ("" for none), and where its
         // row is in this window; both reset when the menu closes.
@@ -2827,8 +2985,9 @@ Item {
           barMenu.openSection = ""
           barMenu.visible = false
         }
-        function openAt(x) {
+        function openAt(x, y) {
           barMenu.pointX = x
+          barMenu.pointY = y
           barMenu.openSection = ""
           barMenu.visible = true
         }
@@ -2845,8 +3004,6 @@ Item {
             barSubClose.restart()
           }
         }
-        // The menu sits just above the bar.
-        readonly property real frameTop: panel.height - root.taskbar.barHeight
 
         Timer {
           id: barSubClose
@@ -2864,9 +3021,13 @@ Item {
         anchor.rect.width: 1
         anchor.rect.height: 1
         anchor.onAnchoring: {
-          var x = barMenu.pointX - barMenu.implicitWidth / 2
-          anchor.rect.x = Math.round(Math.max(barMenu.menuMargin, Math.min(x, panel.width - barMenu.implicitWidth - barMenu.menuMargin)))
-          anchor.rect.y = Math.round(Math.max(barMenu.menuMargin, barMenu.frameTop - barMenu.implicitHeight - barMenu.menuMargin + root.menuShadow))
+          // Beside the bar at the pointer (DockPlacement.alongBar, .beside).
+          var bounds = { width: panel.width, height: panel.height }
+          var at = DockPlacement.beside(panel.edge,
+            DockPlacement.alongBar(panel.edge, { x: barMenu.pointX, y: barMenu.pointY, width: 0, height: 0 }, panel.geo.bar),
+            { width: barMenu.implicitWidth, height: barMenu.implicitHeight }, bounds, barMenu.menuMargin, root.menuShadow, panel.popupGap)
+          anchor.rect.x = Math.round(at.x)
+          anchor.rect.y = Math.round(at.y)
         }
 
         implicitWidth: rowWidth + root.menuShadow * 2
@@ -2907,6 +3068,7 @@ Item {
               item.rows = Qt.binding(function () { return barMenu.rows })
               item.openLabel = Qt.binding(function () { return barMenu.openSection })
               item.rowsTop = Qt.binding(function () { return root.menuShadow + root.menuPad })
+              item.mirrored = Qt.binding(function () { return panel.edge.right })
             }
 
             Connections {
@@ -2939,14 +3101,16 @@ Item {
         color: "transparent"
         anchor.window: barMenu
         anchor.adjustment: PopupAdjustment.Flip | PopupAdjustment.Slide
-        anchor.edges: Edges.Top | Edges.Right
-        anchor.gravity: Edges.Bottom | Edges.Right
+        // On the right Dock the submenu opens on the menu's left.
+        readonly property var opening: DockPlacement.submenu(panel.edge, barMenu.implicitWidth, root.menuShadow)
+        anchor.edges: barSubMenu.opening.opensLeft ? Edges.Top | Edges.Left : Edges.Top | Edges.Right
+        anchor.gravity: barSubMenu.opening.opensLeft ? Edges.Bottom | Edges.Left : Edges.Bottom | Edges.Right
         anchor.rect.width: 1
         anchor.rect.height: 1
         anchor.onAnchoring: {
-          // Frame to frame: the submenu's frame starts where the menu's ends,
-          // and its first row lines up with the section's.
-          anchor.rect.x = barMenu.implicitWidth - root.menuShadow * 2 - 1
+          // Frame to frame: the submenu's frame starts where the menu's ends
+          // (or ends where its starts), and its first row lines up with the section's.
+          anchor.rect.x = barSubMenu.opening.x
           anchor.rect.y = barMenu.openRowY - root.menuPad - root.menuShadow
         }
 
@@ -2958,6 +3122,17 @@ Item {
           if (visible) barSubMenu.anchor.updateAnchor()
         }
         onImplicitHeightChanged: if (visible) barSubMenu.anchor.updateAnchor()
+
+        // The anchor reads openRowY when it is computed, and the popup stays up
+        // while the pointer moves from one section to another: a section with
+        // as many rows as the last changes neither visibility nor height, so
+        // without this the submenu would stay level with the old row.
+        Connections {
+          target: barMenu
+          function onOpenRowYChanged() {
+            if (barSubMenu.visible) barSubMenu.anchor.updateAnchor()
+          }
+        }
 
         HoverHandler {
           onHoveredChanged: if (hovered) barSubClose.stop()
@@ -3015,6 +3190,9 @@ Item {
           property var rows: []
           property string openLabel: ""
           property real rowsTop: 0
+          // The Bar menu on the right Dock: a section's chevron points left
+          // from the left edge, where the submenu opens.
+          property bool mirrored: false
           signal hovered(var row, real y)
           signal chosen(var row)
 
@@ -3068,7 +3246,7 @@ Item {
                 Text {
                   textFormat: Text.PlainText
                   anchors.left: parent.left
-                  anchors.right: barRow.isSection ? sectionChevron.left : parent.right
+                  anchors.right: barRow.isSection && !barList.mirrored ? sectionChevron.left : parent.right
                   anchors.verticalCenter: parent.verticalCenter
                   anchors.leftMargin: Style.space(12) + Style.space(22)
                   anchors.rightMargin: Style.space(12)
@@ -3080,15 +3258,16 @@ Item {
                   font.pixelSize: Style.font.body
                 }
 
-                // A section's chevron, pointing at its submenu.
+                // A section's chevron, pointing at its submenu: at the right
+                // edge, or in the check's column at the left when mirrored (a
+                // section is never checked, so the two share it).
                 Text {
                   textFormat: Text.PlainText
                   id: sectionChevron
                   visible: barRow.isSection
-                  anchors.right: parent.right
-                  anchors.rightMargin: Style.space(12)
+                  x: barList.mirrored ? Style.space(12) : parent.width - width - Style.space(12)
                   anchors.verticalCenter: parent.verticalCenter
-                  text: "\u25B8"
+                  text: barList.mirrored ? "\u25C2" : "\u25B8"
                   color: previewPopup.textColor
                   opacity: 0.7
                   font.family: Style.font.family
@@ -3349,11 +3528,14 @@ Item {
             var target = contextMenu.anchorItem
             var popupWidth = contextMenu.implicitWidth
             var popupHeight = contextMenu.implicitHeight
-            var localX = target.width / 2 - popupWidth / 2
-            var localY = -popupHeight - contextMenu.menuMargin + root.menuShadow
-            var point = contextMenu.anchorWindow.contentItem.mapFromItem(target, localX, localY)
-            point.x = Math.max(contextMenu.menuMargin, Math.min(point.x, contextMenu.anchorWindow.width - popupWidth - contextMenu.menuMargin))
-            point.y = Math.max(contextMenu.menuMargin, point.y)
+            // Beside the Item, on the side facing into the screen
+            // (DockPlacement.beside), in the anchor window's own coordinates.
+            var origin = contextMenu.anchorWindow.contentItem.mapFromItem(target, 0, 0)
+            var point = DockPlacement.beside(panel.edge,
+              DockPlacement.alongBar(panel.edge, { x: origin.x, y: origin.y, width: target.width, height: target.height }, panel.geo.bar),
+              { width: popupWidth, height: popupHeight },
+              { width: contextMenu.anchorWindow.width, height: contextMenu.anchorWindow.height },
+              contextMenu.menuMargin, root.menuShadow, panel.popupGap)
             menuAnchor.rect.x = Math.round(point.x)
             menuAnchor.rect.y = Math.round(point.y)
           }
