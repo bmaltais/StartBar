@@ -9,7 +9,7 @@ The plugin's name, as users see it. It is not a part of the plugin: the panel is
 _Avoid_: using StartBar for the panel or the Start menu
 
 **Dock**:
-The full-width bar along the bottom edge of a monitor that holds Items, with a Start button at its left end and an optional clock at its right. Every monitor gets its own Dock, and each Dock shows the same Items. It is always visible unless auto-hide is on, when it is Hidden or Revealed. Users know it as the taskbar.
+The bar along an edge of a monitor (the bottom, or with `position` the top, left or right) that holds Items, with a Start button at its start (the left end, or the top of the column on a side edge) and an optional clock at its end. On the bottom and top it is full-width. Every monitor gets its own Dock, and each Dock shows the same Items. It is always visible unless auto-hide is on, when it is Hidden or Revealed. Users know it as the taskbar.
 _Avoid_: panel; a bare "bar" where it could be read as the Omarchy bar at the top of the screen
 
 **Item**:
@@ -108,5 +108,5 @@ The Dock is off screen. It only happens when auto-hide is on (off by default); t
 _Avoid_: collapsed, minimised, auto-hidden (auto-hide is the behaviour, Hidden is the state)
 
 **Reveal Strip**:
-The invisible band along the full bottom edge of a monitor, above any space the Omarchy bar reserves, that turns a Hidden Dock into a Revealed one. It exists only when auto-hide is on.
+The invisible band along the full edge of a monitor the Dock sits on (the bottom, or the top, left or right with `position`), clear of any space the Omarchy bar reserves, that turns a Hidden Dock into a Revealed one. It exists only when auto-hide is on.
 _Avoid_: hot zone, trigger area, edge

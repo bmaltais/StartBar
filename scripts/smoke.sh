@@ -14,6 +14,7 @@
 #   --type          also type into the Start menu's search box and capture
 #                   the results. If the menu failed to open, those keys go to
 #                   whatever window has focus, so it is opt-in.
+#   --position EDGE run with the Dock on this edge: bottom (default) or top.
 #   --no-restart    skip the shell restart (the journal check then only covers
 #                   what is logged during the run)
 #
@@ -33,14 +34,16 @@ monitor=""
 out=""
 type_search=false
 restart=true
+position=bottom
 
 while [[ $# -gt 0 ]]; do
   case $1 in
     --monitor) monitor=$2; shift 2 ;;
     --out) out=$2; shift 2 ;;
     --type) type_search=true; shift ;;
+    --position) position=$2; shift 2 ;;
     --no-restart) restart=false; shift ;;
-    -h|--help) sed -n '2,27p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "smoke: unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -129,7 +132,7 @@ fi
 
 echo "smoke: capturing $monitor"
 for scheme in theme light dark; do
-  override "{\"colorScheme\": \"$scheme\", \"startCommand\": \"builtin\", \"autoHide\": false, \"showStart\": true, \"showClock\": true}"
+  override "{\"colorScheme\": \"$scheme\", \"startCommand\": \"builtin\", \"autoHide\": false, \"showStart\": true, \"showClock\": true, \"position\": \"$position\"}"
   shot "$scheme-1-dock"
   omarchy-shell -q "$id" startMenu
   sleep 1.5

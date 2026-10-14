@@ -27,6 +27,9 @@ test("a leftover style: dock does not force auto-hide on", () => {
 test("bar defaults: always visible, left-aligned, theme colours, built-in Start menu, no clock, grouped windows, no hover-open", () => {
   assert.deepEqual(effectiveTaskbar({}), {
     alignment: "left",
+    position: "bottom",
+    reserveSpace: false,
+    edgeSpacing: 12,
     colorScheme: "theme",
     autoHide: false,
     barHeight: 48,
@@ -163,8 +166,8 @@ test("each row's patch sets its own key; toggles flip the current value", () => 
 
 test("the top level is short: sections and the everyday toggles, then Settings", () => {
   const rows = barMenuRows(effectiveTaskbar({}));
-  assert.ok(rows.length <= 10, `${rows.length} top-level rows`);
-  assert.deepEqual(rows.filter((r) => r.children).map((r) => r.label), ["Icon alignment", "Colors", "Start button", "Window previews"]);
+  assert.ok(rows.length <= 11, `${rows.length} top-level rows`);
+  assert.deepEqual(rows.filter((r) => r.children).map((r) => r.label), ["Icon alignment", "Position", "Colors", "Start button", "Window previews"]);
   assert.equal(rows.some((r) => /Omarchy's dock/.test(r.label)), false);
 });
 
@@ -222,4 +225,20 @@ test("longestLabel picks the longest label from rows or strings, for sizing a me
   assert.equal(longestLabel([]), "");
   assert.equal(longestLabel(null), "");
   assert.equal(longestLabel([{ label: "x" }, {}, null]), "x");
+});
+
+test("position is bottom unless the config says top", () => {
+  assert.equal(effectiveTaskbar({}).position, "bottom");
+  assert.equal(effectiveTaskbar({ position: "top" }).position, "top");
+  assert.equal(effectiveTaskbar({ position: "left" }).position, "left");
+  assert.equal(effectiveTaskbar({ position: "right" }).position, "right");
+  assert.equal(effectiveTaskbar({ position: "middle" }).position, "bottom");
+});
+
+test("edgeSpacing is 12, may be zero, and a bad value falls back", () => {
+  assert.equal(effectiveTaskbar({}).edgeSpacing, 12);
+  assert.equal(effectiveTaskbar({ edgeSpacing: 0 }).edgeSpacing, 0);
+  assert.equal(effectiveTaskbar({ edgeSpacing: 20 }).edgeSpacing, 20);
+  assert.equal(effectiveTaskbar({ edgeSpacing: -3 }).edgeSpacing, 12);
+  assert.equal(effectiveTaskbar({ edgeSpacing: "wide" }).edgeSpacing, 12);
 });

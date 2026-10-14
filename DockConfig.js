@@ -51,6 +51,12 @@ function positiveNumberOr(value, fallback) {
   return isFinite(number) && number > 0 ? number : fallback;
 }
 
+// Zero is a valid value (no space), unlike positiveNumberOr.
+function nonNegativeNumberOr(value, fallback) {
+  var number = Number(value);
+  return isFinite(number) && number >= 0 ? number : fallback;
+}
+
 function findPluginEntry(shellConfig, pluginId) {
   var plugins =
     isPlainObject(shellConfig) && Array.isArray(shellConfig.plugins)
@@ -86,7 +92,7 @@ function effectivePlacements(entry) {
     if (!isPlainObject(candidate)) continue;
     var key = candidate.key;
     var index = Number(candidate.index);
-    if (typeof key !== "string" || key.indexOf("pin:") !== 0) continue;
+    if (typeof key !== "string" || key.indexOf("pin:") !== 0) continue; // DockModel.PIN_KEY_PREFIX
     if (seen[key]) continue;
     if (!isFinite(index) || index < 0) continue;
     seen[key] = true;
@@ -97,6 +103,7 @@ function effectivePlacements(entry) {
 
 // The bar's settings (docs/SPEC.md "The bar").
 var DEFAULT_BAR_HEIGHT = 48;
+var DEFAULT_EDGE_SPACING = 12;
 var DEFAULT_OPACITY = 0.9;
 var DEFAULT_START_COMMAND = "builtin";
 var OMARCHY_MENU_COMMAND = "omarchy-menu toggle apps";
@@ -130,9 +137,12 @@ function effectiveTaskbar(entry) {
   var source = isPlainObject(entry) ? entry : {};
   return {
     alignment: oneOf(source.alignment, ["center", "left"], "left"),
+    position: oneOf(source.position, ["bottom", "top", "left", "right"], "bottom"),
     colorScheme: oneOf(source.colorScheme, ["theme", "dark", "light"], "theme"),
     autoHide: booleanOr(source.autoHide, false),
+    reserveSpace: booleanOr(source.reserveSpace, false),
     barHeight: positiveNumberOr(source.barHeight, DEFAULT_BAR_HEIGHT),
+    edgeSpacing: nonNegativeNumberOr(source.edgeSpacing, DEFAULT_EDGE_SPACING),
     opacity: opacityOr(source.opacity, DEFAULT_OPACITY),
     transparent: booleanOr(source.transparent, false),
     showStart: booleanOr(source.showStart, true),
@@ -217,6 +227,12 @@ function barMenuRows(taskbar) {
     section("Icon alignment", 0, [
       choice("Left", "alignment", "left", 0),
       choice("Center", "alignment", "center", 0),
+    ]),
+    section("Position", 0, [
+      choice("Top", "position", "top", 0),
+      choice("Left", "position", "left", 0),
+      choice("Right", "position", "right", 0),
+      choice("Bottom", "position", "bottom", 0),
     ]),
     section("Colors", 0, [
       choice("Theme", "colorScheme", "theme", 0),
@@ -305,17 +321,24 @@ function settingsSchema() {
           options: [{ value: "center", label: "Center" }, { value: "left", label: "Left" }],
         },
         {
+          key: "position", label: "Position", type: "choice",
+          options: [{ value: "top", label: "Top" }, { value: "left", label: "Left" }, { value: "right", label: "Right" }, { value: "bottom", label: "Bottom" }],
+          hint: "Which screen edge the Dock sits on",
+        },
+        {
           key: "colorScheme", label: "Colors", type: "choice",
           options: [{ value: "theme", label: "Theme" }, { value: "dark", label: "Dark" }, { value: "light", label: "Light" }],
           hint: "Follow the Omarchy theme, or a fixed palette",
         },
         { key: "barHeight", label: "Bar height", type: "int", min: 24, max: 96, step: 2, unit: "px" },
+        { key: "edgeSpacing", label: "Edge spacing", type: "int", min: 0, max: 48, step: 2, unit: "px", hint: "Space at the bar's start, and between the bar and what rises from it" },
         { key: "iconSize", label: "Icon size", type: "int", min: 16, max: 128, step: 2, unit: "px", hint: "Largest icon; icons also fit inside the bar height" },
         { key: "transparent", label: "Transparent bar", type: "bool", hint: "Icons only, no background" },
         { key: "opacity", label: "Bar opacity", type: "slider", min: 0, max: 1, step: 0.05, enabledWhen: { key: "transparent", is: false } },
         { key: "showClock", label: "Clock", type: "bool" },
         { key: "showWorkspaceBadge", label: "Workspace badge", type: "bool", hint: "Workspace number or name over each icon" },
         { key: "autoHide", label: "Auto-hide", type: "bool", hint: "Hide the bar until the pointer rests on the bottom edge" },
+        { key: "reserveSpace", label: "Reserve space", type: "bool", hint: "Windows stop at the Dock instead of running under it", enabledWhen: { key: "autoHide", is: false } },
         { key: "revealDelayMs", label: "Reveal delay", type: "int", min: 50, max: 2000, step: 50, unit: "ms", hint: "Pointer rests on the edge this long", enabledWhen: { key: "autoHide", is: true } },
         { key: "hideDelayMs", label: "Hide delay", type: "int", min: 50, max: 3000, step: 50, unit: "ms", hint: "After the pointer leaves", enabledWhen: { key: "autoHide", is: true } },
       ],
@@ -352,7 +375,7 @@ function settingsSchema() {
 // The settings window's search: the groups of `groups` (settingsSchema())
 // cut down to the fields matching `query`, groups with none dropped. Every
 // word of the query must appear, in any order and any case, in the field's
-// label, hint or group title, so "start" finds the whole Start menu page and
+// label, hint, choice-option label or group title, so "start" finds the whole Start menu page and
 // "delay hide" finds the hide delay. A blank query matches nothing here: the
 // window shows the chosen page then.
 function searchSettings(groups, query) {
@@ -361,7 +384,8 @@ function searchSettings(groups, query) {
   var found = [];
   for (var g = 0; g < groups.length; g++) {
     var fields = groups[g].fields.filter(function (field) {
-      var text = (field.label + " " + (field.hint || "") + " " + groups[g].title).toLowerCase();
+      var options = (field.options || []).map(function (option) { return option.label; }).join(" ");
+      var text = (field.label + " " + (field.hint || "") + " " + options + " " + groups[g].title).toLowerCase();
       return words.every(function (word) { return text.indexOf(word) !== -1; });
     });
     if (fields.length > 0) found.push({ title: groups[g].title, fields: fields });
@@ -462,7 +486,7 @@ function applyIntent(entry, intent) {
   else if (kind === "unpinApp" && appId) patch.pins = withoutId(view.pins, appId);
   else if (kind === "unpinAppFromDrag" && appId) {
     patch.pins = withoutId(view.pins, appId);
-    patch.placements = unplaced(view.placements, "pin:" + appId);
+    patch.placements = unplaced(view.placements, "pin:" + appId); // DockModel.pinKey
   } else if (kind === "setPlacements") {
     patch.placements = effectivePlacements({ placements: intent.placements });
   } else if (kind === "pinStartApp" && appId) patch.startPins = withId(view.startPins, appId);
