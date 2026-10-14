@@ -25,7 +25,7 @@
 omarchy plugin add https://github.com/bmaltais/StartBar --enable
 ```
 
-It shows a taskbar at the bottom of every monitor. Everything it needs comes with Omarchy; there is nothing else to install. The Start button opens StartBar's own Start menu. To open the Omarchy menu instead, right-click the bar, open **Start button** and choose **Open the Omarchy menu**.
+It shows a taskbar along the bottom of every monitor, or any other edge you choose (top, left or right). Everything it needs comes with Omarchy; there is nothing else to install. The Start button opens StartBar's own Start menu. To open the Omarchy menu instead, right-click the bar, open **Start button** and choose **Open the Omarchy menu**.
 
 ## Tour
 
@@ -36,7 +36,8 @@ It shows a taskbar at the bottom of every monitor. Everything it needs comes wit
 - **Every window.** One icon per open window, across all workspaces and monitors. Click to jump to it.
 - **Pins.** Keep apps in the bar whether or not they are running. Drag to reorder, drag out to unpin.
 - **Grouped windows.** Optionally stack an app's windows into one icon and pick the window from the previews, as on Windows.
-- **Extras.** Auto-hide, a clock, a workspace badge over each icon, a transparent bar, and an option to open each new window on a workspace of its own.
+- **Any edge.** Put the bar at the bottom (the default), top, left or right of the screen. On the left and right it is a column, with the running dots beside the icons, above them on the top bar and below them on the bottom one. Menus and previews open on the side facing into the screen, the same distance from the bar as the Start menu is from the edge, as on Windows 11. Choose **Position** in the right-click menu or the settings window.
+- **Extras.** Auto-hide, a clock, a workspace badge over each icon, a transparent bar, an option to reserve the bar's space so maximized windows stop at it, and an option to open each new window on a workspace of its own.
 
 ### The Start menu
 
@@ -124,6 +125,7 @@ Everything is saved in StartBar's own entry in `~/.config/omarchy/shell.json`, w
     {
       "id": "io.github.bmaltais.startbar",
       "alignment": "center",
+      "position": "left",
       "startCommand": "builtin"
     }
   ]
