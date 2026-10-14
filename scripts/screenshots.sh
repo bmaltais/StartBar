@@ -399,8 +399,10 @@ fi
 # screen recorder (omarchy-capture-screenrecording) films the monitor, cursor
 # included, while the real pointer and keys drive the tour; ffmpeg then crops it
 # to the region the tour uses and makes the GIF.
-# Hover a group of windows for its Preview; open the Start menu and type; the
-# Bar menu and one submenu; the settings window, a search, another page.
+# Hover a group of windows for its Preview; open the Start menu and launch an App;
+# the Bar menu and one submenu; the settings window, a search, another page; then
+# the Dock moved to the left in the light scheme, with the Start menu, a Preview
+# and an Item's menu.
 if asked hero; then
   rw=$((mw < 1380 ? mw : 1380)); rh=$((mh < 880 ? mh : 880))
   recdir=$tmp/recording; mkdir -p "$recdir"
@@ -436,13 +438,30 @@ if asked hero; then
   fi
   sleep 0.6
 
-  # 2. The Start menu, and a search.
+  # 2. The Start menu: search for an App and launch it. The new window is closed
+  # again once the Dock has shown it. (Not a browser: its start page is the
+  # user's own feed.)
+  term_new=()
+  term_before=$(hyprctl clients -j | jq -r '.[].address')
   omarchy-shell -q "$id" startMenu
   sleep 1.8
-  wtype -d 220 "fil"
-  sleep 2
+  wtype -d 220 "ghost"
+  sleep 1.6
+  wtype -k Return
+  for _ in $(seq 1 100); do
+    mapfile -t term_new < <(hyprctl clients -j | jq -r --arg old "$term_before" '.[] | select(.class == "com.mitchellh.ghostty") | .address | select(. as $a | ($old | split("\n") | index($a)) | not)')
+    ((${#term_new[@]})) && break
+    sleep 0.1
+  done
+  for address in "${term_new[@]:-}"; do
+    [[ -n $address ]] && spares+=("$address")
+  done
+  sleep 2.5
   omarchy-shell -q "$id" closeStartMenu
-  sleep 1
+  for address in "${term_new[@]:-}"; do
+    [[ -n $address ]] && hyprctl dispatch "hl.dsp.window.close({ window = \"address:$address\" })" >/dev/null 2>&1 || true
+  done
+  sleep 1.2
 
   # 3. The Bar menu and a submenu.
   glide $((mw * 45 / 100)) $((mh - 12)); sleep 0.5
@@ -471,6 +490,30 @@ if asked hero; then
   omarchy-shell -q "$id" closeSettings
   sleep 1
 
+  # 5. The Dock on the left, in the light scheme: the Start menu, a Preview, an
+  # Item's menu.
+  override "$(jq -c '. + {position: "left", colorScheme: "light"}' <<<"$readme_state")"
+  sleep 1.5
+  omarchy-shell -q "$id" startMenu
+  sleep 1.8
+  wtype -d 220 "set"
+  sleep 2
+  omarchy-shell -q "$id" closeStartMenu
+  sleep 1
+  if item=$(wait_for '.items[] | select(.key == "group:class:startbar-screenshot") | [.x, .y, .width, .height] | @tsv'); then
+    read -r x y w h <<<"$item"
+    glide 2 $((y + h / 2))
+    glide $((x + w / 2)) $((y + h / 2))
+    sleep 2.6
+    glide $((x + w / 2)) $((y + h / 2 + 2))
+    "$pointer" right >/dev/null
+    if wait_for '.menus.item | select(.height > 40) | [.x, .y, .width, .height] | @tsv' >/dev/null; then
+      sleep 2.4
+    fi
+    glide $((mw / 2)) 300; "$pointer" left >/dev/null
+    sleep 1
+  fi
+
   OMARCHY_SCREENRECORD_DIR="$recdir" omarchy-capture-screenrecording --stop-recording >/dev/null 2>&1
   recording_started=
   video=$(find "$recdir" -name '*.mp4' ! -name '*-preview*' | sort | tail -1)
@@ -486,6 +529,7 @@ if asked hero; then
       -loop 0 "$out/hero.gif"
     echo "  hero.gif $(du -h "$out/hero.gif" | cut -f1)"
   fi
+  override "$readme_state"
   at $((mw / 2)) 200
 fi
 
