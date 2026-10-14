@@ -15,6 +15,7 @@ const all = {
   peekWindow: H.peekWindow(ADDR),
   peekRestore: H.peekRestore(),
   peekCommit: H.peekCommit(),
+  rescueWindows: H.rescueWindows([ADDR, "0xabc"]),
   openOnOwnWorkspace: H.openOnOwnWorkspace(ADDR, "maximized"),
   openOnOwnWorkspaceFullscreen: H.openOnOwnWorkspace(ADDR, "fullscreen"),
   openOnOwnWorkspaceNormal: H.openOnOwnWorkspace(ADDR, "normal"),
@@ -117,4 +118,74 @@ test("openOnOwnWorkspace refuses a mode it does not know", () => {
   assert.equal(H.openOnOwnWorkspace(ADDR, "off"), null);
   assert.equal(H.openOnOwnWorkspace(ADDR, "x; rm -rf ~"), null);
   assert.equal(H.openOnOwnWorkspace(ADDR), null);
+});
+
+for (const name of ["focusWindow", "focusWindowAndWarp"]) {
+  test(`${name} rescues a Window outside every monitor before focusing it`, () => {
+    const script = scriptOf(all[name]);
+    assert.match(script, /hl\.dsp\.window\.center/);
+    assert.ok(script.indexOf('rescue "$addr"') < script.indexOf("hl.dsp.focus({ window"));
+  });
+}
+
+// Runs the focus script against a stub `hyprctl` that serves the given clients
+// and monitors and records each dispatch, and returns the recorded dispatches.
+function dispatchesFor(clients, monitors, argv = H.focusWindow(ADDR)) {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "startbar-rescue-"));
+  try {
+    fs.writeFileSync(path.join(dir, "clients.json"), JSON.stringify(clients));
+    fs.writeFileSync(path.join(dir, "monitors.json"), JSON.stringify(monitors));
+    fs.writeFileSync(path.join(dir, "hyprctl"),
+      '#!/bin/sh\n'
+      + `case "$1 $2" in\n`
+      + `  "-j clients") cat "${dir}/clients.json" ;;\n`
+      + `  "-j monitors") cat "${dir}/monitors.json" ;;\n`
+      + `  "dispatch "*) echo "$2" >> "${dir}/dispatches" ;;\n`
+      + `esac\n`, { mode: 0o755 });
+    spawnSync(argv[0], argv.slice(1), { env: { ...process.env, PATH: dir + ":" + process.env.PATH } });
+    const file = path.join(dir, "dispatches");
+    return fs.existsSync(file) ? fs.readFileSync(file, "utf8").split("\n").filter(Boolean) : [];
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const monitor = (x, scale = 1) => ({ x, y: 0, width: 1920 * scale, height: 1080 * scale, scale });
+const client = (at, over = {}) => ({ address: ADDR, floating: true, at, size: [1100, 700], workspace: { name: "2" }, ...over });
+const centers = (dispatches) => dispatches.filter((d) => d.includes("window.center"));
+
+test("a floating Window outside every monitor is centered", () => {
+  assert.equal(centers(dispatchesFor([client([362, 125])], [monitor(1920)])).length, 1);
+  assert.equal(centers(dispatchesFor([client([-1100, 125])], [monitor(0)])).length, 1);
+  // Only a sliver (40 px) left on the monitor.
+  assert.equal(centers(dispatchesFor([client([3800, 100])], [monitor(1920)])).length, 1);
+});
+
+test("a Window on some monitor is left where it is", () => {
+  assert.equal(centers(dispatchesFor([client([2400, 300])], [monitor(1920)])).length, 0);
+  // On the second of two monitors.
+  assert.equal(centers(dispatchesFor([client([2400, 300])], [monitor(0), monitor(1920)])).length, 0);
+  // Half off the edge, with plenty still showing.
+  assert.equal(centers(dispatchesFor([client([3300, 300])], [monitor(1920)])).length, 0);
+  // A scaled monitor is measured in layout pixels: 3840 px at scale 2 is 1920 wide.
+  assert.equal(centers(dispatchesFor([client([2400, 300])], [{ x: 1920, y: 0, width: 3840, height: 2160, scale: 2 }])).length, 0);
+});
+
+test("a tiled Window is never moved, and the focus still goes ahead", () => {
+  const dispatches = dispatchesFor([client([362, 125], { floating: false })], [monitor(1920)]);
+  assert.equal(centers(dispatches).length, 0);
+  assert.ok(dispatches.some((d) => d.includes("hl.dsp.focus({ window")));
+});
+
+test("opening a Preview rescues each of its Windows that is outside every monitor", () => {
+  const other = "0xabc";
+  const clients = [client([362, 125]), client([2400, 300], { address: other }), client([100, 100], { address: "0xdef" })];
+  const dispatches = dispatchesFor(clients, [monitor(1920)], H.rescueWindows([ADDR, other]));
+  // ADDR is lost and is centered; `other` is on screen; 0xdef is lost but not asked for.
+  assert.deepEqual(centers(dispatches).map((d) => d.match(/address:(\w+)/)[1]), [ADDR]);
+  assert.equal(H.rescueWindows([]), null);
+  assert.equal(H.rescueWindows(["nope"]), null);
 });

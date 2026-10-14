@@ -422,6 +422,11 @@ Item {
     if (command) Quickshell.execDetached(command)
   }
 
+  function rescueWindows(addresses) {
+    var command = DockHyprland.rescueWindows(addresses)
+    if (command) Quickshell.execDetached(command)
+  }
+
   // Left click on a Pin with no Windows launches its App (docs/SPEC.md
   // "Input"). A missing App's Pin has no `execute` to call — clicking it
   // is a no-op until Unpin, same as a Letter Tile Window Item is a no-op
@@ -2686,6 +2691,8 @@ Item {
 
         onVisibleChanged: {
           revealState.set("preview", previewPopup.visible)
+          // A Window outside every monitor would show a blank thumbnail.
+          if (visible) root.rescueWindows(previewPopup.windowIds)
           previewSlideAnim.stop()
           if (visible && root.taskbar.previewSlide) previewSlideAnim.start()
           else slide = 1
@@ -2788,12 +2795,18 @@ Item {
                     onHoveredChanged: previewPopup.peekHover(cell.win, hovered)
                   }
 
-                  // Right click anywhere on the cell: this Window's menu. Left
-                  // clicks fall through to the thumbnail and close button.
+                  // Anywhere on the cell: a left click picks this Window (the
+                  // title and the padding too, not only the thumbnail), a right
+                  // click opens its menu. The close button and the thumbnail
+                  // sit above and take their own clicks first.
                   MouseArea {
                     anchors.fill: parent
-                    acceptedButtons: Qt.RightButton
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
                     onClicked: function (mouse) {
+                      if (mouse.button === Qt.LeftButton) {
+                        previewPopup.focusPicked(cell.win)
+                        return
+                      }
                       var at = mapToItem(previewPopup.contentItem, mouse.x, mouse.y)
                       previewPopup.openMenu(cell, previewAnchor.rect.x + at.x, previewAnchor.rect.y + at.y)
                     }

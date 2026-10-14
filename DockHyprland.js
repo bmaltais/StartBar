@@ -40,6 +40,24 @@ var RESTORE = "restore() { "
   + "(sleep 0.4; hyprctl dispatch \"hl.dsp.window.set_prop({ prop = \\\"no_anim\\\", value = \\\"unset\\\", window = \\\"address:$1\\\" })\" >/dev/null) & "
   + "}; ";
 
+// WORKAROUND, may need revisiting if Omarchy fixes it. A floating Window can be
+// left outside every monitor (seen: two Edge web-app Windows at x=362 on a
+// monitor that starts at x=1920, probably left on a monitor that was then
+// unplugged or switched off), so focusing it from the Dock shows nothing. A shell function:
+// `rescue ADDRESS` centers a floating Window that has less than 64x32 px on
+// any monitor, and does nothing for any other (docs/hyprland-notes.md "Windows
+// outside every monitor"). Positions are in layout pixels, so a monitor is its
+// width and height over its scale.
+var RESCUE = "rescue() { "
+  + "lost=$(jq -n --arg a \"$1\" --argjson c \"$(hyprctl -j clients)\" --argjson m \"$(hyprctl -j monitors)\" '"
+  + "first($c[] | select(.address == $a and .floating)) as $w | "
+  + "if $w == null then false else "
+  + "[$m[] | ((.width / .scale) as $mw | (.height / .scale) as $mh | "
+  + "([$w.at[0] + $w.size[0], .x + $mw] | min) - ([$w.at[0], .x] | max) >= 64 and "
+  + "([$w.at[1] + $w.size[1], .y + $mh] | min) - ([$w.at[1], .y] | max) >= 32)] | any | not end') || return 0; "
+  + "[ \"$lost\" = true ] && hyprctl dispatch \"hl.dsp.window.center({ window = \\\"address:$1\\\" })\" >/dev/null; "
+  + "}; ";
+
 // Focusing can warp the pointer: toggle cursor:no_warps around a dispatch and
 // put the old value back.
 var NO_WARPS = "orig=false; hyprctl -j getoption cursor:no_warps | grep -q '\"bool\": true' && orig=true; "
@@ -80,11 +98,22 @@ function focusWindow(address) {
     + NO_WARPS
     + RAISE
     + RESTORE
+    + RESCUE
     + "restore \"$addr\"; "
+    + "rescue \"$addr\"; "
     + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\"; "
     + "raise \"$addr\"; "
     + WARPS_BACK;
   return argv(script, normalized);
+}
+
+// The Preview opening: rescue each of its Windows (see RESCUE), so a Window
+// outside every monitor is on screen to be captured, not a blank thumbnail.
+// Null when there is none to rescue.
+function rescueWindows(addresses) {
+  var list = (addresses || []).map(normalizedAddress).filter(Boolean);
+  if (list.length === 0) return null;
+  return ["bash", "-lc", RESCUE + "for a in \"$@\"; do rescue \"$a\"; done", "bash"].concat(list);
 }
 
 // A click on a hover Preview can also bring the pointer along
@@ -97,7 +126,9 @@ function focusWindowAndWarp(address) {
   var script = "addr=\"$1\"; "
     + RAISE
     + RESTORE
+    + RESCUE
     + "restore \"$addr\"; "
+    + "rescue \"$addr\"; "
     + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$addr\\\" })\" >/dev/null; "
     + "raise \"$addr\"; "
     + "sleep 0.1; "
@@ -220,6 +251,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     normalizedAddress: normalizedAddress,
     focusWindow: focusWindow,
+    rescueWindows: rescueWindows,
     focusWindowAndWarp: focusWindowAndWarp,
     closeWindow: closeWindow,
     windowAction: windowAction,
