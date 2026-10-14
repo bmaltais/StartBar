@@ -950,7 +950,9 @@ Item {
         anchors.left: settingsSide.right
         anchors.right: parent.right
         anchors.leftMargin: Style.spacing.lg * 2
-        anchors.rightMargin: Style.spacing.lg
+        // Room for the scroll bar's gutter, always: sizing the body by whether
+        // it scrolls would change its width, and with it its height.
+        anchors.rightMargin: Style.spacing.lg + settingsScrollBar.gutter
         contentHeight: settingsColumn.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -1088,6 +1090,58 @@ Item {
           }
 
           Item { width: 1; height: Style.spacing.md }
+        }
+      }
+
+      // A scroll bar for the body, there only while the page has more than
+      // fits, so a page that scrolls is seen to: a track down the window's
+      // right edge and a thumb as long as the visible share of the page. Drag
+      // the thumb or click the track; the wheel scrolls the body itself.
+      // (Hand-drawn like the rest of the window: no native controls.)
+      Item {
+        id: settingsScrollBar
+        readonly property int gutter: Style.spacing.lg + Style.spacing.xs
+        readonly property real extent: settingsFlick.contentHeight - settingsFlick.height
+        visible: settingsScrollBar.extent > 1
+        anchors.top: settingsFlick.top
+        anchors.bottom: settingsFlick.bottom
+        anchors.right: parent.right
+        anchors.rightMargin: Style.spacing.lg
+        width: Style.spacing.md
+
+        Rectangle {
+          anchors.fill: parent
+          radius: width / 2
+          color: Util.alpha(root.colPopupText, 0.08)
+        }
+
+        Rectangle {
+          id: scrollThumb
+          width: parent.width
+          radius: width / 2
+          height: Math.min(parent.height, Math.max(Style.space(28), parent.height * settingsFlick.height / settingsFlick.contentHeight))
+          y: settingsScrollBar.extent > 0
+            ? (parent.height - height) * settingsFlick.contentY / settingsScrollBar.extent : 0
+          color: Util.alpha(root.colPopupText, scrollMouse.pressed ? 0.55 : (scrollMouse.containsMouse ? 0.4 : 0.28))
+        }
+
+        MouseArea {
+          id: scrollMouse
+          // A wider target than the thin bar.
+          anchors.fill: parent
+          anchors.leftMargin: -Style.spacing.sm
+          anchors.rightMargin: -Style.spacing.lg
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+
+          function scrollTo(pointerY) {
+            var room = settingsScrollBar.height - scrollThumb.height
+            if (room <= 0) return
+            var top = Math.max(0, Math.min(pointerY - scrollThumb.height / 2, room))
+            settingsFlick.contentY = top / room * settingsScrollBar.extent
+          }
+          onPressed: function (mouse) { scrollMouse.scrollTo(mouse.y) }
+          onPositionChanged: function (mouse) { if (scrollMouse.pressed) scrollMouse.scrollTo(mouse.y) }
         }
       }
 
