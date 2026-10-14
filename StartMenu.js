@@ -206,15 +206,15 @@ function parseFullName(passwdLine, fallback) {
 function startUserActions() {
   return [
     { label: "Lock", command: "omarchy-system-lock" },
-    { label: "Sign out", command: "omarchy-system-logout" },
+    { label: "Sign out", command: "omarchy-system logout" },
   ];
 }
 
 function startPowerActions() {
   return [
     { label: "Sleep", command: "systemctl suspend" },
-    { label: "Restart", command: "omarchy-system-reboot" },
-    { label: "Shut down", command: "omarchy-system-shutdown" },
+    { label: "Restart", command: "omarchy-system reboot" },
+    { label: "Shut down", command: "omarchy-system shutdown" },
   ];
 }
 
