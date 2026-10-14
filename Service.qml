@@ -3069,6 +3069,17 @@ Item {
         }
         onImplicitHeightChanged: if (visible) barSubMenu.anchor.updateAnchor()
 
+        // The anchor reads openRowY when it is computed, and the popup stays up
+        // while the pointer moves from one section to another: a section with
+        // as many rows as the last changes neither visibility nor height, so
+        // without this the submenu would stay level with the old row.
+        Connections {
+          target: barMenu
+          function onOpenRowYChanged() {
+            if (barSubMenu.visible) barSubMenu.anchor.updateAnchor()
+          }
+        }
+
         HoverHandler {
           onHoveredChanged: if (hovered) barSubClose.stop()
         }
