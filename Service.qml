@@ -112,6 +112,9 @@ Item {
     readonly property string pluginId: root.shell && root.shell.pluginId ? root.shell.pluginId : "io.github.bmaltais.startbar"
     property var rawEntry: null
     property var pendingEntry: null
+    // False until shell.json has been read once; before that, values are the
+    // defaults, and the settings window waits rather than show them.
+    property bool loaded: false
     property int iconSize: DockConfig.DEFAULT_ICON_SIZE
     property int revealDelayMs: DockConfig.DEFAULT_REVEAL_DELAY_MS
     property int hideDelayMs: DockConfig.DEFAULT_HIDE_DELAY_MS
@@ -152,6 +155,7 @@ Item {
       dockSettings.startPlaces = view.startPlaces
       dockSettings.values = view.values
       dockSettings.syncOmarchyDock(view.taskbar.hideOmarchyDock)
+      dockSettings.loaded = true
     }
 
     // docs/SPEC.md "Omarchy dock": hideOmarchyDock (on by default) turns the omarchy.dock plugin
@@ -584,13 +588,13 @@ Item {
   function openSettings(screen) {
     var target = screen || root.focusedScreen()
     if (target) root.settingsScreen = target
-    settingsWindow.visible = true
+    settingsWindow.wanted = true
   }
 
   IpcHandler {
     target: "io.github.bmaltais.startbar"
     function settings(): void { root.openSettings(null) }
-    function closeSettings(): void { settingsWindow.visible = false }
+    function closeSettings(): void { settingsWindow.wanted = false }
     // For a Super-key binding: `omarchy-shell io.github.bmaltais.startbar startMenu`.
     function startMenu(): void { root.startMenuRequested(root.focusedScreenName(), "toggle") }
     function closeStartMenu(): void { root.startMenuRequested(root.focusedScreenName(), "close") }
@@ -629,8 +633,11 @@ Item {
       ? DockConfig.searchSettings(settingsWindow.schema, settingsWindow.query)
       : [settingsWindow.schema[settingsWindow.page]]
 
+    // Asked to be open; shown only once the settings have been read, so the
+    // fields never appear with defaults and then change.
+    property bool wanted: false
     screen: root.settingsScreen
-    visible: false
+    visible: settingsWindow.wanted && dockSettings.loaded
     color: "transparent"
     WlrLayershell.namespace: "omarchy-startbar-settings"
     WlrLayershell.layer: WlrLayer.Overlay
@@ -718,7 +725,7 @@ Item {
       // Escape clears a search first, then closes the window.
       Keys.onEscapePressed: {
         if (settingsWindow.searching) settingsWindow.query = ""
-        else settingsWindow.visible = false
+        else settingsWindow.wanted = false
       }
 
       // Header
@@ -830,7 +837,7 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: settingsWindow.visible = false
+            onClicked: settingsWindow.wanted = false
           }
         }
       }
@@ -1220,6 +1227,11 @@ Item {
         height: implicitHeight
         radius: height / 2
         color: sw.value ? root.colAccent : Util.alpha(root.colPopupText, 0.25)
+        // The Loader hands over the real value just after this is created;
+        // animating only once that has settled keeps the knob from sliding
+        // into place when the window opens.
+        property bool settled: false
+        Component.onCompleted: Qt.callLater(function () { sw.settled = true })
 
         Rectangle {
           width: parent.height - 6
@@ -1229,7 +1241,7 @@ Item {
           x: sw.value ? parent.width - width - 3 : 3
           color: root.colPopupBackground
 
-          Behavior on x { NumberAnimation { duration: 100 } }
+          Behavior on x { enabled: sw.settled; NumberAnimation { duration: 100 } }
         }
 
         MouseArea {
