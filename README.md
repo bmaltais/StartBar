@@ -19,6 +19,8 @@
   <a href="#contributing">Contributing</a>
 </p>
 
+> **Omarchy 4.5:** StartBar is compatible with the windowed mode coming in Omarchy 4.5.
+
 ## Install
 
 ```sh
