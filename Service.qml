@@ -88,6 +88,12 @@ Item {
   // of its own: the popups are this much larger on every side and the menu
   // is drawn inset, with the anchor moved out by the same amount.
   readonly property int menuShadow: Style.space(14)
+  // Omarchy's Glassy bar (shell.json bar.background): the bar and the Start
+  // menu turn see-through, and Hyprland blurs what is behind them
+  // (DockHyprland.glassRule). The bar is as clear as Omarchy's own, 0.35 at
+  // most. The menus, Previews and settings window stay solid: they are separate
+  // surfaces Hyprland does not blur, so the Windows behind would show through.
+  readonly property bool glassy: dockSettings.glassy
   readonly property color colHairline: Util.alpha(colPopupText, 0.12)
   readonly property color colRowHover: Util.alpha(colPopupText, 0.08)
 
@@ -120,6 +126,7 @@ Item {
     property int hideDelayMs: DockConfig.DEFAULT_HIDE_DELAY_MS
     property var pins: []
     property var taskbar: DockConfig.effectiveView(null).taskbar
+    property bool glassy: false
     // A Placed Pin's own position (CONTEXT.md "Placed"), persisted here
     // the same way pins is. A Placed Window Item's lives only in
     // dockState.itemsState.windowPlacements — it has no business surviving a
@@ -148,6 +155,7 @@ Item {
       dockSettings.revealDelayMs = view.settings.revealDelayMs
       dockSettings.hideDelayMs = view.settings.hideDelayMs
       dockSettings.taskbar = view.taskbar
+      dockSettings.glassy = !!(shellConfig && shellConfig.bar && shellConfig.bar.background === "glassy")
       dockSettings.pins = view.pins
       dockSettings.placements = view.placements
       dockSettings.startPins = view.startPins
@@ -275,6 +283,7 @@ Item {
   Connections {
     target: Hyprland
     function onRawEvent(event) {
+      if (event.name === "configreloaded") Quickshell.execDetached(DockHyprland.glassRule())
       // An App started any other way (Super+Space, a Pin, a terminal) is
       // still a recently launched App: openwindow data is
       // "address,workspace,class,title".
@@ -314,6 +323,7 @@ Item {
   // no Windows opened since the last shell restart). Hyprland.refreshToplevels()
   // force-fetches the missing data via `hyprctl -j clients`.
   Component.onCompleted: {
+    Quickshell.execDetached(DockHyprland.glassRule())
     // A peek the last shell never got to undo (it restarted mid-hover).
     root.peekRestore()
     Hyprland.refreshToplevels()
@@ -1843,7 +1853,7 @@ Item {
         y: panel.geo.bar.y
         width: panel.geo.bar.width
         height: panel.geo.bar.height
-        color: root.taskbar.transparent ? "transparent" : Util.alpha(root.colBackground, root.taskbar.opacity)
+        color: root.taskbar.transparent ? "transparent" : Util.alpha(root.colBackground, root.glassy ? Math.min(root.taskbar.opacity, 0.35) : root.taskbar.opacity)
 
         HoverHandler {
           onHoveredChanged: revealState.set("bar", hovered)
@@ -2946,6 +2956,7 @@ Item {
         dockGap: panel.popupGap
         settings: dockSettings
         scheme: root.scheme
+        glassy: root.glassy
         panelWidth: panel.width
         panelHeight: panel.height
         buttonX: startButton.x
