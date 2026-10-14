@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Retake the README screenshots on this machine, the same way every time.
 #
-#   scripts/screenshots.sh [--only NAME,NAME] [--install] [--out DIR] [--monitor NAME] [--no-restart]
+#   scripts/screenshots.sh [--only NAME,NAME] [--install] [--out DIR] [--monitor NAME] [--headless WxH] [--no-restart]
 #
 #   --only      just these: taskbar, start-menu, start-menu-light, start-menu-dark,
 #               search, settings, settings-windows, settings-search, right-click,
@@ -11,6 +11,11 @@
 #               for a look, and print what each would replace)
 #   --out DIR   where the images go (default: a new directory under $TMPDIR or /tmp)
 #   --monitor   capture this monitor (default: the focused one)
+#   --headless  do it all on a temporary virtual monitor of this size (say
+#               1280x800), taken away again on exit, so the shots and the hero
+#               tour fit the whole screen whatever the real monitor is. The hero
+#               is then filmed with grim, a frame at a time, as the screen
+#               recorder cannot see a virtual monitor
 #   --no-restart  skip the shell restart
 #
 # What it does to the session while it runs: switches the monitor to an empty
@@ -39,6 +44,7 @@ only=""
 install=false
 out=""
 monitor=""
+headless=""
 restart=true
 
 while [[ $# -gt 0 ]]; do
@@ -47,8 +53,9 @@ while [[ $# -gt 0 ]]; do
     --install) install=true; shift ;;
     --out) out=$2; shift 2 ;;
     --monitor) monitor=$2; shift 2 ;;
+    --headless) headless=$2; shift 2 ;;
     --no-restart) restart=false; shift ;;
-    -h|--help) sed -n '2,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "screenshots: unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -76,17 +83,31 @@ pointer=$repo/scripts/pointer.sh
 # The wallpaper left around every subject, in pixels.
 margin=32
 
-monitor=${monitor:-$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')}
-read -r mx my mw mh < <(hyprctl monitors -j | jq -r --arg m "$monitor" '.[] | select(.name == $m) | "\(.x) \(.y) \(.width) \(.height)"')
-orig_workspace=$(hyprctl monitors -j | jq -r --arg m "$monitor" '.[] | select(.name == $m) | .activeWorkspace.id')
 orig_focused=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')
+orig_workspace=$(hyprctl monitors -j | jq -r --arg m "$orig_focused" '.[] | select(.name == $m) | .activeWorkspace.id')
+headless_name=""
+if [[ -n $headless ]]; then
+  [[ $headless =~ ^[0-9]+x[0-9]+$ ]] || { echo "screenshots: --headless wants WxH, like 1280x800" >&2; exit 2; }
+  headless_name=STARTBAR-REC
+  # To the right of every real monitor, so nothing is moved.
+  headless_x=$(hyprctl monitors -j | jq -r '[.[] | .x + .width] | max')
+  hyprctl output create headless "$headless_name" >/dev/null
+  hyprctl eval "hl.monitor({ output = \"$headless_name\", mode = \"$headless@60\", position = \"${headless_x}x0\", scale = 1 })" >/dev/null
+  sleep 1
+  monitor=$headless_name
+fi
+monitor=${monitor:-$orig_focused}
+read -r mx my mw mh < <(hyprctl monitors -j | jq -r --arg m "$monitor" '.[] | select(.name == $m) | "\(.x) \(.y) \(.width) \(.height)"')
+[[ -n $headless_name ]] || orig_workspace=$(hyprctl monitors -j | jq -r --arg m "$monitor" '.[] | select(.name == $m) | .activeWorkspace.id')
 
 backup=$(mktemp)
 cp "$config" "$backup"
 spares=()
 
 recording_started=
+rec_pid=""
 cleanup() {
+  [[ -n $rec_pid ]] && kill "$rec_pid" 2>/dev/null || true
   # An interrupted hero run must not leave the screen recorder going.
   [[ -n $recording_started ]] && OMARCHY_SCREENRECORD_DIR="${recdir:-/tmp}" omarchy-capture-screenrecording --stop-recording >/dev/null 2>&1 || true
   omarchy-shell -q "$id" closeStartMenu 2>/dev/null || true
@@ -96,9 +117,14 @@ cleanup() {
   done
   cp "$backup" "$config"
   rm -f "$backup"
-  hyprctl dispatch "hl.dsp.focus({ monitor = \"$monitor\" })" >/dev/null 2>&1 || true
-  hyprctl dispatch "hl.dsp.focus({ workspace = \"$orig_workspace\" })" >/dev/null 2>&1 || true
-  [[ $monitor != "$orig_focused" ]] && hyprctl dispatch "hl.dsp.focus({ monitor = \"$orig_focused\" })" >/dev/null 2>&1 || true
+  if [[ -n $headless_name ]]; then
+    hyprctl dispatch "hl.dsp.focus({ monitor = \"$orig_focused\" })" >/dev/null 2>&1 || true
+    hyprctl output remove "$headless_name" >/dev/null 2>&1 || true
+  else
+    hyprctl dispatch "hl.dsp.focus({ monitor = \"$monitor\" })" >/dev/null 2>&1 || true
+    hyprctl dispatch "hl.dsp.focus({ workspace = \"$orig_workspace\" })" >/dev/null 2>&1 || true
+    [[ $monitor != "$orig_focused" ]] && hyprctl dispatch "hl.dsp.focus({ monitor = \"$orig_focused\" })" >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 
@@ -424,8 +450,16 @@ if asked hero; then
   }
 
   at $gx $gy; sleep 0.5
-  OMARCHY_SCREENRECORD_DIR="$recdir" omarchy-capture-screenrecording --fullscreen >/dev/null 2>&1
-  recording_started=1
+  if [[ -n $headless_name ]]; then
+    # The screen recorder cannot see a virtual monitor: take frames with grim,
+    # stamped with the time, and give each the time until the next one below.
+    mkdir -p "$recdir/frames"
+    (while :; do grim -c -t jpeg -q 92 -o "$monitor" "$recdir/frames/$(date +%s%N).jpg"; done) &
+    rec_pid=$!
+  else
+    OMARCHY_SCREENRECORD_DIR="$recdir" omarchy-capture-screenrecording --fullscreen >/dev/null 2>&1
+    recording_started=1
+  fi
   sleep 2.2
 
   # 1. The Preview of a group of windows.
@@ -514,8 +548,23 @@ if asked hero; then
     sleep 1
   fi
 
-  OMARCHY_SCREENRECORD_DIR="$recdir" omarchy-capture-screenrecording --stop-recording >/dev/null 2>&1
-  recording_started=
+  if [[ -n $headless_name ]]; then
+    kill "$rec_pid" 2>/dev/null; wait "$rec_pid" 2>/dev/null || true
+    rec_pid=""
+    prev=""; : >"$recdir/frames.txt"
+    for f in "$recdir"/frames/*.jpg; do
+      [[ -s $f ]] || continue
+      t=$(basename "$f" .jpg)
+      [[ -n $prev ]] && printf "duration %s\n" "$(awk -v a="$prev_t" -v b="$t" 'BEGIN { printf "%.3f", (b - a) / 1e9 }')" >>"$recdir/frames.txt"
+      printf "file '%s'\n" "$f" >>"$recdir/frames.txt"
+      prev=$f; prev_t=$t
+    done
+    printf "file '%s'\n" "$prev" >>"$recdir/frames.txt"
+    ffmpeg -loglevel error -y -f concat -safe 0 -i "$recdir/frames.txt" -fps_mode vfr -c:v libx264 -pix_fmt yuv420p -crf 14 "$recdir/tour.mp4"
+  else
+    OMARCHY_SCREENRECORD_DIR="$recdir" omarchy-capture-screenrecording --stop-recording >/dev/null 2>&1
+    recording_started=
+  fi
   video=$(find "$recdir" -name '*.mp4' ! -name '*-preview*' | sort | tail -1)
   if [[ -z $video ]]; then
     echo "screenshots: the screen recorder made no video, skipping hero.gif" >&2
