@@ -6,7 +6,7 @@
 # It runs in a sandbox, like the hero tour (see scripts/tours/common.sh). Nothing is launched: the search ends with Escape.
 
 # shellcheck source=tours/common.sh
-source "$HERE/tours/common.sh"
+source "$TOUR_DIR/common.sh"
 TOUR_OUT=screenshots/start-menu-clip.avif
 # The Start menu and the Dock under it, over the theme's wallpaper, with a margin.
 TOUR_CROP=790x710+0+90

@@ -1,4 +1,4 @@
-// The test session and the tour recorder (scripts/nested/session.sh) run the plugin in a second desktop that shares this user's systemd,
+// The test session and the tour recorder (scripts/devkit/lib/session.sh, the shared devkit's) run the plugin in a second desktop that shares this user's systemd,
 // login session and system bus, so a click on the Start menu's Shut down, Restart, Sleep, Sign out or Lock would act on the real
 // machine. The guard in front of the session's PATH refuses those commands. These tests build the guard in a throwaway folder and
 // check it refuses them and writes down what it refused. systemctl and loginctl are replaced by stand-ins that only say they were
@@ -11,7 +11,10 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const root = path.join(__dirname, "..");
-const session = path.join(root, "scripts", "nested", "session.sh");
+const session = path.join(root, "scripts", "devkit", "lib", "session.sh");
+// scripts/devkit is a submodule: without it checked out there is nothing to test.
+const skip = fs.existsSync(session) ? false : "scripts/devkit is not checked out (git submodule update --init scripts/devkit)";
+const t = (name, fn) => test(name, { skip }, fn);
 const StartMenu = require("../StartMenu.js");
 
 // Builds the guard in a new folder and returns what the test needs to run its commands.
@@ -25,7 +28,7 @@ function build() {
   const env = { ...process.env, GUARD_SYSTEMCTL: standIn("systemctl"), GUARD_LOGINCTL: standIn("loginctl") };
   const script = `
     set -u
-    TMP=${JSON.stringify(tmp)}; REPO=${JSON.stringify(root)}; HERE=${JSON.stringify(path.join(root, "scripts"))}
+    TMP=${JSON.stringify(tmp)}; REPO=${JSON.stringify(root)}
     source ${JSON.stringify(session)}
     mkdir -p "$NEST_HOME" "$NEST_BIN"
     sandbox_guard
@@ -44,7 +47,7 @@ function build() {
   };
 }
 
-test("the guard builds and passes its own check", () => {
+t("the guard builds and passes its own check", () => {
   const g = build();
   try {
     assert.equal(g.built.status, 0, g.built.stderr);
@@ -53,7 +56,7 @@ test("the guard builds and passes its own check", () => {
   }
 });
 
-test("the guard refuses every power command the Start menu can run, and writes down each", () => {
+t("the guard refuses every power command the Start menu can run, and writes down each", () => {
   const g = build();
   try {
     assert.equal(g.built.status, 0, g.built.stderr);
@@ -78,7 +81,7 @@ test("the guard refuses every power command the Start menu can run, and writes d
   }
 });
 
-test("systemctl and loginctl pass on what does not act on the machine", () => {
+t("systemctl and loginctl pass on what does not act on the machine", () => {
   const g = build();
   try {
     assert.equal(g.built.status, 0, g.built.stderr);
@@ -91,7 +94,7 @@ test("systemctl and loginctl pass on what does not act on the machine", () => {
   }
 });
 
-test("systemctl and loginctl refuse the verbs that act on the machine, wherever they are among the arguments", () => {
+t("systemctl and loginctl refuse the verbs that act on the machine, wherever they are among the arguments", () => {
   const g = build();
   try {
     assert.equal(g.built.status, 0, g.built.stderr);
@@ -111,7 +114,7 @@ test("systemctl and loginctl refuse the verbs that act on the machine, wherever 
   }
 });
 
-test("the guard refuses every omarchy-system command, with any arguments", () => {
+t("the guard refuses every omarchy-system command, with any arguments", () => {
   const g = build();
   try {
     assert.equal(g.built.status, 0, g.built.stderr);
