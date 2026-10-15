@@ -13,7 +13,7 @@
 # (Service.qml, settingsWindow): the search box at the top, the page list on the left, then the rows of the Taskbar page.
 
 # shellcheck source=tours/common.sh
-source "$HERE/tours/common.sh"
+source "$TOUR_DIR/common.sh"
 TOUR_OUT=screenshots/hero.avif
 TOUR_STEPS=6
 TOUR_MAX_SECONDS=360
