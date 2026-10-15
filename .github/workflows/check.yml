@@ -15,6 +15,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - run: sudo apt-get install -y shellcheck jq
       # The manifest and QML checks in `npm run check` need Omarchy and Qt,
       # which this runner doesn't have; they run in the pre-commit hook.
+      - run: scripts/lint-sh.sh
+      - run: scripts/lint-rules.sh
       - run: npm test
