@@ -87,8 +87,8 @@ test("close dispatches window.close at the address argument", () => {
 
 test("peek scripts share one lock and one state file", () => {
   for (const name of ["peekWindow", "peekRestore", "peekCommit"]) {
-    assert.match(scriptOf(all[name]), /startbar-peek\.lock/, name);
-    assert.match(scriptOf(all[name]), /startbar-peek"/, name);
+    assert.match(scriptOf(all[name]), /startbar-peek-\$\{HYPRLAND_INSTANCE_SIGNATURE:-0\}\.lock/, name);
+    assert.match(scriptOf(all[name]), /startbar-peek-\$\{HYPRLAND_INSTANCE_SIGNATURE:-0\}"/, name);
   }
 });
 
