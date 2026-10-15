@@ -3501,6 +3501,11 @@ Item {
         // auto-hide uses, so a brief crossing between rows doesn't.
         readonly property bool hoveringMenu: menuHover.hovered
         property bool enteredMenu: false
+        // The compositor's grab (grabFocus below) moves pointer focus to the popup the moment it opens and sends an enter at the
+        // popup's corner before it has placed the popup, whether or not the pointer is anywhere near it; on a Dock at the top or left
+        // edge that read as the pointer entering and then leaving the menu, which closed it a moment later. Hover changes during
+        // that moment (menuSettleTimer) are not the pointer's own, so they do not count as having entered the menu.
+        property bool settling: false
 
         // Without this, the popup renders on top but never actually
         // becomes the surface Hyprland routes pointer input to — hover
@@ -3517,15 +3522,29 @@ Item {
           revealState.set("menu", contextMenu.visible)
           contextMenu.enteredMenu = false
           menuLeaveTimer.stop()
+          contextMenu.settling = contextMenu.visible
+          if (contextMenu.visible) menuSettleTimer.restart()
+          else menuSettleTimer.stop()
           previewState.send({ type: "menuVisible", visible: contextMenu.visible, forPreview: contextMenu.forPreview })
         }
 
         onHoveringMenuChanged: {
+          if (contextMenu.settling) return
           if (contextMenu.hoveringMenu) {
             contextMenu.enteredMenu = true
             menuLeaveTimer.stop()
           } else if (contextMenu.visible && contextMenu.enteredMenu) {
             menuLeaveTimer.restart()
+          }
+        }
+
+        // Once the grab has settled, a pointer that is on the menu counts as having entered it.
+        Timer {
+          id: menuSettleTimer
+          interval: 250
+          onTriggered: {
+            contextMenu.settling = false
+            if (contextMenu.visible && contextMenu.hoveringMenu) contextMenu.enteredMenu = true
           }
         }
 

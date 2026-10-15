@@ -23,7 +23,7 @@ scripts/tour.sh scripts/tours/start-menu-clip.sh      # one tour, to look at it 
 
 `scripts/hero.sh` is a shortcut for `scripts/tour.sh scripts/tours/hero.sh`. It takes about three minutes, of which the tour itself is a minute and a half. A red strip appears along the top of your screen with a **Cancel recording** button, and a view-only window below it shows the recording as it happens. **Your mouse and keyboard stay yours** and nothing of yours is changed: the tour runs in a sandbox, and the Start menu's power commands are refused there ([testing.md](testing.md#the-guard-what-a-click-in-the-session-cannot-do)). Cancel any time (the button, or Ctrl+C in the terminal): the run stops within a step, the sandbox is thrown away and nothing is kept.
 
-Do not run two at once, and do not hover a Preview on your real desktop while the hero or the taskbar clip is filming: their Peek shares a state file with your shell ([testing.md](testing.md#6-what-went-wrong-on-the-way-and-the-rule-it-left)).
+Do not run two at once.
 
 Retake a tour when a step of it changes (a menu row moves, a label is renamed), and look at the result before you commit it: it clicks the real Dock, so a changed layout can make it miss. `scripts/sheet /tmp/hero.avif` makes a contact sheet of it.
 
@@ -94,7 +94,7 @@ Keys and typing are only sent while the Start menu or the settings window is up,
 
 Use the test session ([testing.md](testing.md)): `scripts/dev up`, `scripts/dev run foot -a foot sleep 600`, `scripts/dev layout`, `scripts/dev shot /tmp/a.png`. Run a tour without `--install` and look at the result with `scripts/sheet /tmp/example.avif --every 4`. Give each caption enough time to be read (the recorder holds it for its reading time, below), and let animations finish before the next click; use `wait_until` for what takes as long as it takes, not a fixed `sleep`.
 
-Two things the session does that a real desktop does not: a right-click on an Item of a Dock on the top or left edge closes its menu at once, so right-click Items on a bottom Dock; and the windows are one per workspace (`pose`'s last argument), so that a Peek shows that window alone.
+One thing in the tours is a choice: the windows are one per workspace (`pose`'s last argument), so that a Peek shows that window alone.
 
 ### 5. Making changes safe
 
@@ -175,7 +175,6 @@ The same as the test session ([testing.md](testing.md#5-how-it-works-inside)), p
 
 - **"window not up, skipped keys …"**: the Start menu or the settings window was not up when the keys were due. A step before it did not open it, or closed it (Escape backs out one layer at a time: search text, All apps, then the menu). Fix the earlier step; use `menu_rect start` or `wait_until` rather than `sleep` if the window can be slow.
 - **Clicks miss**: the layout is not what you measured. Items come from `item_center`; the settings window's are fixed, so check it opened at its default size.
-- **"the item menu did not open"**: right-clicks on Items of a Dock on the top or left edge do not work in the session; use a bottom Dock for them.
 - **The film is on the wrong workspace after a Preview**: a posed window was left as the active window. End `tour_setup` with `settle_focus`.
 - **The run is slow and the film shows the wallpaper**: `/tmp` was full. Look at `df -h /tmp`; a run removes its frames now, an older one (or another Start app's) may not have.
 - **A run was killed with `kill -9`**: the cleanup did not run. `hyprctl output remove TOURTEST`, and stop the leftovers: the `quickshell` running `tour-banner.qml` and `dev-view.qml`, and the nested Hyprland (they carry the sandbox's `XDG_CONFIG_HOME`, see `nested_procs` in `scripts/nested/session.sh`). Nothing of yours needs restoring. Remove the run's folder in `/tmp` by hand (`TOUR_KEEP_TMP` or a killed run leaves it).
