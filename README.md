@@ -1,5 +1,7 @@
 <p align="center">
-  <img alt="A tour of StartBar: window previews, launching an app from the Start menu, the right-click menu with a submenu, the settings window with search, and the Dock on the left in the light scheme" src="screenshots/hero.gif" width="900" />
+  <picture>
+    <img alt="A tour of StartBar: a preview of a group of windows, an icon's right-click menu, launching an app from the Start menu, the bar's menu with a submenu, the settings window with search and the bar following the colours and edge chosen there, and the Dock on the left in the light colours" src="screenshots/hero.avif" width="100%" />
+  </picture>
 </p>
 
 <h1 align="center">StartBar</h1>
@@ -33,7 +35,7 @@ It shows a taskbar along the bottom of every monitor, or any other edge you choo
 
 ### The taskbar
 
-<img src="screenshots/taskbar.png" alt="A full-width taskbar with a Start button, pinned apps and open windows">
+<img src="screenshots/taskbar-clip.avif" alt="The taskbar with a Start button, pinned apps and open windows: the pointer goes over the icons, and resting on a group of two windows shows a live preview of each, with a thumbnail peeked" width="640">
 
 - **Every window.** One icon per open window, across all workspaces and monitors. Click to jump to it.
 - **Pins.** Keep apps in the bar whether or not they are running. Drag to reorder, drag out to unpin.
@@ -43,12 +45,7 @@ It shows a taskbar along the bottom of every monitor, or any other edge you choo
 
 ### The Start menu
 
-<table>
-  <tr valign="top">
-    <td><img src="screenshots/start-menu.png" alt="The Start menu with pinned apps, recommended apps and folders"></td>
-    <td><img src="screenshots/search.png" alt="Typing in the Start menu filters every installed app"></td>
-  </tr>
-</table>
+<img src="screenshots/start-menu-clip.avif" alt="The Start menu opening from the Start button with pinned apps, recommended apps and folders; typing filters every installed app, the arrow keys move, Escape backs out, and All apps lists them A to Z" width="640">
 
 Search every installed app, a Pinned grid you can reorder, an A-Z list, recently launched apps, your folders, and lock, sign out and power. Bind a key to toggle it, then type to search, use the arrow keys to move and Enter to launch. Escape backs out one step at a time.
 
@@ -77,16 +74,7 @@ Colours and fonts follow the current Omarchy theme live, or pick a fixed light o
 
 Each icon has its own menu. A pin with no windows offers the app's actions, the app itself and **Unpin from taskbar**; a running app adds its window actions (Maximize, Full screen, Float, Move to scratchpad), then the app and **Pin to taskbar**, and ends with **Close window** (**Close all windows** for a stack of several).
 
-<table>
-  <tr>
-    <th>A pinned app that is not running</th>
-    <th>A running app that is not pinned</th>
-  </tr>
-  <tr valign="top">
-    <td><img src="screenshots/pin-menu.png" alt="The menu of a pinned app that is not running: the app's actions, the app, Unpin from taskbar" width="230"></td>
-    <td><img src="screenshots/window-menu.png" alt="The menu of a running app: its actions, window actions, Close Window, the app, Pin to taskbar" width="220"></td>
-  </tr>
-</table>
+<img src="screenshots/icon-menu-clip.avif" alt="The menu of a running app that is not pinned, with its window actions, Close window, the app and Pin to taskbar, then the menu of a pinned app that is not running, with the app's actions, the app and Unpin from taskbar" width="640">
 
 ## Configure
 
@@ -96,24 +84,13 @@ Changes apply as you make them. There are two ways in.
 
 The common options, kept short: icon alignment, position (bottom, top, left or right), colours, the Start button and window previews open a submenu beside them, and the everyday toggles (auto-hide, clock, group windows, workspace badge, transparent background) sit below. Options that mean nothing while another is off are dimmed. The last row, **Settings…**, opens the full window.
 
-<img src="screenshots/right-click-submenu.png" alt="The bar's right-click menu with the Start button submenu open" width="440">
+<img src="screenshots/bar-menu-clip.avif" alt="The bar's right-click menu: the pointer goes down its rows, and Icon alignment, Position, Colors, Start button and Window previews each open a submenu beside them" width="640">
 
 ### The settings window
 
 A control for every option, laid out like the Windows 11 settings: a search box at the top, the pages down the left (Taskbar, Windows, Start menu) and the chosen page on the right. Drag the title bar to move it. Options that follow another one are indented and dimmed while it is off.
 
-<img src="screenshots/settings.png" alt="The settings window: a search box on top, the pages down the left, the chosen page's options on the right" width="600">
-
-<table>
-  <tr>
-    <th>Another page</th>
-    <th>Search</th>
-  </tr>
-  <tr valign="top">
-    <td><img src="screenshots/settings-windows.png" alt="The Windows page, with the preview options dimmed because previews are off"></td>
-    <td><img src="screenshots/settings-search.png" alt="Typing icon in the search box lists the matching settings from every page"></td>
-  </tr>
-</table>
+<img src="screenshots/settings-clip.avif" alt="The settings window: the Taskbar, Windows and Start menu pages, a search for icon listing the matching settings from every page, and the clock switched on and off" width="640">
 
 Type in the search box to find a setting on any page: every word must appear in a setting's name or description, or in its page's name.
 
@@ -161,7 +138,7 @@ omarchy plugin remove io.github.bmaltais.startbar
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the development install, the tests and the manual checklist.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development install, the tests and the manual checklist, [docs/testing.md](docs/testing.md) for the test session that runs the plugin in a second desktop your mouse and keyboard cannot reach, and [docs/recording-tours.md](docs/recording-tours.md) for how the animations above are recorded.
 
 ## License
 

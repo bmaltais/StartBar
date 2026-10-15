@@ -41,8 +41,8 @@ card "$shots/taskbar.png" "$work/dock.png" 790x50+0+24 100
 
 # The Bar menu and its submenu are two rounded shapes in one shot: cut both out.
 magick "$shots/right-click-submenu.png" -alpha set \
-  \( -size 527x419 xc:none -fill white \
-     -draw "roundrectangle 33,33 270,386 9,9" -draw "roundrectangle 272,106 495,240 9,9" \) \
+  \( -size 527x451 xc:none -fill white \
+     -draw "roundrectangle 33,33 270,418 9,9" -draw "roundrectangle 272,138 495,272 9,9" \) \
   -compose DstIn -composite -trim +repage -resize 92% "$work/r.png"
 shadow "$work/r.png" "$work/menus.png"
 
