@@ -10,8 +10,9 @@
 # on, no clock, no badge, no auto-hide, and these Pins. The Pins are apps installed on the machine that records; tour_requires says
 # which one is missing.
 
-TOUR_TITLE=StartBar
-TOUR_PLUGIN_ID=io.github.bmaltais.startbar
+# The plugin, its sandbox and what a recording must not change are in devkit.conf.
+
+ID=io.github.bmaltais.startbar
 TOUR_PLUGIN_WIDGET=0       # a service: loaded, not put on the Omarchy bar
 TOUR_SANDBOX_COPY=()       # nothing of the real config: the Dock's settings and Pins are in the sandbox's shell.json (below)
 TOUR_SANDBOX_LINK=(.local/share/icons)

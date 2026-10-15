@@ -4,6 +4,8 @@ The agreed behaviour is in [docs/SPEC.md](docs/SPEC.md) and the vocabulary in [C
 
 ## Development install
 
+Clone with `git clone --recurse-submodules` (or run `git submodule update --init` in an existing clone): `scripts/devkit`, the test session and recorder, is a submodule of the shared [omarchy-plugin-devkit](https://github.com/bmaltais/omarchy-plugin-devkit). It is development tooling, so it is not in what `omarchy plugin add` installs; without it `npm run check` still passes, skipping the devkit's rules.
+
 This repository's root is the plugin directory (`manifest.json` at the root), with id `io.github.bmaltais.startbar`.
 
 1. Symlink the checkout into the Omarchy plugins directory:

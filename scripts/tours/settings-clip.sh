@@ -7,7 +7,7 @@
 # place, centred on the 1280x800 screen: the search box at the top, the page list on the left, the rows of the Taskbar page.
 
 # shellcheck source=tours/common.sh
-source "$HERE/tours/common.sh"
+source "$TOUR_DIR/common.sh"
 TOUR_OUT=screenshots/settings-clip.avif
 # The settings window, centred on the screen, with a 30 px margin of wallpaper.
 TOUR_CROP=840x680+220+60
