@@ -82,7 +82,7 @@ runs everything that can be checked without the shell:
 
 - the tests above, which also keep the docs in step with the code: every setting has a row in `docs/SETTINGS.md`, every `SPEC.md "…"` section a comment cites exists, `manifest.json` and `package.json` agree on the version, and the Dock and what rises from it take their colours from the colour scheme instead of the theme directly;
 - `omarchy plugin validate .`;
-- `npm run lint:sh`, which syntax-checks `scripts/*.sh` and runs `shellcheck` over them when it is installed;
+- `npm run lint:sh`, which syntax-checks every shell script (`scripts/`, the session's, the tours', the hook) and runs `shellcheck` over them when it is installed, with the rules in `.shellcheckrc`; and `scripts/lint-rules.sh`, the project rules no linter knows (see its header);
 - `npm run lint:qml`, which fails on any `qmllint` warning not already listed in `scripts/qmllint-baseline.txt`. `qmllint` can't see Quickshell's types, so the QML carries standing warnings; a new one is usually a misspelt or removed id. Accept a legitimate new one with `npm run lint:qml -- --update`.
 
 Run it on every commit with the pre-commit hook:
@@ -91,23 +91,38 @@ Run it on every commit with the pre-commit hook:
 git config core.hooksPath .githooks
 ```
 
-Pull requests run `npm test` on GitHub; the manifest and QML checks need Omarchy and Qt, so they only run locally.
+Pull requests run `npm test`, shellcheck and the project rules on GitHub; the manifest and QML checks need Omarchy and Qt, so they only run locally.
 
-### Live smoke test
+### Trying a change: the test session
 
-`Service.qml` (the Dock, the menus, the settings window) and `StartMenuView.qml` (the Start menu's view) draw what the modules decide. They depend on Quickshell and Hyprland, so after changing them run:
+`Service.qml` (the Dock, the menus, the settings window) and `StartMenuView.qml` (the Start menu's view) draw what the modules decide. They depend on Quickshell and Hyprland, so try a change in the test session, a second Hyprland and Omarchy shell running this checkout that your mouse and keyboard cannot reach, with a home of its own and a guard that refuses the Start menu's Shut down, Restart, Sleep, Sign out and Lock. Nothing of yours is restarted, moved or changed. [docs/testing.md](docs/testing.md) is the guide; in short:
 
 ```sh
-scripts/smoke.sh            # --monitor NAME, --type, --out DIR, --no-restart
+scripts/dev up                  # the session, and a view-only window of it on your screen
+scripts/dev run foot -a foot sleep 600     # a window for the Dock to show
+scripts/dev startmenu           # or: settings, close
+scripts/dev move 78 776         # hover an Item: its Preview opens. click, rclick, scroll, type, key, set, layout: scripts/dev --help
+scripts/dev shot /tmp/a.png     # then look at it
+scripts/dev reload              # after editing a .qml file; the session loads uncommitted files
+scripts/dev down
 ```
 
-It restarts the shell with this checkout, fails if the plugin logs anything, and screenshots the Dock, the Start menu and the settings window in each colour scheme. It edits the plugin's entry in `shell.json` for the run and restores it on exit. Look at the screenshots: the script only knows the plugin loaded quietly. It cannot click, drag or hover. `scripts/pointer.sh` can (`move X Y`, `reveal`, `left`, `right`, `shot FILE [WxH+X+Y]`), given `ydotool` and a writable `/dev/uinput` (`docs/hyprland-notes.md` "Moving the pointer"); use it for Previews, the Item menu and the Bar menu. With auto-hide on, `reveal` first and take a `shot` before the first click: a click while the Dock is hidden goes to the window behind it. Drag, and anything it could not reach, still needs the checklist below.
+`npm run smoke` does the standing part for you: it starts the session, fails if the plugin logs anything, and screenshots the Dock, the Start menu and the settings window in each colour scheme (`--position`, `--type`, `--out`). Look at the screenshots: the script only knows the plugin loaded quietly. It cannot hover or drag; use `scripts/dev` for a Preview, the Item menu and the Bar menu. Drag, a second monitor and anything it could not reach still need the checklist below, on a real desktop.
 
-### Retaking screenshots
+To see a change on your own shell, `scripts/reload` restarts it with this checkout. `scripts/pointer.sh` (a real pointer through `ydotool`, `docs/hyprland-notes.md` "Moving the pointer") and `scripts/try-setting.sh` act on your real desktop, so use them only when you mean to.
 
-The README images are in `screenshots/`. Retake one only when its subject changed: a new row in the settings window changes `settings.png`; a new look for the Dock or Start menu changes `taskbar.png` and the `start-menu*.png` and `search.png` files; the Preview and the bar's menu have `preview.png` and `right-click.png`; an icon's menu has `pin-menu.png` and `window-menu.png`. `screenshots/hero.gif`, the tour at the top of the README, is retaken with `scripts/screenshots.sh --only hero --headless 1280x800 --install`; it films a temporary virtual monitor frame by frame with `grim` (or, without `--headless`, the screen with Omarchy's recorder, `omarchy-capture-screenrecording`) while the script drives the pointer, and it needs retaking when any step of the tour changes. It is not part of a plain run. `preview.png` at the repo root is the marketplace's picture: a collage of the shots, composed by `scripts/make-preview.sh`; rerun it after retaking any shot it uses (the Start menu, settings, submenu, Preview and taskbar).
+### Retaking screenshots and animations
 
-Run `scripts/screenshots.sh` (needs `ydotool`; see `docs/hyprland-notes.md` "Moving the pointer"). It retakes every image the same way: on an empty workspace, with two throwaway windows for the Preview, the real pointer for the hover and the right-click, and every image framed the same way: the subject plus a 32 px margin of wallpaper on each side (the Dock, and what stands on it, run on to the monitor's bottom edge). It finds the Items and menus with `omarchy-shell io.github.bmaltais.startbar layout`, which prints the Dock's Items and any open menu (including the Start menu) as JSON rectangles in pixels from the monitor's top-left corner (use it from your own pointer scripts too). It leaves the results in a scratch directory and prints each size beside the file it would replace; `--only NAME,NAME` takes some, `--install` copies them over `screenshots/`. Look at every image before committing it: the Dock shows your pins and open windows, and the wallpaper and theme are yours, so the images change from release to release for those reasons alone. The Preview shows the throwaway windows' group with a letter tile, not an App's icon.
+The README's animations and images are in `screenshots/`: `hero.avif` (the tour at the top), `taskbar-clip.avif`, `icon-menu-clip.avif`, `start-menu-clip.avif`, `bar-menu-clip.avif` and `settings-clip.avif`, and the stills (`start-menu-light.png`, `start-menu-dark.png`, `preview.png` and the rest). Retake one only when its subject changed: a new row in the settings window changes `settings-clip.avif`; a new look for the Dock or Start menu changes the clips and the stills; the Preview and the bar's menu have `taskbar-clip.avif`, `preview.png` and `bar-menu-clip.avif`.
+
+```sh
+scripts/hero.sh --install       # the tour at the top of the README (about three minutes)
+scripts/clips.sh                # the five clips, installed (or: scripts/clips.sh start-menu settings)
+scripts/screenshots.sh --install   # the stills (--only NAME,NAME takes some)
+scripts/make-preview.sh         # preview.png at the repo root, the marketplace's picture: rerun it after retaking a still it uses
+```
+
+They all run in the test session, so they do not touch your desktop, your windows or your pins: the Dock shows five apps pinned in `scripts/tours/common.sh` (edit `TOUR_PINS` if one is not installed) and terminals posing as apps. The wallpaper and colours are the Omarchy theme's. Look at every image before committing it. [docs/recording-tours.md](docs/recording-tours.md) says how to write or change a tour, and `scripts/sheet FILE` makes a contact sheet of one to look at.
 
 Releasing is described in [docs/agents/release.md](docs/agents/release.md).
 
