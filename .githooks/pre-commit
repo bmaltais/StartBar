@@ -1,8 +1,3 @@
 #!/usr/bin/env bash
 # Enable once per clone: git config core.hooksPath .githooks
-# Quiet when everything passes; prints the whole run when something fails.
-if ! output=$(npm run --silent check 2>&1); then
-  echo "$output"
-  echo "pre-commit: npm run check failed"
-  exit 1
-fi
+exec "$(git rev-parse --show-toplevel)/scripts/devkit/bin/pre-commit"

@@ -61,6 +61,7 @@ Newest first.
 | Date | Decision | Why |
 |---|---|---|
 | 2026-10-15 | The test session and the recorder moved to the shared devkit, a git submodule (`scripts/devkit`), configured by `devkit.conf` | One place fixes the three Start apps' copies; as a submodule it is development tooling that a user does not install and the marketplace's review does not read, and an update is a pointer change, not the merge commits of a subtree |
+| 2026-10-15 | `pointer`, `reload`, `try-setting`, `spare`, `hypr-events`, `release-branch`, the shell and rule checks, the pre-commit hook and the CI job moved to the devkit (v0.2.1) | The same reason: three apps carried copies. StartBar's `pointer move X Y` (global coordinates) is now `warp X Y`; `move` takes screenshot pixels |
 | 2026-10-15 | StartBar adopted StartDrive's test session and recorder (it had filmed a virtual monitor with the real pointer and the shell restarted) | The old way moved the maintainer's pointer, restarted their shell and acted on their windows; the nested session does none of it, and the three Start apps keep one set of scripts |
 | 2026-10-15 | The session runs behind a guard that refuses the Start menu's power commands, and does not start without it | A nested session shares the user's systemd and login session: a click on Shut down would have shut the machine down |
 | 2026-10-15 | The README's tour and clips are animated AVIFs in `<picture>` tags, replacing `hero.gif` (3.7 MB) | About a seventh of the size, sharper, and GitHub does not link a `<picture>` to the file |

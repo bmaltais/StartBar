@@ -84,16 +84,16 @@ runs everything that can be checked without the shell:
 
 - the tests above, which also keep the docs in step with the code: every setting has a row in `docs/SETTINGS.md`, every `SPEC.md "…"` section a comment cites exists, `manifest.json` and `package.json` agree on the version, and the Dock and what rises from it take their colours from the colour scheme instead of the theme directly;
 - `omarchy plugin validate .`;
-- `npm run lint:sh`, which syntax-checks every shell script (`scripts/`, the session's, the tours', the hook) and runs `shellcheck` over them when it is installed, with the rules in `.shellcheckrc`; and `scripts/lint-rules.sh`, the project rules no linter knows (see its header);
-- `npm run lint:qml`, which fails on any `qmllint` warning not already listed in `scripts/qmllint-baseline.txt`. `qmllint` can't see Quickshell's types, so the QML carries standing warnings; a new one is usually a misspelt or removed id. Accept a legitimate new one with `npm run lint:qml -- --update`.
+- the shell scripts (`bash -n`, and `shellcheck` when it is installed, with the rules in `.shellcheckrc`) and the project rules no linter knows (`scripts/devkit/bin/lint`): both are steps of the devkit's `scripts/check`, which `npm run check` runs;
+- `npm run lint:qml`, which fails on any `qmllint` warning not already listed in `scripts/qmllint-baseline.txt`. `qmllint` can't see Quickshell's types, so the QML carries standing warnings; a new one is usually a misspelt or removed id. Accept a legitimate new one with `npm run lint:qml -- --update` (it refuses to baseline a real bug such as a property override).
 
 Run it on every commit with the pre-commit hook:
 
 ```sh
-git config core.hooksPath .githooks
+git config core.hooksPath .githooks   # or: scripts/devkit/bin/pre-commit --install
 ```
 
-Pull requests run `npm test`, shellcheck and the project rules on GitHub; the manifest and QML checks need Omarchy and Qt, so they only run locally.
+Pull requests run the devkit's `check` on GitHub (its shell, rules and `npm test` steps); the manifest and QML checks need Omarchy and Qt, so they only run locally.
 
 ### Trying a change: the test session
 
@@ -111,7 +111,7 @@ scripts/dev down
 
 `npm run smoke` does the standing part for you: it starts the session, fails if the plugin logs anything, and screenshots the Dock, the Start menu and the settings window in each colour scheme (`--position`, `--type`, `--out`). Look at the screenshots: the script only knows the plugin loaded quietly. It cannot hover or drag; use `scripts/dev` for a Preview, the Item menu and the Bar menu. Drag, a second monitor and anything it could not reach still need the checklist below, on a real desktop.
 
-To see a change on your own shell, `scripts/reload` restarts it with this checkout. `scripts/pointer.sh` (a real pointer through `ydotool`, `docs/hyprland-notes.md` "Moving the pointer") and `scripts/try-setting.sh` act on your real desktop, so use them only when you mean to.
+To see a change on your own shell, `scripts/reload` restarts it with this checkout. `scripts/pointer` (a real pointer through `ydotool`, `docs/hyprland-notes.md` "Moving the pointer") and `scripts/try-setting` act on your real desktop, so use them only when you mean to.
 
 ### Retaking screenshots and animations
 

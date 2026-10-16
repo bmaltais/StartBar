@@ -12,16 +12,14 @@ How a change gets checked, from the cheapest check to trying it in a live shell.
 | retake the README's screenshots | `scripts/screenshots.sh` | no |
 | record the README's animations | `scripts/hero.sh`, `scripts/clips.sh` ([recording-tours.md](recording-tours.md)) | no |
 | look over a recording | `scripts/sheet` | no |
-| try it on your own shell | `scripts/reload`, `scripts/pointer.sh`, `scripts/try-setting.sh` | yes: restarts your shell, moves your pointer, edits your `shell.json` for a moment |
+| try it on your own shell | `scripts/reload`, `scripts/pointer`, `scripts/try-setting` | yes: restarts your shell, moves your pointer, edits your `shell.json` for a moment |
 
-**The rule: test in `scripts/dev`, not on the real desktop.** A restart of the real shell makes the bar blink and puts the Dock's menus away; a click or key sent to it moves your pointer and types into your windows; the Dock acts on your real windows. The test session has none of that. Use `reload`, `pointer.sh` and `try-setting.sh` only when the person asks to see it on their real shell, or for what the session cannot do (a real mouse drag, a second monitor, the user's real Hyprland configuration).
+**The rule: test in `scripts/dev`, not on the real desktop.** A restart of the real shell makes the bar blink and puts the Dock's menus away; a click or key sent to it moves your pointer and types into your windows; the Dock acts on your real windows. The test session has none of that. Use `reload`, `pointer` and `try-setting` only when the person asks to see it on their real shell, or for what the session cannot do (a real mouse drag, a second monitor, the user's real Hyprland configuration).
 
 ## 1. Checks: `npm run check`
 
-One command, no running shell needed. The pre-commit hook runs it (`git config core.hooksPath .githooks`). What it runs, and the Node tests, are described in [CONTRIBUTING.md](../CONTRIBUTING.md#checks). Two parts are about the session:
+One command, no running shell needed. The pre-commit hook runs it (`git config core.hooksPath .githooks`). `npm run check` is the devkit's `check` (`scripts/check`: shell scripts, the devkit's project rules, new `qmllint` warnings, the manifest; [the kit's docs](../scripts/devkit/README.md)) plus `node --test` from `devkit_check` in `devkit.conf`. The shell rules are in `.shellcheckrc`, with the reason for each one disabled. The Node tests are described in [CONTRIBUTING.md](../CONTRIBUTING.md#checks). One is about the session:
 
-- `scripts/lint-sh.sh`: `bash -n` and shellcheck over every script (the rules are in `.shellcheckrc`, with the reason for each one disabled).
-- `scripts/lint-rules.sh`: project rules no linter knows, each one a mistake that cost a session: a background launch (`setsid -f`) must redirect its own output (see section 6), and a tour must not copy or link the real `shell.json`. `test/lintRules.test.js` proves each rule catches what it is for.
 - `test/nestedGuard.test.js`: builds the guard (below) in a throwaway folder and checks it refuses every power command the Start menu can run, with `systemctl` and `loginctl` replaced by stand-ins that only say they were reached.
 
 What it cannot catch: a layout that looks wrong, a click that misses, anything about the live shell. That is what the test session is for.
@@ -58,12 +56,12 @@ Runs the whole thing in the session: `up`, the Dock set to the state the README 
 
 `scripts/smoke.sh` starts the session, opens the Dock, the Start menu and the settings window in each colour scheme (`--position EDGE`, `--type` to type into the search), screenshots each, and fails if the plugin logged anything. Read the screenshots: it only knows the plugin loaded quietly. It cannot hover or drag; for a Preview or a menu, drive the session by hand (above) or run a tour.
 
-## 3. Your real desktop: `scripts/reload`, `scripts/pointer.sh`, `scripts/try-setting.sh`
+## 3. Your real desktop: `scripts/reload`, `scripts/pointer`, `scripts/try-setting`
 
 For when someone wants to see the change in their own shell, or for what a nested session cannot do.
 
 - `scripts/reload [--check]` restarts your shell so it loads this checkout (the plugin in `~/.config/omarchy/plugins/` is a link to it, `CONTRIBUTING.md` "Development install"; the script refuses otherwise) and reports what the plugin logged: `reload ok release/1.5.0@93575aa restart 4.1s plugin-errors 0`. The bar blinks. Your windows, settings and Pins are untouched. Changes to `Service.qml` and `StartMenuView.qml` need this restart; the shell does not reload them on save.
-- `scripts/pointer.sh`, `scripts/try-setting.sh` and `scripts/spare.sh` are the old tools for the real desktop: a real pointer through `ydotool`, StartBar's settings changed for one command and put back, and a spare window to try Hyprland calls on. See `docs/hyprland-notes.md`. `pointer.sh` moves your real pointer: only when asked.
+- `scripts/pointer`, `scripts/try-setting` and `scripts/spare` are the devkit's tools for the real desktop: a real pointer through `ydotool`, StartBar's settings changed for one command and put back (with no command it prints the Dock's layout: `try_default` in `devkit.conf`), and a spare window to try Hyprland calls on. See `docs/hyprland-notes.md`. `pointer` moves your real pointer: only when asked. Its `move` and `click` take the pixels of a screenshot of the focused monitor; `warp X Y` takes global coordinates.
 
 ## StartBar's own lessons
 
@@ -84,12 +82,11 @@ The devkit's [how-it-works](../scripts/devkit/docs/how-it-works.md#what-went-wro
 
 | Path | What it is |
 |---|---|
-| `package.json` `check`, `scripts/lint-sh.sh`, `scripts/lint-rules.sh`, `scripts/qmllint-check.js`, `scripts/qmllint-baseline.txt`, `.shellcheckrc` | the checks |
-| `.githooks/pre-commit`, `.github/workflows/check.yml` | the hook and the CI job |
+| `scripts/check`, `package.json` `check`, `devkit_check` in `devkit.conf`, `scripts/qmllint-baseline.txt`, `.shellcheckrc` | the checks (the devkit's `check`, with the Node tests as StartBar's own step) |
+| `.githooks/pre-commit`, `.github/workflows/check.yml` | the hook (the devkit's `pre-commit`) and the CI job (the devkit's `app-check.yml`) |
 | `test/*.test.js` | the Node tests (`nestedGuard` and the modules') |
 | `devkit.conf` | what the devkit needs to know about this plugin: its id, that it is a service, the starting settings, the Start menu's window check, the commands |
 | `scripts/devkit/` | the devkit, a git submodule (update with `git -C scripts/devkit checkout vX.Y.Z`, then commit) |
-| `scripts/dev`, `scripts/tour.sh`, `scripts/sheet` | wrappers of the devkit's `dev`, `tour`, `sheet` for this checkout |
+| `scripts/dev`, `scripts/tour.sh`, `scripts/sheet`, `scripts/check`, `scripts/reload`, `scripts/pointer`, `scripts/try-setting`, `scripts/spare`, `scripts/hypr-events`, `scripts/release-branch` | two-line wrappers of the devkit's commands of the same name, for this checkout |
 | `scripts/smoke.sh`, `scripts/screenshots.sh`, `scripts/make-preview.sh` | the smoke test, the README screenshots, the marketplace picture |
 | `scripts/tours/`, `scripts/hero.sh`, `scripts/clips.sh` | the tours ([recording-tours.md](recording-tours.md)) |
-| `scripts/reload`, `scripts/pointer.sh`, `scripts/try-setting.sh`, `scripts/spare.sh`, `scripts/hypr-events.sh` | for the real desktop |

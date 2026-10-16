@@ -1730,7 +1730,7 @@ Item {
 
       // Where everything is on this monitor, in pixels from its top-left
       // corner, for `omarchy-shell <id> layout` (scripts/screenshots.sh and
-      // scripts/pointer.sh read it instead of finding things in a screenshot):
+      // scripts/pointer read it instead of finding things in a screenshot):
       // { monitor, items: [{ key, kind, appId, count, x, y, width, height }],
       //   menus: { item, bar, preview, start } } with a menu's rectangle when it is open.
       // The panel covers the monitor less any bar reserved at an edge, so its
