@@ -5,17 +5,12 @@
 ## Run the tours
 
 ```sh
-scripts/hero.sh              # records the hero, leaves the result in /tmp/hero.avif for a look
-scripts/hero.sh --install    # records it and copies it to screenshots/hero.avif
-scripts/clips.sh             # records the five clips and installs them in screenshots/ (or: scripts/clips.sh start-menu settings)
+scripts/hero.sh              # the hero, left in /tmp/hero.avif for a look (--install copies it to screenshots/hero.avif)
+scripts/clips.sh             # the five clips, installed in screenshots/ (or: scripts/clips.sh start-menu settings)
 scripts/tour.sh scripts/tours/start-menu-clip.sh      # one tour, to look at it first (/tmp/start-menu-clip.avif)
 ```
 
-`scripts/hero.sh` is a shortcut for `scripts/tour.sh scripts/tours/hero.sh`. It takes about three minutes, of which the tour itself is a minute and a half. A red strip appears along the top of your screen with a **Cancel recording** button, and a view-only window below it shows the recording as it happens. **Your mouse and keyboard stay yours** and nothing of yours is changed: the tour runs in a sandbox, and the Start menu's power commands are refused there ([testing.md](testing.md#the-guard-what-a-click-in-the-session-cannot-do)). Cancel any time (the button, or Ctrl+C in the terminal): the run stops within a step, the sandbox is thrown away and nothing is kept.
-
-Do not run two at once.
-
-Retake a tour when a step of it changes (a menu row moves, a label is renamed), and look at the result before you commit it: it clicks the real Dock, so a changed layout can make it miss. `scripts/sheet /tmp/hero.avif` makes a contact sheet of it.
+`scripts/hero.sh` is a shortcut for `scripts/tour.sh scripts/tours/hero.sh`. The Start menu's power commands are refused in the session ([testing.md](testing.md#the-guard-what-a-click-in-the-session-cannot-do)). What a run does to your desktop (nothing), cancelling, retaking a tour and `scripts/sheet` are in the [devkit's guide](../scripts/devkit/docs/recording-tours.md).
 
 ## What is StartBar's
 
@@ -47,12 +42,10 @@ Keys and typing are only sent while the Start menu or the settings window is up,
 
 ## Clips
 
-A tour with `TOUR_CROP=WxH+X+Y` keeps only that box of the session's screen, so a short tour of one part can stand in for a still image. The README's clips are `scripts/tours/taskbar-clip.sh`, `icon-menu-clip.sh`, `start-menu-clip.sh`, `bar-menu-clip.sh` and `settings-clip.sh`, each 14 to 21 seconds and 50 to 220 KB as an AVIF. `scripts/clips.sh` records them all.
+The README's clips are `scripts/tours/taskbar-clip.sh`, `icon-menu-clip.sh`, `start-menu-clip.sh`, `bar-menu-clip.sh` and `settings-clip.sh`; `scripts/clips.sh` records them all and installs them in `screenshots/`. How a clip is made (`TOUR_CROP`, no captions, looping) is in the [devkit's guide](../scripts/devkit/docs/recording-tours.md#clips). What is different here:
 
-- **No captions**: the crop is small. A clip is meant to be read as a picture.
-- **Loop it.** Start and end on the same picture: the Dock idle, the menu closed, or (the settings clip) the window opened in `tour_setup` and the page it began on.
 - **The wallpaper stays.** The flat backdrop (`TOUR_BACKDROP=plain`) the other Start apps use is a full-screen window, which Hyprland may draw over the Dock (a Top layer); it was not tried here. The clips show the theme's wallpaper, as the stills do.
-- Run it like any tour: `scripts/tour.sh scripts/tours/settings-clip.sh [--install]`. Each run starts its own session (about a minute of set-up and encoding).
+- **The settings clip** starts and ends on the page the window opened on, opened in `tour_setup`.
 
 ## Decision log
 
@@ -60,6 +53,7 @@ Newest first.
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-15 | This page keeps only what is StartBar's; the recorder's how-to is the devkit's (v0.2.2) | The same text was in both and would drift |
 | 2026-10-15 | The test session and the recorder moved to the shared devkit, a git submodule (`scripts/devkit`), configured by `devkit.conf` | One place fixes the three Start apps' copies; as a submodule it is development tooling that a user does not install and the marketplace's review does not read, and an update is a pointer change, not the merge commits of a subtree |
 | 2026-10-15 | `pointer`, `reload`, `try-setting`, `spare`, `hypr-events`, `release-branch`, the shell and rule checks, the pre-commit hook and the CI job moved to the devkit (v0.2.1) | The same reason: three apps carried copies. StartBar's `pointer move X Y` (global coordinates) is now `warp X Y`; `move` takes screenshot pixels |
 | 2026-10-15 | StartBar adopted StartDrive's test session and recorder (it had filmed a virtual monitor with the real pointer and the shell restarted) | The old way moved the maintainer's pointer, restarted their shell and acted on their windows; the nested session does none of it, and the three Start apps keep one set of scripts |

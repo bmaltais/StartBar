@@ -1,6 +1,6 @@
 #!/bin/bash
 # Records the README's clips (scripts/tours/*-clip.sh) and installs them in screenshots/. Each one is its own session, so this takes a
-# few minutes. See docs/recording-tours.md ("Clips of one window").
+# few minutes. See docs/recording-tours.md ("Clips").
 #
 #   scripts/clips.sh [CLIP...]     CLIP is taskbar, icon-menu, start-menu, bar-menu or settings (default: all five)
 set -euo pipefail
