@@ -9,7 +9,7 @@ A change to the settings window, the Dock's menus or the Start menu's look is no
 - **No manager window.** The Dock and the Start menu are the app's surface; the shared Manager rows, scrim and click-outside-to-close do not apply. The settings window is a frame on a transparent overlay layer: only the frame takes input, so a click around it reaches the desktop and does not close it. Esc clears a search, then closes.
 - **Size and place.** 780 × 620 (at most the screen minus 80), opens centred on the screen it was opened from, every time. It moves by its 60 high top strip (the hand pointer, at least 60 of it stays on screen). It does not resize and does not remember its place or size, so there are no *Remember size/position* switches.
 - **Pages.** Taskbar, Windows, Start menu. The window is named "Taskbar settings"; there is no small-caps line under it.
-- **Footer.** "Changes apply instantly" on the left (no "· Esc to close"), the *Reset to defaults* pill (click twice) on the right. Pins and the Start menu's own pins and recents survive a reset.
+- **Footer.** The kit's line ("Changes apply instantly · Esc to close") on the left, the *Reset to defaults* pill (click twice) on the right, and no resize grip. Pins and the Start menu's own pins and recents survive a reset.
 - **No first-run window.** Settings are never opened by themselves.
 - **Controls only here.** Steppers (numbers), a slider (opacity) and a list editor (the Start menu's Places folders), next to the shared switch, choice and text field.
 - **Menus.** The Item menu and the Bar menu are part of the Dock's surface, not cards, and close on a click outside or when the pointer leaves them ([SETTINGS.md](SETTINGS.md#menus)).
@@ -20,4 +20,5 @@ Newest first.
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-15 | The footer says "Esc to close" and a search with no match says "No setting matches …" | Esc does close the window (first clears a search), and the kit and both other Start apps use these words; StartBar alone differed |
 | 2026-10-15 | This page exists, and says only where StartBar differs from the shared file | The kit asks each app for one; the settings window is the other apps' reference, so its differences have to be written down |

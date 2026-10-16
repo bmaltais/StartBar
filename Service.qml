@@ -990,7 +990,7 @@ Item {
             width: settingsColumn.width
             wrapMode: Text.WordWrap
             topPadding: Style.spacing.md
-            text: "No settings match \u201C" + settingsWindow.query.trim() + "\u201D."
+            text: "No setting matches \u201C" + settingsWindow.query.trim() + "\u201D."
             color: Util.alpha(root.colPopupText, 0.7)
             font.family: Style.font.family
             font.pixelSize: Style.font.body
@@ -1180,7 +1180,7 @@ Item {
           anchors.left: parent.left
           anchors.leftMargin: Style.spacing.lg
           anchors.verticalCenter: parent.verticalCenter
-          text: "Changes apply instantly"
+          text: "Changes apply instantly   \u00B7   Esc to close"
           color: Util.alpha(root.colPopupText, 0.55)
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
