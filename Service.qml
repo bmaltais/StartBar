@@ -627,6 +627,12 @@ Item {
   }
 
   FileView {
+    id: manifestFile
+    path: decodeURIComponent(Qt.resolvedUrl("manifest.json").toString().replace(/^file:\/\//, ""))
+    printErrors: false
+  }
+
+  FileView {
     id: userDirsForSettings
     path: Quickshell.env("HOME") + "/.config/user-dirs.dirs"
     printErrors: false
@@ -637,6 +643,10 @@ Item {
 
     readonly property var values: dockSettings.values
     property bool confirmingReset: false
+    // The plugin's version, from its manifest, for the small-caps line under the title.
+    readonly property string version: {
+      try { return JSON.parse(manifestFile.text() || "{}").version || "" } catch (e) { return "" }
+    }
     // The page shown: an index into DockConfig.settingsSchema().
     property int page: 0
     // What is typed in the search box; while it is not blank the right side
@@ -867,21 +877,37 @@ Item {
         anchors.leftMargin: Style.spacing.lg
         width: Style.space(190)
 
-        // The window's name, on the row of the page heading beside it.
-        Text {
-          textFormat: Text.PlainText
+        // The window's name over a small-caps line saying what it is for, on
+        // the row of the page heading beside it, as in the other Start apps.
+        Column {
           id: settingsTitle
           anchors.top: parent.top
           anchors.left: parent.left
           anchors.right: parent.right
-          height: Style.space(40)
-          verticalAlignment: Text.AlignVCenter
-          elide: Text.ElideRight
-          text: "Taskbar settings"
-          color: root.colPopupText
-          font.family: Style.font.family
-          font.pixelSize: Style.font.body + 3
-          font.bold: true
+          height: Style.space(48)
+          topPadding: (height - implicitHeight) / 2
+
+          Text {
+            textFormat: Text.PlainText
+            width: parent.width
+            elide: Text.ElideRight
+            text: "StartBar"
+            color: root.colPopupText
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body + 3
+            font.bold: true
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            width: parent.width
+            elide: Text.ElideRight
+            text: settingsWindow.version !== "" ? "SETTINGS \u00B7 " + settingsWindow.version : "SETTINGS"
+            color: root.colMuted
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            font.letterSpacing: 1
+          }
         }
 
         Column {
@@ -954,7 +980,7 @@ Item {
         anchors.leftMargin: Style.spacing.lg * 2
         anchors.right: parent.right
         anchors.rightMargin: Style.spacing.lg
-        height: Style.space(40)
+        height: Style.space(48)
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
         text: settingsWindow.searching ? "Search results" : settingsWindow.schema[settingsWindow.page].title
