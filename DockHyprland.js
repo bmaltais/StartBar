@@ -270,6 +270,14 @@ function followMouse(on) {
     + ", float_switch_override_focus = " + (on ? 2 : 1) + " } })' >/dev/null");
 }
 
+// A Window that just took focus (Hyprland's activewindowv2 event): raise it if
+// it floats, so hover focus (focusFollowsMouse) also brings it to the front.
+function raiseWindow(address) {
+  var normalized = normalizedAddress(address);
+  if (!normalized) return null;
+  return argv(RAISE + "raise \"$1\"", normalized);
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     normalizedAddress: normalizedAddress,
@@ -285,5 +293,6 @@ if (typeof module !== "undefined" && module.exports) {
     openOnOwnWorkspace: openOnOwnWorkspace,
     glassRule: glassRule,
     followMouse: followMouse,
+    raiseWindow: raiseWindow,
   };
 }

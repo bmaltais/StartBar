@@ -46,6 +46,7 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 | `showClock` | `false` | Clock at the right end |
 | `hideOmarchyDock` | `true` | Turn off Omarchy's own dock (the `omarchy.dock` plugin, shown on floating workspaces). Switching it on disables the plugin and switching it off enables it again; while it is off, a dock you disabled yourself stays disabled |
 | `focusFollowsMouse` | `false` | Hovering a Window gives it keyboard focus without a click (Hyprland's `input:follow_mouse`, with `float_switch_override_focus` 2 so it also works between floating Windows). Off leaves Omarchy's own value alone; switching it off after it was on sets it back to 0 until the next config reload |
+| `raiseOnFocus` | `false` | A floating Window that takes focus, by hover or any other way, is raised above the other floating Windows. Tiled Windows are left alone, and nothing is raised while a Preview peek is showing a Window |
 | `newWindowWorkspace` | `off` | `off`, `normal`, `maximized` or `fullscreen`. Otherwise a Window that opens tiled beside other Windows moves to the lowest-numbered empty workspace and is shown that way there (`normal` leaves its state alone). Floating Windows Omarchy did not float itself, and full screen ones, are left alone. A leftover `true` reads as `maximized` |
 | `showPreviews` | `true` | Hover thumbnails with a close button |
 | `previewSlide` | `true` | The hover preview rises out of the Dock edge when it appears; it still disappears at once |

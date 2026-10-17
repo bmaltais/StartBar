@@ -302,6 +302,11 @@ Item {
       // An App started any other way (Super+Space, a Pin, a terminal) is
       // still a recently launched App: openwindow data is
       // "address,workspace,class,title".
+      if (event.name === "activewindowv2" && root.taskbar && root.taskbar.raiseOnFocus
+          && !peekRunner.running && root.peekQueue.length === 0) {
+        let raise = DockHyprland.raiseWindow(event.data)
+        if (raise) Quickshell.execDetached(raise)
+      }
       if (event.name === "openwindow") {
         let opened = DockModel.openedWindow(event.data)
         let app = opened.class ? root.resolveApp({ class: opened.class }) : null
