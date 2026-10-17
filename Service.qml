@@ -163,6 +163,7 @@ Item {
       dockSettings.startPlaces = view.startPlaces
       dockSettings.values = view.values
       dockSettings.syncOmarchyDock(view.taskbar.hideOmarchyDock)
+      dockSettings.syncFollowMouse(view.taskbar.focusFollowsMouse)
       dockSettings.loaded = true
     }
 
@@ -175,6 +176,17 @@ Item {
       dockSettings.omarchyDockHidden = hide
       if (before === hide || (before === null && !hide)) return
       Quickshell.execDetached(["omarchy-shell", "shell", "setPluginEnabled", "omarchy.dock", hide ? "false" : "true"])
+    }
+
+    // docs/SPEC.md "Focus follows mouse": focusFollowsMouse (off by default)
+    // sets Hyprland's input:follow_mouse. Off leaves Omarchy's own value alone;
+    // it only writes 0 when the switch goes from on to off.
+    property var followMouseOn: null
+    function syncFollowMouse(on) {
+      var before = dockSettings.followMouseOn
+      dockSettings.followMouseOn = on
+      if (before === on || (before === null && !on)) return
+      Quickshell.execDetached(DockHyprland.followMouse(on))
     }
 
     function apply(intent) {
@@ -283,7 +295,10 @@ Item {
   Connections {
     target: Hyprland
     function onRawEvent(event) {
-      if (event.name === "configreloaded") Quickshell.execDetached(DockHyprland.glassRule())
+      if (event.name === "configreloaded") {
+        Quickshell.execDetached(DockHyprland.glassRule())
+        if (dockSettings.followMouseOn) Quickshell.execDetached(DockHyprland.followMouse(true))
+      }
       // An App started any other way (Super+Space, a Pin, a terminal) is
       // still a recently launched App: openwindow data is
       // "address,workspace,class,title".

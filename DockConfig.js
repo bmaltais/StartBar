@@ -157,6 +157,7 @@ function effectiveTaskbar(entry) {
     groupWindows: booleanOr(source.groupWindows, true),
     startHoverOpen: booleanOr(source.startHoverOpen, false),
     hideOmarchyDock: booleanOr(source.hideOmarchyDock, true),
+    focusFollowsMouse: booleanOr(source.focusFollowsMouse, false),
     newWindowWorkspace: newWindowWorkspaceOr(source.newWindowWorkspace),
   };
 }
@@ -356,6 +357,7 @@ function settingsSchema() {
           options: [{ value: "off", label: "Off" }, { value: "normal", label: "Normal" }, { value: "maximized", label: "Maximized" }, { value: "fullscreen", label: "Full screen" }],
           hint: "A window that opens beside others moves to an empty workspace, shown this way",
         },
+        { key: "focusFollowsMouse", label: "Focus follows mouse", type: "bool", hint: "Hovering a window gives it keyboard focus, without a click" },
         { key: "hideOmarchyDock", label: "Hide Omarchy's dock", type: "bool", hint: "Turns off the dock Omarchy shows on floating workspaces" },
       ],
     },

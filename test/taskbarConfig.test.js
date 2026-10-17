@@ -47,6 +47,7 @@ test("bar defaults: always visible, left-aligned, theme colours, built-in Start 
     groupWindows: true,
     startHoverOpen: false,
     hideOmarchyDock: true,
+    focusFollowsMouse: false,
     newWindowWorkspace: "off",
   });
 });

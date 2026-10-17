@@ -260,6 +260,16 @@ function glassRule() {
     + "blur = true, ignore_alpha = 0.3 })' >/dev/null");
 }
 
+// Hyprland's input:follow_mouse at runtime: 1 focuses a Window when the
+// pointer enters it, 0 needs a click. float_switch_override_focus 2 makes that
+// hold between two floating Windows too (Omarchy's windowed mode); its default,
+// 1, only switches focus between a floating and a tiled Window. It is not persistent, so it is run again
+// after a config reload (see Service.qml).
+function followMouse(on) {
+  return argv("hyprctl eval 'hl.config({ input = { follow_mouse = " + (on ? 1 : 0)
+    + ", float_switch_override_focus = " + (on ? 2 : 1) + " } })' >/dev/null");
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     normalizedAddress: normalizedAddress,
@@ -274,5 +284,6 @@ if (typeof module !== "undefined" && module.exports) {
     peekCommit: peekCommit,
     openOnOwnWorkspace: openOnOwnWorkspace,
     glassRule: glassRule,
+    followMouse: followMouse,
   };
 }
