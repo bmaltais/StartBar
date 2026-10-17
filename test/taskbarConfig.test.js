@@ -28,7 +28,7 @@ test("bar defaults: always visible, left-aligned, theme colours, built-in Start 
   assert.deepEqual(effectiveTaskbar({}), {
     alignment: "left",
     position: "bottom",
-    reserveSpace: false,
+    reserveSpace: true,
     edgeSpacing: 12,
     colorScheme: "theme",
     autoHide: false,

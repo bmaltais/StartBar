@@ -140,7 +140,7 @@ function effectiveTaskbar(entry) {
     position: oneOf(source.position, ["bottom", "top", "left", "right"], "bottom"),
     colorScheme: oneOf(source.colorScheme, ["theme", "dark", "light"], "theme"),
     autoHide: booleanOr(source.autoHide, false),
-    reserveSpace: booleanOr(source.reserveSpace, false),
+    reserveSpace: booleanOr(source.reserveSpace, true),
     barHeight: positiveNumberOr(source.barHeight, DEFAULT_BAR_HEIGHT),
     edgeSpacing: nonNegativeNumberOr(source.edgeSpacing, DEFAULT_EDGE_SPACING),
     opacity: opacityOr(source.opacity, DEFAULT_OPACITY),
