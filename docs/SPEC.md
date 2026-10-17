@@ -36,7 +36,7 @@ What StartBar does today. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); 
 
 ## How the Dock behaves
 
-- The Dock floats on the Top layer and by default reserves no screen space, so maximized and fullscreen windows cover it. `reserveSpace` (off) makes it reserve its bar's thickness on its edge, so windows stop at it: a transparent, input-less window on the Bottom layer holds the space, on each monitor, and only while auto-hide is off (a hiding Dock never reserves).
+- The Dock floats on the Top layer and reserves its bar's thickness on its edge by default (`reserveSpace`, on; it was off before 1.6.1), so windows stop at it. Turning `reserveSpace` off lets maximized and fullscreen windows cover it. The space is held by a transparent, input-less window on the Bottom layer, on each monitor, and only while auto-hide is off (a hiding Dock never reserves).
 - It is always Revealed unless `autoHide` is on (default off).
 - Reveal: with auto-hide on, the Dock is Hidden by default and the Reveal Strip spans the full bottom edge of each monitor, above any space the Omarchy bar reserves. The pointer resting on it for the reveal delay (`revealDelayMs`, 200 ms) makes the Dock Revealed; it returns to Hidden after the hide delay (`hideDelayMs`, 300 ms) once the pointer leaves it. It slides up from the edge in about 150 ms. Without auto-hide there is no Reveal Strip and no timers run.
 - With auto-hide on, the Dock stays Revealed while a menu or the Start menu is open, while the pointer is on the Start button, and for the whole of a drag; the hide timer starts after the drop or the close.

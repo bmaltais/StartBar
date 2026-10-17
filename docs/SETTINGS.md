@@ -28,7 +28,7 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 | `alignment` | `left` | `left` or `center` for the Start button and icons |
 | `position` | `bottom` | `bottom`, `top`, `left` or `right`: the screen edge the bar sits on |
 | `autoHide` | `false` | Hide the bar until the pointer rests on the bar's screen edge |
-| `reserveSpace` | `false` | With auto-hide off: windows (maximized ones included) stop at the Dock instead of running under it |
+| `reserveSpace` | `true` | With auto-hide off: windows (maximized ones included) stop at the Dock instead of running under it |
 | `revealDelayMs` | `200` | With auto-hide: how long the pointer must rest on the Reveal Strip before the bar shows, in ms |
 | `hideDelayMs` | `300` | With auto-hide: how long after the pointer leaves the bar before it hides, in ms |
 | `iconSize` | `48` | Largest icon size in px; icons are also limited to `barHeight - 20` and shrink further to fit when there are many windows |
