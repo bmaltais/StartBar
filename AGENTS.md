@@ -30,6 +30,8 @@ Single-context: `CONTEXT.md` at the root, ADRs under `docs/adr/`. See `docs/agen
 ## Checks
 
 - Before committing: `npm run check` (the devkit's `check`: shell scripts, project rules, new QML warnings, manifest, plus the Node tests). The pre-commit hook runs it once `git config core.hooksPath .githooks` is set. The check, pointer, reload, try-setting, spare, hypr-events and release-branch scripts are wrappers of `scripts/devkit/bin/*`; `scripts/devkit/docs/` says what each does.
+- Source files stay under ~5000 tokens (bytes/4). `scripts/check-file-size.sh` runs first in the pre-commit hook and rejects a larger staged file; split before finishing. `.file-size-guard-ignore` lists the files still to split: remove a line once its file is under the limit.
+
 
 ## Releasing
 

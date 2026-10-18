@@ -1,0 +1,7 @@
+# Source files already over the ~5000-token limit (scripts/check-file-size.sh).
+# Each entry is a file still to split; delete its line once it is under the limit.
+# DockModel.js: the refresh half calls the build half, so a split needs those three
+# functions passed in rather than imported (modules here do not import each other).
+DockModel.js
+Service.qml
+StartMenuView.qml

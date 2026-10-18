@@ -98,6 +98,7 @@ Run it on every commit with the pre-commit hook:
 git config core.hooksPath .githooks   # or: scripts/devkit/bin/pre-commit --install
 ```
 
+The hook also runs `scripts/check-file-size.sh`, which rejects a staged source file over ~5000 tokens (bytes/4) and says how to split it. Files already over are listed in `.file-size-guard-ignore`; `scripts/check-file-size.sh --all` audits every tracked file.
 
 Pull requests run the devkit's `check` on GitHub (its shell, rules and `npm test` steps); the manifest and QML checks need Omarchy and Qt, so they only run locally.
 
