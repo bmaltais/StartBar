@@ -16,7 +16,9 @@ import qs.Commons
 import qs.Ui
 import "DockModel.js" as DockModel
 import "DockConfig.js" as DockConfig
-import "StartMenu.js" as StartMenu
+import "DockBarMenu.js" as DockBarMenu
+import "DockSettingsWindow.js" as DockSettingsWindow
+import "StartPlaces.js" as StartPlaces
 import "DockInteraction.js" as DockInteraction
 import "DockGeometry.js" as DockGeometry
 import "DockPlacement.js" as DockPlacement
@@ -675,7 +677,7 @@ Item {
     readonly property bool searching: settingsWindow.query.trim() !== ""
     readonly property var schema: DockConfig.settingsSchema()
     readonly property var shownGroups: settingsWindow.searching
-      ? DockConfig.searchSettings(settingsWindow.schema, settingsWindow.query)
+      ? DockSettingsWindow.searchSettings(settingsWindow.schema, settingsWindow.query)
       : [settingsWindow.schema[settingsWindow.page]]
 
     // Asked to be open; shown only once the settings have been read, so the
@@ -1075,7 +1077,7 @@ Item {
                   readonly property bool stacked: fieldRow.field.type === "list"
                   // A field that follows another setting is dimmed and
                   // inert while that one is off, and indented under it.
-                  readonly property bool live: DockConfig.fieldEnabled(fieldRow.field, settingsWindow.values)
+                  readonly property bool live: DockSettingsWindow.fieldEnabled(fieldRow.field, settingsWindow.values)
                   readonly property real indent: fieldRow.field.enabledWhen ? Style.space(16) : 0
 
                   width: groupBlock.width
@@ -1525,7 +1527,7 @@ Item {
         readonly property var items: listBox.isDefault ? [] : listBox.value
 
         function seedFromDefaults() {
-          var places = StartMenu.effectivePlaces(dockSettings.startPlaces, userDirsForSettings.text(), Quickshell.env("HOME") || "")
+          var places = StartPlaces.effectivePlaces(dockSettings.startPlaces, userDirsForSettings.text(), Quickshell.env("HOME") || "")
           var paths = []
           for (let i = 0; i < places.length; i++) paths.push(places[i].path)
           listBox.commit(paths)
@@ -3017,7 +3019,7 @@ Item {
 
 
       // The bar's quick menu: right click on the bar itself. Rows come from
-      // DockConfig.barMenuRows; choosing one writes its patch through the
+      // DockBarMenu.barMenuRows; choosing one writes its patch through the
       // same write-back Pin/Unpin uses, so the bar updates live. A section
       // row (Colors, Start button...) opens its choices in a second popup
       // beside it, barSubMenu, as a traditional submenu does. Closes on any
@@ -3033,7 +3035,7 @@ Item {
         // row is in this window; both reset when the menu closes.
         property string openSection: ""
         property real openRowY: 0
-        readonly property var rows: DockConfig.barMenuRows(root.taskbar)
+        readonly property var rows: DockBarMenu.barMenuRows(root.taskbar)
         readonly property var openRows: {
           for (let i = 0; i < barMenu.rows.length; i++) {
             if (barMenu.rows[i].children && barMenu.rows[i].label === barMenu.openSection) return barMenu.rows[i].children
@@ -3052,14 +3054,14 @@ Item {
           id: barMenuMetrics
           font.family: Style.font.family
           font.pixelSize: Style.font.body
-          text: DockConfig.longestLabel(DockConfig.barMenuLabels(barMenu.rows))
+          text: DockBarMenu.longestLabel(DockBarMenu.barMenuLabels(barMenu.rows))
         }
 
         TextMetrics {
           id: barSubMetrics
           font.family: Style.font.family
           font.pixelSize: Style.font.body
-          text: DockConfig.longestLabel(DockConfig.barSubmenuLabels(barMenu.rows))
+          text: DockBarMenu.longestLabel(DockBarMenu.barSubmenuLabels(barMenu.rows))
         }
 
         function close() {
@@ -3410,7 +3412,7 @@ Item {
           id: contextMenuMetrics
           font.family: Style.font.family
           font.pixelSize: Style.font.body
-          text: DockConfig.longestLabel(contextMenu.rows)
+          text: DockBarMenu.longestLabel(contextMenu.rows)
         }
 
         // Rows in three groups, divided in the menu: App rows (Pin/Unpin, New

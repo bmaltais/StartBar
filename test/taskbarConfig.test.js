@@ -131,7 +131,7 @@ test("resolveStartIcon: grid, an absolute image path, or an icon-theme name", ()
   assert.deepEqual(resolveStartIcon(""), { kind: "grid" });
 });
 
-const { barMenuRows, barMenuLabels, barSubmenuLabels } = require("../DockConfig.js");
+const { barMenuRows, barMenuLabels, barSubmenuLabels } = require("../DockBarMenu.js");
 
 // Every row, sections' children included.
 const everyRow = (rows) => rows.flatMap((r) => [r, ...(r.children || [])]);
@@ -219,7 +219,7 @@ test("barMenuLabels sizes the menu, barSubmenuLabels its submenus", () => {
   assert.equal(sub.includes("Colors"), false);
 });
 
-const { longestLabel } = require("../DockConfig.js");
+const { longestLabel } = require("../DockBarMenu.js");
 
 test("longestLabel picks the longest label from rows or strings, for sizing a menu", () => {
   assert.equal(longestLabel([{ label: "Clock" }, { label: "Pointer follows preview click" }, { label: "Auto-hide" }]), "Pointer follows preview click");

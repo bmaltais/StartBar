@@ -10,9 +10,10 @@
 // keyboard command, hover rest, pointer leaving, click-away, a hover preview
 // taking over), hover mode vs. stay-open mode, the view/layer stack and
 // Escape's order through it, selection, what Enter launches, overlay menus
-// and the pinned-grid drag. Search, grouping, grid navigation and reorder
-// geometry are internals of this file; the view reads `filterApps`,
-// `catalog`, `overlayRows`, `effectivePlaces` and `parseFullName` to paint.
+// and the pinned-grid drag. Grid navigation and reorder geometry are internals
+// of this file. The lists the view paints come from StartMenuApps.js (search,
+// A-Z groups, pins and recents), StartPlaces.js and StartMenuActions.js (the
+// overlay rows); the view reads `overlayRows` and the drag geometry from here.
 //
 // STATE (plain data, never mutated):
 //   open        the menu is showing
@@ -56,62 +57,6 @@
 //   { type: "run", command }     bash -lc command, detached
 //   { type: "open", path }       xdg-open path
 //   { type: "togglePin", appId, pinned }   Pin/Unpin on the Dock
-
-// The built-in Start menu's app list (docs/SPEC.md "Start menu"): `apps` are
-// plain { id, name, genericName, keywords, noDisplay } objects (Service.qml
-// flattens DesktopEntries into them); `query` is what the user typed.
-// Hidden entries never show. Ranking: name prefix, then name substring,
-// then generic name / keyword / id substring; ties alphabetical by name.
-// An empty query lists everything alphabetically.
-function filterApps(apps, query) {
-  var list = Array.isArray(apps) ? apps : [];
-  var needle = String(query || "").trim().toLowerCase();
-  var scored = [];
-  for (var i = 0; i < list.length; i++) {
-    var app = list[i];
-    if (!app || app.noDisplay) continue;
-    var name = String(app.name || "").toLowerCase();
-    var rank = 0;
-    if (needle) {
-      if (name.indexOf(needle) === 0) rank = 0;
-      else if (name.indexOf(needle) > 0) rank = 1;
-      else {
-        var haystack = [app.genericName, app.id].concat(app.keywords || []).join("\n").toLowerCase();
-        if (haystack.indexOf(needle) < 0) continue;
-        rank = 2;
-      }
-    }
-    scored.push({ app: app, rank: rank, name: name });
-  }
-  scored.sort(function (a, b) {
-    if (a.rank !== b.rank) return a.rank - b.rank;
-    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
-  });
-  return scored.map(function (entry) { return entry.app; });
-}
-
-// The Start menu's "All apps" view: displayable apps grouped under their
-// first letter (non-letters under "#"), "#" first, apps alphabetical.
-function groupAlphabetically(apps) {
-  var list = Array.isArray(apps) ? apps : [];
-  var buckets = {};
-  for (var i = 0; i < list.length; i++) {
-    var app = list[i];
-    if (!app || app.noDisplay) continue;
-    var first = String(app.name || "").charAt(0).toUpperCase();
-    var letter = /[A-Z]/.test(first) ? first : "#";
-    if (!buckets[letter]) buckets[letter] = [];
-    buckets[letter].push(app);
-  }
-  return Object.keys(buckets).sort().map(function (letter) {
-    buckets[letter].sort(function (a, b) {
-      var x = String(a.name).toLowerCase();
-      var y = String(b.name).toLowerCase();
-      return x < y ? -1 : x > y ? 1 : 0;
-    });
-    return { letter: letter, apps: buckets[letter] };
-  });
-}
 
 // `list` with the entry at `from` moved to index `to` (clamped), for dragging
 // a pinned app to a new place in the Start menu. Returns a new array; a bad
@@ -181,94 +126,6 @@ function moveSelection(sel, key, counts) {
   return { section: section, index: index };
 }
 
-// For the All apps A-Z jump: each letter's first position in the flattened
-// list (`flat` entries carry a `letter`, as Service.qml builds them).
-function letterIndex(flat) {
-  var list = Array.isArray(flat) ? flat : [];
-  var map = {};
-  for (var i = 0; i < list.length; i++) {
-    if (!(list[i].letter in map)) map[list[i].letter] = i;
-  }
-  return map;
-}
-
-// The account's real name from a `getent passwd` line (the fifth,
-// comma-separated field's first part), else `fallback`.
-function parseFullName(passwdLine, fallback) {
-  var line = String(passwdLine || "").split("\n")[0];
-  var fields = line.split(":");
-  var name = fields.length > 4 ? fields[4].split(",")[0].trim() : "";
-  return name.length > 0 ? name : fallback;
-}
-
-// The menu behind the user's name in the Start menu (Windows 11 offers lock
-// and sign out there).
-function startUserActions() {
-  return [
-    { label: "Lock", command: "omarchy-system-lock" },
-    { label: "Sign out", command: "omarchy-system logout" },
-  ];
-}
-
-function startPowerActions() {
-  return [
-    { label: "Sleep", command: "systemctl suspend" },
-    { label: "Restart", command: "omarchy-system reboot" },
-    { label: "Shut down", command: "omarchy-system shutdown" },
-  ];
-}
-
-var PLACE_DEFAULTS = [
-  { key: "XDG_DOCUMENTS_DIR", label: "Documents", folder: "Documents", icon: "folder-documents" },
-  { key: "XDG_DOWNLOAD_DIR", label: "Downloads", folder: "Downloads", icon: "folder-download" },
-  { key: "XDG_PICTURES_DIR", label: "Pictures", folder: "Pictures", icon: "folder-pictures" },
-  { key: "XDG_MUSIC_DIR", label: "Music", folder: "Music", icon: "folder-music" },
-  { key: "XDG_VIDEOS_DIR", label: "Videos", folder: "Videos", icon: "folder-videos" },
-];
-
-function trimSlashes(path) {
-  return path.length > 1 ? path.replace(/\/+$/, "") : path;
-}
-
-function parseUserDirs(text, home) {
-  var dirs = {};
-  var lines = String(text || "").split("\n");
-  for (var i = 0; i < lines.length; i++) {
-    var match = /^\s*(XDG_[A-Z]+_DIR)="(.*)"\s*$/.exec(lines[i]);
-    if (match) dirs[match[1]] = trimSlashes(match[2].replace(/\$HOME/g, home));
-  }
-  return dirs;
-}
-
-// The Start menu's Places column (docs/SPEC.md "Start menu"): Home plus the
-// user's XDG folders, each { label, path, icon }. A `startPlaces` list of
-// paths (~ allowed) replaces the defaults; an empty one hides the column.
-// XDG folders that are just Home itself (an unset Desktop, say) are skipped.
-function effectivePlaces(startPlaces, userDirsText, home) {
-  if (Array.isArray(startPlaces)) {
-    var seen = {};
-    var custom = [];
-    for (var i = 0; i < startPlaces.length; i++) {
-      var raw = startPlaces[i];
-      if (typeof raw !== "string" || raw.trim().length === 0) continue;
-      var path = trimSlashes(raw.trim().replace(/^~(?=\/|$)/, home));
-      if (seen[path]) continue;
-      seen[path] = true;
-      custom.push({ label: path.split("/").pop() || path, path: path, icon: "folder" });
-    }
-    return custom;
-  }
-  var dirs = parseUserDirs(userDirsText, home);
-  var places = [{ label: "Home", path: home, icon: "user-home" }];
-  for (var j = 0; j < PLACE_DEFAULTS.length; j++) {
-    var d = PLACE_DEFAULTS[j];
-    var dir = dirs[d.key] || home + "/" + d.folder;
-    if (dir === home) continue;
-    places.push({ label: d.label, path: dir, icon: d.icon });
-  }
-  return places;
-}
-
 // Drag to reorder a pinned app. `point` is the pointer's position in the
 // grid's own coordinates ({ x, y }); `grid` is { width, height, cellWidth,
 // cellHeight, contentY } with contentY the scroll offset. Returns the slot
@@ -322,36 +179,6 @@ function reorderedPins(pinIds, shownIds, draggedId, slot) {
   var to = pinIds.indexOf(shownIds[slot]);
   if (from < 0 || to < 0 || from === to) return null;
   return moveItem(pinIds, from, to);
-}
-
-// --- Catalog ----------------------------------------------------------------
-//
-// What the view lists, derived from the flattened desktop entries. Built once
-// per app-list change; `resolveApps` then maps saved ids (pins, recents) to
-// the Apps that are still installed.
-
-function catalog(apps) {
-  var list = Array.isArray(apps) ? apps : [];
-  var byId = {};
-  for (var i = 0; i < list.length; i++) byId[list[i].id] = list[i];
-  var groups = groupAlphabetically(list);
-  var allFlat = [];
-  for (var g = 0; g < groups.length; g++) {
-    for (var a = 0; a < groups[g].apps.length; a++) {
-      var app = groups[g].apps[a];
-      allFlat.push({ id: app.id, name: app.name, icon: app.icon, entry: app.entry, letter: groups[g].letter });
-    }
-  }
-  return { byId: byId, allFlat: allFlat, letterRows: letterIndex(allFlat) };
-}
-
-function resolveApps(cat, ids) {
-  var out = [];
-  var list = Array.isArray(ids) ? ids : [];
-  for (var i = 0; i < list.length; i++) {
-    if (cat.byId[list[i]]) out.push(cat.byId[list[i]]);
-  }
-  return out;
 }
 
 // --- State machine ----------------------------------------------------------
@@ -615,41 +442,8 @@ function transition(state, event, ctx) {
   return out(state);
 }
 
-// The rows of whichever overlay is up, each { label, action } where `action`
-// is the effect choosing it carries out. `ctx.startPinIds` / `ctx.dockPinIds`
-// decide the Pin / Unpin wording.
-function overlayRows(overlay, ctx) {
-  if (!overlay) return [];
-  if (overlay.kind === "power" || overlay.kind === "user") {
-    var actions = overlay.kind === "power" ? startPowerActions() : startUserActions();
-    return actions.map(function (a) { return { label: a.label, action: { type: "run", command: a.command } }; });
-  }
-  var app = overlay.app;
-  var startPinned = ctx.startPinIds.indexOf(app.id) >= 0;
-  var dockPinned = ctx.dockPinIds.indexOf(app.id) >= 0;
-  return [
-    {
-      label: startPinned ? "Unpin from Start" : "Pin to Start",
-      action: { type: "apply", intent: { type: startPinned ? "unpinStartApp" : "pinStartApp", appId: app.id } },
-    },
-    {
-      label: dockPinned ? "Unpin from Dock" : "Pin to Dock",
-      action: { type: "togglePin", appId: app.id, pinned: dockPinned },
-    },
-    { label: "Open", action: { type: "launch", app: app } },
-  ];
-}
-
-// The argv that opens a Place. A path that starts with "-" would be read by
-// xdg-open as an option, so it is made relative.
-function openCommand(path) {
-  var p = String(path === undefined || path === null ? "" : path);
-  return ["xdg-open", p.charAt(0) === "-" ? "./" + p : p];
-}
-
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    openCommand: openCommand,
     PINNED_COLUMNS: PINNED_COLUMNS,
     RECENT_COLUMNS: RECENT_COLUMNS,
     HOVER_OPEN_DELAY_MS: HOVER_OPEN_DELAY_MS,
@@ -657,12 +451,6 @@ if (typeof module !== "undefined" && module.exports) {
     initial: initial,
     transition: transition,
     isSearching: isSearching,
-    catalog: catalog,
-    resolveApps: resolveApps,
-    filterApps: filterApps,
-    overlayRows: overlayRows,
-    effectivePlaces: effectivePlaces,
-    parseFullName: parseFullName,
     clampPinGhost: clampPinGhost,
     pinTileShift: pinTileShift,
   };

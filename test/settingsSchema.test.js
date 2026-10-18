@@ -4,10 +4,9 @@ const {
   settingsSchema,
   effectiveView,
   applyIntent,
-  barMenuRows,
-  fieldEnabled,
-  searchSettings,
 } = require("../DockConfig.js");
+const { barMenuRows } = require("../DockBarMenu.js");
+const { fieldEnabled, searchSettings } = require("../DockSettingsWindow.js");
 
 const settingsValues = (entry) => effectiveView(entry).values;
 const effectiveTaskbar = (entry) => effectiveView(entry).taskbar;

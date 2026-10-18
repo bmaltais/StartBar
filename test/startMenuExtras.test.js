@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { parseFullName } = require("../StartMenu.js");
+const { parseFullName } = require("../StartMenuActions.js");
 
 test("parseFullName takes the account's real name, else falls back", () => {
   assert.equal(parseFullName("bernard:x:1000:1000:Bernard Maltais,,,:/home/bernard:/bin/bash", "Bernard"), "Bernard Maltais");

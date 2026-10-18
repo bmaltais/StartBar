@@ -106,7 +106,6 @@ var DEFAULT_BAR_HEIGHT = 48;
 var DEFAULT_EDGE_SPACING = 12;
 var DEFAULT_OPACITY = 0.9;
 var DEFAULT_START_COMMAND = "builtin";
-var OMARCHY_MENU_COMMAND = "omarchy-menu toggle apps";
 var DEFAULT_START_ICON = "grid";
 
 function oneOf(value, allowed, fallback) {
@@ -184,114 +183,7 @@ function resolveStartIcon(value) {
   return { kind: "icon", value: ICON_ALIASES[name] || name };
 }
 
-
 // The longest label among menu rows (objects with a `label`) or plain strings,
-// so a menu can be sized to fit it. By character count: Omarchy's menu font is
-// monospace, and a proportional one only needs the width as a close estimate
-// (Service.qml adds slack).
-function longestLabel(items) {
-  var list = Array.isArray(items) ? items : [];
-  var best = "";
-  for (var i = 0; i < list.length; i++) {
-    var item = list[i];
-    var text = typeof item === "string" ? item : item && typeof item.label === "string" ? item.label : "";
-    if (text.length > best.length) best = text;
-  }
-  return best;
-}
-
-// The rows of the bar's right-click menu (docs/SPEC.md "The bar"): each
-// is { label, checked, patch, group }, where patch is the `setSettings` patch
-// to apply when it's chosen and group lets the menu draw a
-// divider between runs of related rows.
-// Opens the full settings window (docs/SPEC.md "Settings window"): an
-// `action` rather than a `patch`, since there is no single setting to write.
-var SETTINGS_ROW = { label: "Settings\u2026", checked: false, action: "settings", group: 9, enabled: true };
-
-function barMenuRows(taskbar) {
-  function toggle(label, key, group, enabled) {
-    var patch = {};
-    patch[key] = !taskbar[key];
-    return { label: label, checked: !!taskbar[key], patch: patch, group: group, enabled: enabled !== false };
-  }
-  function choice(label, key, value, group, enabled) {
-    var patch = {};
-    patch[key] = value;
-    return { label: label, checked: taskbar[key] === value, patch: patch, group: group, enabled: enabled !== false };
-  }
-  // A row that opens a submenu of `children`.
-  function section(label, group, children) {
-    return { label: label, group: group, children: children, enabled: true };
-  }
-  var builtin = taskbar.startCommand === "builtin";
-  var previews = !!taskbar.showPreviews;
-  return [
-    section("Icon alignment", 0, [
-      choice("Left", "alignment", "left", 0),
-      choice("Center", "alignment", "center", 0),
-    ]),
-    section("Position", 0, [
-      choice("Top", "position", "top", 0),
-      choice("Left", "position", "left", 0),
-      choice("Right", "position", "right", 0),
-      choice("Bottom", "position", "bottom", 0),
-    ]),
-    section("Colors", 0, [
-      choice("Theme", "colorScheme", "theme", 0),
-      choice("Dark", "colorScheme", "dark", 0),
-      choice("Light", "colorScheme", "light", 0),
-    ]),
-    section("Start button", 1, [
-      toggle("Show Start button", "showStart", 1),
-      {
-        label: "Open the built-in menu",
-        checked: builtin,
-        patch: { startCommand: "builtin" },
-        group: 1,
-        enabled: !!taskbar.showStart,
-      },
-      {
-        label: "Open the Omarchy menu",
-        checked: !builtin,
-        patch: { startCommand: OMARCHY_MENU_COMMAND },
-        group: 1,
-        enabled: !!taskbar.showStart,
-      },
-      toggle("Open on hover", "startHoverOpen", 1, !!taskbar.showStart && builtin),
-    ]),
-    section("Window previews", 1, [
-      toggle("Show previews", "showPreviews", 1),
-      toggle("Show window on hover", "previewPeek", 1, previews),
-      toggle("Pointer follows click", "previewWarpPointer", 1, previews),
-    ]),
-    toggle("Auto-hide", "autoHide", 2),
-    toggle("Clock", "showClock", 2),
-    toggle("Group windows of one app", "groupWindows", 2),
-    toggle("Workspace badge", "showWorkspaceBadge", 2),
-    toggle("Transparent background", "transparent", 2),
-    SETTINGS_ROW,
-  ];
-}
-
-// Every label the Bar menu itself can show, for sizing it.
-function barMenuLabels(rows) {
-  var labels = [];
-  for (var i = 0; i < rows.length; i++) {
-    labels.push(rows[i].label);
-  }
-  return labels;
-}
-
-// The labels of every section's choices, for sizing the submenu.
-function barSubmenuLabels(rows) {
-  var labels = [];
-  for (var i = 0; i < rows.length; i++) {
-    var kids = rows[i].children || [];
-    for (var c = 0; c < kids.length; c++) labels.push(kids[c].label);
-  }
-  return labels;
-}
-
 function mergeSettings(entry, patch) {
   var next = {};
   var source = isPlainObject(entry) ? entry : {};
@@ -305,7 +197,6 @@ function mergeSettings(entry, patch) {
   }
   return next;
 }
-
 
 // The settings window's contents (docs/SPEC.md "Settings window"): groups of
 // fields, each { key, label, type, ... } with type one of bool, choice
@@ -374,36 +265,6 @@ function settingsSchema() {
       ],
     },
   ];
-}
-
-// The settings window's search: the groups of `groups` (settingsSchema())
-// cut down to the fields matching `query`, groups with none dropped. Every
-// word of the query must appear, in any order and any case, in the field's
-// label, hint, choice-option label or group title, so "start" finds the whole Start menu page and
-// "delay hide" finds the hide delay. A blank query matches nothing here: the
-// window shows the chosen page then.
-function searchSettings(groups, query) {
-  var words = String(query || "").toLowerCase().split(/\s+/).filter(function (w) { return w !== ""; });
-  if (words.length === 0) return [];
-  var found = [];
-  for (var g = 0; g < groups.length; g++) {
-    var fields = groups[g].fields.filter(function (field) {
-      var options = (field.options || []).map(function (option) { return option.label; }).join(" ");
-      var text = (field.label + " " + (field.hint || "") + " " + options + " " + groups[g].title).toLowerCase();
-      return words.every(function (word) { return text.indexOf(word) !== -1; });
-    });
-    if (fields.length > 0) found.push({ title: groups[g].title, fields: fields });
-  }
-  return found;
-}
-
-// Whether a settings-window field can be changed now: a field with
-// `enabledWhen: { key, is }` is dimmed while that other setting differs
-// (a delay while auto-hide is off). `values` is effectiveView(...).values.
-function fieldEnabled(field, values) {
-  var rule = field && field.enabledWhen;
-  if (!rule) return true;
-  return !!(values && values[rule.key]) === rule.is;
 }
 
 // The complete effective view of a config entry (see the header). `settings`
@@ -517,12 +378,6 @@ if (typeof module !== "undefined" && module.exports) {
     applyIntent: applyIntent,
     schemeColors: schemeColors,
     resolveStartIcon: resolveStartIcon,
-    barMenuRows: barMenuRows,
-    barMenuLabels: barMenuLabels,
-    barSubmenuLabels: barSubmenuLabels,
-    fieldEnabled: fieldEnabled,
-    searchSettings: searchSettings,
-    longestLabel: longestLabel,
     settingsSchema: settingsSchema,
   };
 }

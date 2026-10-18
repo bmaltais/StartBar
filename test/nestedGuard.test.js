@@ -15,7 +15,7 @@ const session = path.join(root, "scripts", "devkit", "lib", "session.sh");
 // scripts/devkit is a submodule: without it checked out there is nothing to test.
 const skip = fs.existsSync(session) ? false : "scripts/devkit is not checked out (git submodule update --init scripts/devkit)";
 const t = (name, fn) => test(name, { skip }, fn);
-const StartMenu = require("../StartMenu.js");
+const StartMenuActions = require("../StartMenuActions.js");
 
 // Builds the guard in a new folder and returns what the test needs to run its commands.
 function build() {
@@ -62,7 +62,7 @@ t("the guard refuses every power command the Start menu can run, and writes down
     assert.equal(g.built.status, 0, g.built.stderr);
     // Every command behind the user's name and the power button, so a new one added to the menu is held to the guard as well.
     const commands = ["user", "power"]
-      .flatMap((kind) => StartMenu.overlayRows({ kind }, {}))
+      .flatMap((kind) => StartMenuActions.overlayRows({ kind }, {}))
       .map((row) => row.action.command);
     assert.ok(commands.length >= 5, "the Start menu offers Lock, Sign out, Sleep, Restart and Shut down");
     for (const command of commands) {

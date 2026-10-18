@@ -25,6 +25,9 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "StartMenu.js" as StartMenu
+import "StartMenuApps.js" as StartMenuApps
+import "StartMenuActions.js" as StartMenuActions
+import "StartPlaces.js" as StartPlaces
 import "DockPlacement.js" as DockPlacement
 
 Item {
@@ -130,7 +133,7 @@ Item {
     case "launch": startMenu.launchRequested(effect.app.entry); break
     case "apply": startMenu.settings.apply(effect.intent); break
     case "run": Quickshell.execDetached(["bash", "-lc", effect.command]); break
-    case "open": Quickshell.execDetached(StartMenu.openCommand(effect.path)); break
+    case "open": Quickshell.execDetached(StartMenuActions.openCommand(effect.path)); break
     case "togglePin": startMenu.togglePinRequested(effect.appId, effect.pinned); break
     }
   }
@@ -177,14 +180,14 @@ Item {
     }
     return list
   }
-  readonly property var catalog: StartMenu.catalog(startMenu.allApps)
-  readonly property var pinnedApps: StartMenu.resolveApps(startMenu.catalog, startMenu.settings.startPins)
-  readonly property var recentApps: StartMenu.resolveApps(startMenu.catalog, startMenu.settings.recentApps)
-  readonly property var results: StartMenu.filterApps(startMenu.allApps, startMenu.query)
+  readonly property var catalog: StartMenuApps.catalog(startMenu.allApps)
+  readonly property var pinnedApps: StartMenuApps.resolveApps(startMenu.catalog, startMenu.settings.startPins)
+  readonly property var recentApps: StartMenuApps.resolveApps(startMenu.catalog, startMenu.settings.recentApps)
+  readonly property var results: StartMenuApps.filterApps(startMenu.allApps, startMenu.query)
   // Places column on the left (Home, Documents, Downloads...): from the
-  // user's XDG folders or a `startPlaces` list (StartMenu.effectivePlaces).
+  // user's XDG folders or a `startPlaces` list (StartPlaces.effectivePlaces).
   property string userDirsText: ""
-  readonly property var places: StartMenu.effectivePlaces(startMenu.settings.startPlaces, startMenu.userDirsText, Quickshell.env("HOME") || "")
+  readonly property var places: StartPlaces.effectivePlaces(startMenu.settings.startPlaces, startMenu.userDirsText, Quickshell.env("HOME") || "")
   readonly property real placesWidth: startMenu.places.length > 0 ? Style.space(150) : 0
 
   FileView {
@@ -206,7 +209,7 @@ Item {
     running: true
     command: ["getent", "passwd", Quickshell.env("USER") || ""]
     stdout: StdioCollector {
-      onStreamFinished: startMenu.fullName = StartMenu.parseFullName(text, "")
+      onStreamFinished: startMenu.fullName = StartMenuActions.parseFullName(text, "")
     }
   }
 
@@ -1354,7 +1357,7 @@ Item {
         anchors.margins: Style.space(4)
 
         Repeater {
-          model: StartMenu.overlayRows(startMenu.overlay, startMenu.context)
+          model: StartMenuActions.overlayRows(startMenu.overlay, startMenu.context)
 
           delegate: Rectangle {
             id: overlayRow
