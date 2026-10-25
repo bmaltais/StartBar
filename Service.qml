@@ -663,19 +663,9 @@ Item {
 
   Process {
     id: activeAsk
-    // "ADDRESS X Y": the active Window and where the pointer is. Omarchy hides the
-    // pointer on a key press, so Super+Z would open the card with no pointer to
-    // aim with: warping it one pixel and back shows it again, without a visible move.
-    command: ["bash", "-lc", [
-      "addr=$(hyprctl -j activewindow | jq -r '.address // empty')",
-      "pos=$(hyprctl -j cursorpos | jq -r '\"\\(.x | floor) \\(.y | floor)\"')",
-      "set -- $pos",
-      "if [ -n \"$2\" ]; then",
-      "  hyprctl dispatch \"hl.dsp.cursor.move({ x = $(($1 + 1)), y = $2 })\" >/dev/null",
-      "  hyprctl dispatch \"hl.dsp.cursor.move({ x = $1, y = $2 })\" >/dev/null",
-      "fi",
-      "echo \"$addr $pos\"",
-    ].join("\n")]
+    // "ADDRESS X Y": the active Window and where the pointer is.
+    command: ["bash", "-lc", "echo \"$(hyprctl -j activewindow | jq -r '.address // empty') "
+      + "$(hyprctl -j cursorpos | jq -r '\"\\(.x | floor) \\(.y | floor)\"')\""]
     stdout: StdioCollector {
       onStreamFinished: {
         var parts = this.text.trim().split(/\s+/)
@@ -764,6 +754,19 @@ Item {
     MouseArea {
       anchors.fill: parent
       onClicked: snapPopup.wanted = false
+    }
+
+    // The card goes away when the pointer moves off it: further than this from
+    // its edge. Only a moving pointer counts, so a pointer left where it was
+    // (just above the card, which opens below it) does not close it.
+    HoverHandler {
+      onPointChanged: {
+        var px = point.position.x, py = point.position.y
+        var far = Style.space(48)
+        var dx = Math.max(snapCard.x - px, 0, px - (snapCard.x + snapCard.width))
+        var dy = Math.max(snapCard.y - py, 0, py - (snapCard.y + snapCard.height))
+        if (dx > far || dy > far) snapPopup.wanted = false
+      }
     }
 
     RectangularShadow {
