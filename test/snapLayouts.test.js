@@ -254,3 +254,9 @@ test("the picker ends with a full layout that maximizes, and maximizeWindow sets
   assert.equal(cmd[4], "0xab");
   assert.equal(H.maximizeWindow("nope"), null);
 });
+
+test("the menu offers wide and narrow side by side, 2/3 and 1/3", () => {
+  const wn = LAYOUTS.find((l) => l.length === 2 && Math.abs(l[0].w - 2 / 3) < 1e-9);
+  assert.ok(wn, "wide and narrow");
+  assert.ok(Math.abs(wn[1].x - 2 / 3) < 1e-9 && Math.abs(wn[1].w - 1 / 3) < 1e-9 && wn.every((z) => z.h === 1));
+});
