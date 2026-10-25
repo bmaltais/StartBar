@@ -89,9 +89,11 @@ test("a monitor's scale and offset are respected", () => {
 
 test("a tiled or full screen window is floated first, and leaves full screen", () => {
   const calls = snap(HALVES[0], { ...client, floating: false, fullscreen: 2 }, monitor);
-  assert.match(calls[0], /window\.fullscreen\(.*action = "unset"/);
-  assert.match(calls[1], /window\.float\(.*action = "set"/);
-  assert.match(calls[2], /window\.resize/);
+  // The unset names the mode, so both are sent: maximized and full screen.
+  assert.match(calls[0], /window\.fullscreen\(.*mode = "maximized".*action = "unset"/);
+  assert.match(calls[1], /window\.fullscreen\(.*mode = "fullscreen".*action = "unset"/);
+  assert.match(calls[2], /window\.float\(.*action = "set"/);
+  assert.match(calls[3], /window\.resize/);
 });
 
 test("a window the compositor does not know does nothing", () => {
@@ -186,7 +188,9 @@ test("a tiled workspace is offered its own tile arrangement, normalised, tiles o
 
 test("swapTiles dispatches a swap of two valid addresses", () => {
   const cmd = H.swapTiles("0xab", "cd");
-  assert.match(cmd[2], /hl\.dsp\.window\.swap\(\{ target = \\"address:0xcd\\", window = \\"address:0xab\\" \}\)/);
+  assert.match(cmd[2], /action = \\"unset\\"/, "leaves full screen first");
+  assert.ok(cmd[2].startsWith("a=0xab\n"));
+  assert.match(cmd[2], /hl\.dsp\.window\.swap\(\{ target = \\"address:0xcd\\", window = \\"address:\$a\\" \}\)/);
   assert.equal(H.swapTiles("0xab", "0xab"), null);
   assert.equal(H.swapTiles("0xab", "x; rm"), null);
 });

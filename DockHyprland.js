@@ -171,13 +171,19 @@ function windowAction(id, address) {
   return argv("hyprctl dispatch \"$1\"", make("window = \"address:" + normalized + "\""));
 }
 
+// A maximized or full screen Window refuses layout changes ("Can't swap
+// fullscreen window") and fills the area, so snapping one starts by taking it out.
+var UNSET_FULLSCREEN = "[ \"$(hyprctl -j clients | jq -r --arg a \"$a\" 'first(.[] | select(.address == $a)).fullscreen // 0')\" != 0 ] "
+  + "&& { for m in maximized fullscreen; do hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$m\\\", action = \\\"unset\\\", window = \\\"address:$a\\\" })\" >/dev/null; done; sleep 0.3; }";
+
 // Swap two tiled Windows' places in the layout: both stay tiled and Hyprland
 // rearranges the rest.
 function swapTiles(address, other) {
   var a = normalizedAddress(address), b = normalizedAddress(other);
   if (!a || !b || a === b) return null;
-  // Both are validated hex, so they go straight into the dispatch.
-  return argv("hyprctl dispatch \"hl.dsp.window.swap({ target = \\\"address:" + b + "\\\", window = \\\"address:" + a + "\\\" })\"");
+  // Both are validated hex, so they go straight into the script.
+  return ["bash", "-lc", "a=" + a + "\n" + UNSET_FULLSCREEN + "\n"
+    + "hyprctl dispatch \"hl.dsp.window.swap({ target = \\\"address:" + b + "\\\", window = \\\"address:$a\\\" })\"", "bash"];
 }
 
 // Reshape a tiled workspace (docs/SPEC.md "Snap layouts"): `reshapeTiles(address,
@@ -213,6 +219,7 @@ function reshapeTiles(address, shape, zone) {
   if (fr.some(function (n) { return !isFinite(n); })) return null;
   var script = [
     "a=$1; want=$2; zx=$3; zy=$4",
+    UNSET_FULLSCREEN,
     "t() { hyprctl -j clients | jq -c --arg a \"$a\" '" + TILE_SHAPE + "tiles($a) | shape'; }",
     "flip() { hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$1\\\" })\" >/dev/null; "
       + "hyprctl dispatch 'hl.dsp.layout(\"togglesplit\")' >/dev/null; sleep 0.25; }",
@@ -289,7 +296,8 @@ function snapWindow(address, zone, others) {
     "  [ -n \"$geo\" ] || return 0",
     "  get() { jq -r \".$1\" <<<\"$geo\"; }",
     "  t=\"window = \\\"address:$a\\\"\"",
-    "  [ \"$(get fs)\" != 0 ] && hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"fullscreen\\\", action = \\\"unset\\\", $t })\" >/dev/null",
+    // The unset must name the mode the Window is in: maximized (1) or full screen (2), or both (3).
+    "  [ \"$(get fs)\" != 0 ] && for m in maximized fullscreen; do hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$m\\\", action = \\\"unset\\\", $t })\" >/dev/null; done",
     "  [ \"$(get fl)\" != true ] && hyprctl dispatch \"hl.dsp.window.float({ action = \\\"set\\\", $t })\" >/dev/null",
     "  hyprctl dispatch \"hl.dsp.window.resize({ x = $(get w), y = $(get h), exact = true, $t })\" >/dev/null",
     "  hyprctl dispatch \"hl.dsp.window.move({ x = $(get x), y = $(get y), $t })\" >/dev/null",
