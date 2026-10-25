@@ -180,6 +180,72 @@ function swapTiles(address, other) {
   return argv("hyprctl dispatch \"hl.dsp.window.swap({ target = \\\"address:" + b + "\\\", window = \\\"address:" + a + "\\\" })\"");
 }
 
+// Reshape a tiled workspace (docs/SPEC.md "Snap layouts"): `reshapeTiles(address,
+// shape, zone)` flips dwindle's splits until the workspace's two or three tiles
+// have the shape, then swaps the Window into the zone. Shapes name each split,
+// outer first: H is side by side, V is stacked. Two tiles: "H", "V". Three:
+// "HV" (one beside two stacked), "HH" (three columns), "VH" (one on top, two
+// below), "VV" (three rows). Hyprland has no way to choose a shape, only
+// `togglesplit`, which flips the split of the focused Window's parent: the lone
+// Window's flips the outer split, one of the pair's the inner. So the shape is
+// read from the geometry (the lone Window is the largest), flipped one split at
+// a time, and read again. Then `swapsplit` on the lone Window puts it first, as
+// the thumbnail draws it.
+var TILE_SHAPE = "def tiles($a): . as $c | first($c[] | select(.address == $a)) as $w | "
+  + "[$c[] | select(.workspace.id == $w.workspace.id and .monitor == $w.monitor and .floating == false "
+  + "and .mapped and (.hidden | not))]; "
+  + "def box: { x0: (map(.at[0]) | min), y0: (map(.at[1]) | min), "
+  + "x1: (map(.at[0] + .size[0]) | max), y1: (map(.at[1] + .size[1]) | max) }; "
+  + "def shape: . as $t | ($t | box) as $b | ($b.x1 - $b.x0) as $W | ($b.y1 - $b.y0) as $H | "
+  + "if ($t | length) == 2 then { n: 2, shape: (if (($t[0].at[1] - $t[1].at[1]) | fabs) <= 2 then \"H\" else \"V\" end) } "
+  + "elif ($t | length) == 3 then "
+  + "($t | sort_by(-(.size[0] * .size[1])) | .[0]) as $l | [$t[] | select(.address != $l.address)] as $p | "
+  + "(if $l.size[1] >= $H * 0.9 and $l.size[0] < $W * 0.9 then \"H\" else \"V\" end) as $r | "
+  + "(if (($p[0].at[1] - $p[1].at[1]) | fabs) <= 2 then \"H\" else \"V\" end) as $q | "
+  + "(if $r == \"H\" then (($l.at[0] - $b.x0) | fabs) <= 2 else (($l.at[1] - $b.y0) | fabs) <= 2 end) as $f | "
+  + "{ n: 3, shape: ($r + $q), lone: $l.address, pair: $p[0].address, first: $f } "
+  + "else { n: ($t | length) } end; ";
+
+function reshapeTiles(address, shape, zone) {
+  var a = normalizedAddress(address);
+  if (!a || !/^(H|V|HV|HH|VH|VV)$/.test(String(shape)) || !zone) return null;
+  var fr = [zone.x, zone.y, zone.w, zone.h].map(Number);
+  if (fr.some(function (n) { return !isFinite(n); })) return null;
+  var script = [
+    "a=$1; want=$2; zx=$3; zy=$4",
+    "t() { hyprctl -j clients | jq -c --arg a \"$a\" '" + TILE_SHAPE + "tiles($a) | shape'; }",
+    "flip() { hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$1\\\" })\" >/dev/null; "
+      + "hyprctl dispatch 'hl.dsp.layout(\"togglesplit\")' >/dev/null; sleep 0.25; }",
+    "for i in 1 2 3 4; do",
+    "  s=$(t) || exit 0",
+    "  cur=$(jq -r '.shape // empty' <<<\"$s\")",
+    "  [ \"${#cur}\" = \"${#want}\" ] || exit 0",
+    "  [ \"$cur\" = \"$want\" ] && break",
+    "  if [ \"${#want}\" = 1 ] || [ \"${cur:0:1}\" != \"${want:0:1}\" ]; then",
+    "    [ \"${#want}\" = 1 ] && id=$a || id=$(jq -r .lone <<<\"$s\")",
+    "  else id=$(jq -r .pair <<<\"$s\"); fi",
+    "  flip \"$id\"",
+    "done",
+    // Three tiles: the lone Window belongs first (left or top), as drawn. `swapsplit` on it mirrors the outer split.
+    "if [ \"${#want}\" = 2 ]; then",
+    "  s=$(t) || exit 0",
+    "  [ \"$(jq -r '.first' <<<\"$s\")\" = false ] && { id=$(jq -r .lone <<<\"$s\"); "
+      + "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$id\\\" })\" >/dev/null; "
+      + "hyprctl dispatch 'hl.dsp.layout(\"swapsplit\")' >/dev/null; sleep 0.25; }",
+    "fi",
+    // Put the Window in the zone: swap with whoever is there now.
+    "other=$(hyprctl -j clients | jq -r --arg a \"$a\" --argjson zx \"$zx\" --argjson zy \"$zy\" '" + TILE_SHAPE
+      + "tiles($a) | . as $t | ($t | box) as $b | ($b.x0 + ($b.x1 - $b.x0) * $zx) as $px | ($b.y0 + ($b.y1 - $b.y0) * $zy) as $py "
+      + "| first($t[] | select(.at[0] <= $px and .at[0] + .size[0] >= $px and .at[1] <= $py and .at[1] + .size[1] >= $py)).address // empty')",
+    "[ -n \"$other\" ] && [ \"$other\" != \"$a\" ] && hyprctl dispatch \"hl.dsp.window.swap({ target = \\\"address:$other\\\", window = \\\"address:$a\\\" })\" >/dev/null",
+    "hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$a\\\" })\" >/dev/null",
+    "exit 0",
+  ].join("\n");
+  // The zone's centre, as fractions of the tiles' box.
+  var cx = fr[0] + fr[2] / 2, cy = fr[1] + fr[3] / 2;
+  return ["bash", "-lc", script, "bash", a, String(shape), String(cx), String(cy)];
+}
+
 // Snap layouts (docs/SPEC.md "Snap layouts"): put a Window in a zone of its monitor's usable
 // area, as fractions of it: `snapWindow(address, {x, y, w, h})`. Floats the
 // Window first if it is tiled, leaves full screen, then resizes and moves it.
@@ -374,6 +440,8 @@ if (typeof module !== "undefined" && module.exports) {
     windowAction: windowAction,
     snapWindow: snapWindow,
     swapTiles: swapTiles,
+    reshapeTiles: reshapeTiles,
+    TILE_SHAPE: TILE_SHAPE,
     windowActionIds: Object.keys(WINDOW_ACTIONS),
     peekWindow: peekWindow,
     peekRestore: peekRestore,

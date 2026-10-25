@@ -44,6 +44,31 @@ function windowsOn(items, workspace) {
   return found;
 }
 
+// The shapes dwindle can give two or three tiles, as thumbnails (see
+// DockHyprland.reshapeTiles). Each zone carries its layout's `shape`. dwindle
+// halves each split, so three columns are 1/2, 1/4 and 1/4 wide.
+var SHAPES = {
+  2: [
+    [{ x: 0, y: 0, w: 0.5, h: 1 }, { x: 0.5, y: 0, w: 0.5, h: 1 }],
+    [{ x: 0, y: 0, w: 1, h: 0.5 }, { x: 0, y: 0.5, w: 1, h: 0.5 }],
+  ],
+  3: [
+    [{ x: 0, y: 0, w: 0.5, h: 1 }, { x: 0.5, y: 0, w: 0.5, h: 0.5 }, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }],
+    [{ x: 0, y: 0, w: 0.5, h: 1 }, { x: 0.5, y: 0, w: 0.25, h: 1 }, { x: 0.75, y: 0, w: 0.25, h: 1 }],
+    [{ x: 0, y: 0, w: 1, h: 0.5 }, { x: 0, y: 0.5, w: 0.5, h: 0.5 }, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }],
+    [{ x: 0, y: 0, w: 1, h: 0.5 }, { x: 0, y: 0.5, w: 1, h: 0.25 }, { x: 0, y: 0.75, w: 1, h: 0.25 }],
+  ],
+};
+var SHAPE_NAMES = { 2: ["H", "V"], 3: ["HV", "HH", "VH", "VV"] };
+
+// The shape thumbnails for `count` tiles; empty for any other count.
+function shapeLayouts(count) {
+  var layouts = SHAPES[count] || [];
+  return layouts.map(function (layout, i) {
+    return layout.map(function (z) { return { x: z.x, y: z.y, w: z.w, h: z.h, shape: SHAPE_NAMES[count][i] }; });
+  });
+}
+
 // The tiled Windows of a workspace as one layout: each zone is a tile's current
 // rectangle as fractions of the tiles' bounding box, carrying the Window's `id`.
 // Empty when fewer than two tiles have a known rectangle (nothing to swap with).
@@ -64,5 +89,5 @@ function tileLayout(items, workspace) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { LAYOUTS: LAYOUTS, windowsOn: windowsOn, tileLayout: tileLayout };
+  module.exports = { LAYOUTS: LAYOUTS, windowsOn: windowsOn, tileLayout: tileLayout, shapeLayouts: shapeLayouts };
 }

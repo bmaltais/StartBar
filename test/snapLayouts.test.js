@@ -205,3 +205,38 @@ test("windowsOn counts a workspace's windows once, across Window and Group Items
   assert.deepEqual(windowsOn(items, ""), []);
   assert.deepEqual(windowsOn(null, "2"), []);
 });
+
+test("shapeLayouts offers every shape for two and three tiles, each tiling the area, and none for other counts", () => {
+  const { shapeLayouts } = require("../SnapLayouts.js");
+  assert.deepEqual(shapeLayouts(2).map((l) => l[0].shape), ["H", "V"]);
+  assert.deepEqual(shapeLayouts(3).map((l) => l[0].shape), ["HV", "HH", "VH", "VV"]);
+  assert.deepEqual([shapeLayouts(1), shapeLayouts(4)], [[], []]);
+  for (const layout of [...shapeLayouts(2), ...shapeLayouts(3)]) {
+    assert.ok(Math.abs(layout.reduce((sum, z) => sum + z.w * z.h, 0) - 1) < 1e-9);
+  }
+});
+
+test("the jq that reads a workspace's shape tells two and three tiles' shapes apart", () => {
+  const c = (address, x, y, w, h) => ({ address, at: [x, y], size: [w, h], floating: false, mapped: true, hidden: false, monitor: 0, workspace: { id: 1 } });
+  const shapeOf = (clients) => JSON.parse(spawnSync("jq", ["-c", "--arg", "a", "a", H.TILE_SHAPE + "tiles($a) | shape"], { input: JSON.stringify(clients), encoding: "utf8" }).stdout);
+  assert.equal(shapeOf([c("a", 0, 0, 400, 800), c("b", 400, 0, 400, 800)]).shape, "H");
+  assert.equal(shapeOf([c("a", 0, 0, 800, 400), c("b", 0, 400, 800, 400)]).shape, "V");
+  assert.equal(shapeOf([c("a", 0, 0, 400, 800), c("b", 400, 0, 400, 400), c("c", 400, 400, 400, 400)]).shape, "HV");
+  assert.equal(shapeOf([c("a", 0, 0, 400, 800), c("b", 400, 0, 200, 800), c("c", 600, 0, 200, 800)]).shape, "HH");
+  assert.equal(shapeOf([c("a", 0, 0, 800, 400), c("b", 0, 400, 400, 400), c("c", 400, 400, 400, 400)]).shape, "VH");
+  assert.equal(shapeOf([c("a", 0, 0, 800, 400), c("b", 0, 400, 800, 200), c("c", 0, 600, 800, 200)]).shape, "VV");
+  const lone = shapeOf([c("a", 400, 0, 400, 800), c("b", 0, 0, 400, 400), c("c", 0, 400, 400, 400)]);
+  assert.equal(lone.lone, "a");
+  assert.equal(lone.first, false, "the lone window sits right of its pair");
+  assert.equal(shapeOf([c("a", 0, 0, 800, 400), c("b", 0, 400, 400, 400), c("c", 400, 400, 400, 400)]).first, true);
+  assert.equal(shapeOf([{ ...c("a", 0, 0, 800, 800), floating: true }, c("b", 0, 0, 400, 400)]).n, 1, "floating windows are not tiles");
+});
+
+test("reshapeTiles refuses a bad address, shape or zone", () => {
+  const z = { x: 0, y: 0, w: 0.5, h: 1 };
+  assert.equal(H.reshapeTiles("nope", "H", z), null);
+  assert.equal(H.reshapeTiles(ADDR, "X", z), null);
+  assert.equal(H.reshapeTiles(ADDR, "H", null), null);
+  assert.equal(H.reshapeTiles(ADDR, "H", { x: "a", y: 0, w: 1, h: 1 }), null);
+  assert.equal(H.reshapeTiles(ADDR, "HV", z)[3], "bash");
+});

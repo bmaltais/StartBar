@@ -3554,7 +3554,9 @@ Item {
           if (!contextMenu.snapTarget) return []
           if (!contextMenu.snapTiled) return SnapLayoutData.LAYOUTS
           var tiles = SnapLayoutData.tileLayout(dockState.items, contextMenu.snapTarget.workspace)
-          return tiles.length > 0 ? [tiles] : []
+          // Two or three tiles can be reshaped; more can only be swapped.
+          var shapes = SnapLayoutData.shapeLayouts(tiles.length)
+          return shapes.length > 0 ? shapes : (tiles.length > 0 ? [tiles] : [])
         }
         readonly property bool snapAvailable: !!root.taskbar && root.taskbar.snapLayouts
           && !!contextMenu.snapTarget && !!contextMenu.snapTarget.id && contextMenu.snapLayoutList.length > 0
@@ -3707,9 +3709,11 @@ Item {
               onPick: function (zone, others) {
                 // From a Preview, keep the peeked Window shown, as a state row does.
                 if (contextMenu.forPreview) previewState.send({ type: "menuRowChosen" })
-                // A tile swaps places with the tile it is dropped on, and stays tiled.
+                // A tile never floats: it is reshaped to the thumbnail (two or three tiles)
+                // and swapped into the zone, or just swapped with the tile clicked.
                 var command = contextMenu.snapTiled
-                  ? DockHyprland.swapTiles(contextMenu.snapTarget.id, zone.id)
+                  ? (zone.shape ? DockHyprland.reshapeTiles(contextMenu.snapTarget.id, zone.shape, zone)
+                                : DockHyprland.swapTiles(contextMenu.snapTarget.id, zone.id))
                   : DockHyprland.snapWindow(contextMenu.snapTarget.id, zone, root.taskbar.snapFillOthers ? others : [])
                 if (command) Quickshell.execDetached(command)
                 contextMenu.close()
