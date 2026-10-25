@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Where the repo and its pull requests stand, from git and gh (never from notes). Read-only; fetches origin first.
+#   scripts/repo-state [PR...]   the branch against the open release branch, then the latest pull requests (or the ones named)
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+git fetch -q origin
+branch=$(git branch --show-current)
+release=$(scripts/release-branch 2>/dev/null | head -1 || true)
+echo "branch ${branch:-detached}  head $(git rev-parse --short HEAD)"
+if [[ -n $release ]] && git rev-parse -q --verify "origin/$release" >/dev/null; then
+  read -r behind ahead < <(git rev-list --left-right --count "origin/$release...HEAD")
+  echo "open release $release  this branch is ahead $ahead, behind $behind"
+else
+  echo "open release: none (every release branch is tagged: docs/agents/release.md step 7)"
+fi
+if [[ $# -gt 0 ]]; then
+  for pr in "$@"; do
+    gh pr view "$pr" --json number,state,baseRefName,mergedAt,title \
+      --jq '"PR #\(.number) \(.state) into \(.baseRefName)\(if .mergedAt then " merged " + .mergedAt[:10] else "" end): \(.title)"'
+  done
+else
+  gh pr list --state all --limit 6 --json number,state,baseRefName,mergedAt,title \
+    --jq '.[] | "PR #\(.number) \(.state) into \(.baseRefName)\(if .mergedAt then " merged " + .mergedAt[:10] else "" end): \(.title)"'
+fi
