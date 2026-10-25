@@ -8,6 +8,8 @@ const { LAYOUTS } = require("../SnapLayouts.js");
 const H = require("../DockHyprland.js");
 
 const ADDR = "0x56538020a4f0";
+const HALVES = LAYOUTS.find((l) => l.length === 2 && l[0].h === 1);
+const QUARTERS = LAYOUTS.find((l) => l.length === 4);
 
 test("every zone of every layout lies inside the area", () => {
   assert.ok(LAYOUTS.length > 0);
@@ -34,8 +36,13 @@ test("the zones of a layout tile the area: no overlap, no gap", () => {
   }
 });
 
+test("the menu offers two stacked, and one on top with two below", () => {
+  assert.ok(LAYOUTS.some((l) => l.length === 2 && l[0].w === 1 && l[0].h === 0.5), "two stacked");
+  assert.ok(LAYOUTS.some((l) => l.length === 3 && l[0].w === 1 && l[1].w === 0.5 && l[2].w === 0.5), "one on top, two below");
+});
+
 test("snapWindow refuses a bad address or zone", () => {
-  assert.equal(H.snapWindow("nope", LAYOUTS[0][0]), null);
+  assert.equal(H.snapWindow("nope", HALVES[0]), null);
   assert.equal(H.snapWindow(ADDR, null), null);
   assert.equal(H.snapWindow(ADDR, { x: "a", y: 0, w: 1, h: 1 }), null);
 });
@@ -66,27 +73,27 @@ const resizeOf = (c) => c.find((x) => x.includes("window.resize"));
 const moveOf = (c) => c.find((x) => x.includes("window.move"));
 
 test("the right half goes beside the left, inside the reserved space and a 6 px margin", () => {
-  const calls = snap(LAYOUTS[0][1], client, monitor);
+  const calls = snap(HALVES[1], client, monitor);
   assert.match(resizeOf(calls), /x = 628, y = 756, exact = true/);
   assert.match(moveOf(calls), /x = 643, y = 35,/);
   assert.equal(calls.length, 2, "a floating window only needs resize and move");
 });
 
 test("a monitor's scale and offset are respected", () => {
-  const calls = snap(LAYOUTS[2][3], client, { ...monitor, x: 1920, y: 100, width: 3840, height: 2160, scale: 2, reserved: [0, 0, 0, 40] });
+  const calls = snap(QUARTERS[3], client, { ...monitor, x: 1920, y: 100, width: 3840, height: 2160, scale: 2, reserved: [0, 0, 0, 40] });
   // usable 1920x1040 less a 6 px margin: 1908 x 1028; a quarter is 948 x 508 (half the area less the margin); its corner is 6 + 954 + 3 in, and 6 + 514 + 3 down.
   assert.match(resizeOf(calls), /x = 948, y = 508, exact = true/);
   assert.match(moveOf(calls), /x = 2883, y = 623,/);
 });
 
 test("a tiled or full screen window is floated first, and leaves full screen", () => {
-  const calls = snap(LAYOUTS[0][0], { ...client, floating: false, fullscreen: 2 }, monitor);
+  const calls = snap(HALVES[0], { ...client, floating: false, fullscreen: 2 }, monitor);
   assert.match(calls[0], /window\.fullscreen\(.*action = "unset"/);
   assert.match(calls[1], /window\.float\(.*action = "set"/);
   assert.match(calls[2], /window\.resize/);
 });
 
 test("a window the compositor does not know does nothing", () => {
-  const calls = snap(LAYOUTS[0][0], { ...client, address: "0xdead" }, monitor);
+  const calls = snap(HALVES[0], { ...client, address: "0xdead" }, monitor);
   assert.deepEqual(calls, []);
 });

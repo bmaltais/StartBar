@@ -9,6 +9,8 @@ var THIRD = 1 / 3;
 var LAYOUTS = [
   // Halves.
   [{ x: 0, y: 0, w: 0.5, h: 1 }, { x: 0.5, y: 0, w: 0.5, h: 1 }],
+  // Two stacked.
+  [{ x: 0, y: 0, w: 1, h: 0.5 }, { x: 0, y: 0.5, w: 1, h: 0.5 }],
   // Thirds.
   [{ x: 0, y: 0, w: THIRD, h: 1 }, { x: THIRD, y: 0, w: THIRD, h: 1 }, { x: 2 * THIRD, y: 0, w: THIRD, h: 1 }],
   // Quarters.
@@ -16,6 +18,8 @@ var LAYOUTS = [
    { x: 0, y: 0.5, w: 0.5, h: 0.5 }, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }],
   // A main pane with two stacked beside it.
   [{ x: 0, y: 0, w: 2 * THIRD, h: 1 }, { x: 2 * THIRD, y: 0, w: THIRD, h: 0.5 }, { x: 2 * THIRD, y: 0.5, w: THIRD, h: 0.5 }],
+  // One on top, two side by side below it.
+  [{ x: 0, y: 0, w: 1, h: 0.5 }, { x: 0, y: 0.5, w: 0.5, h: 0.5 }, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }],
 ];
 
 if (typeof module !== "undefined" && module.exports) {
