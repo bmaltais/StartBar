@@ -71,7 +71,7 @@ test("every Window-state row has a dispatch aimed by address, and no others exis
     { fullscreen: 0, floating: false, workspace: "1" },
     { fullscreen: 1, floating: true, pinned: true, workspace: "1" },
     { fullscreen: 2, floating: true, workspace: "special:scratchpad" },
-  ]) for (const a of windowActions(window)) ids.add(a.id);
+  ]) for (const a of windowActions(window, { move: true })) ids.add(a.id);
   assert.deepEqual([...ids].sort(), [...H.windowActionIds].sort());
   for (const id of ids) {
     const argv = H.windowAction(id, ADDR);

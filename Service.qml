@@ -3424,7 +3424,7 @@ Item {
             // peek being put back) is reflected in the labels.
             let win = previewPopup.windowFor(contextMenu.previewWindowId)
             let previewRows = []
-            let winStates = DockModel.windowActions(win)
+            let winStates = DockModel.windowActions(win, { move: !!root.taskbar && root.taskbar.snapLayouts })
             for (let s = 0; s < winStates.length; s++) {
               previewRows.push({
                 label: winStates[s].label,
@@ -3491,7 +3491,7 @@ Item {
             })
           }
           if (item.kind === "window" && !(item.count > 1)) {
-            let states = DockModel.windowActions(item.window)
+            let states = DockModel.windowActions(item.window, { move: !!root.taskbar && root.taskbar.snapLayouts })
             for (let j = 0; j < states.length; j++) {
               list.push({
                 label: states[j].label,
@@ -3539,15 +3539,15 @@ Item {
         function close() { contextMenu.visible = false }
 
         // docs/SPEC.md "Snap layouts": the layout picker tops the menu of a
-        // floating Window, from its Item (a Window Item alone) or its Preview,
-        // when the setting is on.
+        // Window, from its Item (a Window Item alone) or its Preview, when the
+        // setting is on.
         readonly property var snapTarget: {
           if (contextMenu.forPreview) return previewPopup.windowFor(contextMenu.previewWindowId)
           var item = contextMenu.menuItem
           return item && item.kind === "window" && !(item.count > 1) ? item.window : null
         }
         readonly property bool snapAvailable: !!root.taskbar && root.taskbar.snapLayouts
-          && !!contextMenu.snapTarget && !!contextMenu.snapTarget.floating
+          && !!contextMenu.snapTarget && !!contextMenu.snapTarget.id
 
         // The menu stays open until a row is chosen, an outside click closes
         // it (the focus grab below), or the pointer leaves it: leaving only
