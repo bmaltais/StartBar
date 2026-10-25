@@ -167,6 +167,33 @@ function windowAction(id, address) {
   return argv("hyprctl dispatch \"$1\"", make("window = \"address:" + normalized + "\""));
 }
 
+// Snap layouts (docs/SPEC.md "Snap layouts"): put a Window in a zone of its monitor's usable
+// area, as fractions of it: `snapWindow(address, {x, y, w, h})`. Floats the
+// Window first if it is tiled, leaves full screen, then resizes and moves it.
+function snapWindow(address, zone) {
+  var normalized = normalizedAddress(address);
+  if (!normalized || !zone) return null;
+  var fr = [zone.x, zone.y, zone.w, zone.h].map(Number);
+  if (fr.some(function (n) { return !isFinite(n); })) return null;
+  var script = "a=$1; shift; "
+    + "geo=$(hyprctl -j clients | jq -c --arg a \"$a\" --argjson m \"$(hyprctl -j monitors)\" --argjson f \"[$1,$2,$3,$4]\" "
+    + "'first(.[] | select(.address == $a)) as $w | first($m[] | select(.id == $w.monitor)) as $o | "
+    + "($o.scale // 1) as $s | 6 as $g | "
+    + "($o.x + $o.reserved[0] + $g) as $x0 | ($o.y + $o.reserved[1] + $g) as $y0 | "
+    + "(($o.width / $s) - $o.reserved[0] - $o.reserved[2] - 2 * $g) as $aw | "
+    + "(($o.height / $s) - $o.reserved[1] - $o.reserved[3] - 2 * $g) as $ah | "
+    + "{ x: ($x0 + $aw * $f[0] + ($g / 2) | floor), y: ($y0 + $ah * $f[1] + ($g / 2) | floor), "
+    + "w: ($aw * $f[2] - $g | floor), h: ($ah * $f[3] - $g | floor), "
+    + "fs: ($w.fullscreen), fl: ($w.floating) }') || exit 0; "
+    + "[ -n \"$geo\" ] || exit 0; "
+    + "t=\"window = \\\"address:$a\\\"\"; "
+    + "[ \"$(jq -r .fs <<<\"$geo\")\" != 0 ] && hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"fullscreen\\\", action = \\\"unset\\\", $t })\" >/dev/null; "
+    + "[ \"$(jq -r .fl <<<\"$geo\")\" != true ] && hyprctl dispatch \"hl.dsp.window.float({ action = \\\"set\\\", $t })\" >/dev/null; "
+    + "hyprctl dispatch \"hl.dsp.window.resize({ x = $(jq -r .w <<<\"$geo\"), y = $(jq -r .h <<<\"$geo\"), exact = true, $t })\" >/dev/null; "
+    + "hyprctl dispatch \"hl.dsp.window.move({ x = $(jq -r .x <<<\"$geo\"), y = $(jq -r .y <<<\"$geo\"), $t })\" >/dev/null";
+  return ["bash", "-lc", script, "bash", normalized].concat(fr.map(String));
+}
+
 // Peek: hovering a Preview thumbnail focuses its Window to show it. The first
 // peek saves the original state; later ones undo the previous peek first,
 // keeping that saved state.
@@ -286,6 +313,7 @@ if (typeof module !== "undefined" && module.exports) {
     focusWindowAndWarp: focusWindowAndWarp,
     closeWindow: closeWindow,
     windowAction: windowAction,
+    snapWindow: snapWindow,
     windowActionIds: Object.keys(WINDOW_ACTIONS),
     peekWindow: peekWindow,
     peekRestore: peekRestore,

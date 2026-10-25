@@ -68,6 +68,7 @@ Service.qml	unqualified	switchEditor
 Service.qml	unqualified	textEditor
 Service.qml	unqualified	userDirsForSettings
 Service.qml	unresolved-type	Type rect is used but it is not resolved
+SnapLayouts.qml	unqualified	Style
 StartMenuView.qml	missing-property	Member "accent" not found on type "QQuickColor"
 StartMenuView.qml	missing-property	Member "background" not found on type "QQuickColor"
 StartMenuView.qml	missing-property	Member "foreground" not found on type "QQuickColor"

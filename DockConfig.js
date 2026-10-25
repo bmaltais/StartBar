@@ -159,6 +159,7 @@ function effectiveTaskbar(entry) {
     hideOmarchyDock: booleanOr(source.hideOmarchyDock, true),
     focusFollowsMouse: booleanOr(source.focusFollowsMouse, false),
     raiseOnFocus: booleanOr(source.raiseOnFocus, false),
+    snapLayouts: booleanOr(source.snapLayouts, false),
     newWindowWorkspace: newWindowWorkspaceOr(source.newWindowWorkspace),
   };
 }
@@ -360,6 +361,7 @@ function settingsSchema() {
         },
         { key: "focusFollowsMouse", label: "Focus follows mouse", type: "bool", hint: "Hovering a window gives it keyboard focus, without a click" },
         { key: "raiseOnFocus", label: "Raise window on focus", type: "bool", hint: "A floating window that gets focus, by hover or otherwise, comes to the front" },
+        { key: "snapLayouts", label: "Snap layouts", type: "bool", hint: "A floating window's menu offers screen layouts to place it in: halves, thirds, quarters" },
         { key: "hideOmarchyDock", label: "Hide Omarchy's dock", type: "bool", hint: "Turns off the dock Omarchy shows on floating workspaces" },
       ],
     },

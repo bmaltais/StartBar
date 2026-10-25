@@ -17,6 +17,7 @@ const all = {
   peekCommit: H.peekCommit(),
   rescueWindows: H.rescueWindows([ADDR, "0xabc"]),
   glassRule: H.glassRule(),
+  snapWindow: H.snapWindow(ADDR, { x: 0, y: 0, w: 0.5, h: 1 }),
   openOnOwnWorkspace: H.openOnOwnWorkspace(ADDR, "maximized"),
   openOnOwnWorkspaceFullscreen: H.openOnOwnWorkspace(ADDR, "fullscreen"),
   openOnOwnWorkspaceNormal: H.openOnOwnWorkspace(ADDR, "normal"),

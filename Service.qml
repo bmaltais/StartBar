@@ -3538,6 +3538,13 @@ Item {
 
         function close() { contextMenu.visible = false }
 
+        // docs/SPEC.md "Snap layouts": the layout picker tops the menu of a
+        // floating Window Item, when the setting is on.
+        readonly property bool snapAvailable: !!root.taskbar && root.taskbar.snapLayouts
+          && !contextMenu.forPreview && !!contextMenu.menuItem
+          && contextMenu.menuItem.kind === "window" && !(contextMenu.menuItem.count > 1)
+          && !!contextMenu.menuItem.window && !!contextMenu.menuItem.window.floating
+
         // The menu stays open until a row is chosen, an outside click closes
         // it (the focus grab below), or the pointer leaves it: leaving only
         // counts once the pointer has actually been on the menu
@@ -3562,7 +3569,7 @@ Item {
         visible: false
         color: "transparent"
         implicitWidth: contextMenu.rowWidth + root.menuShadow * 2
-        implicitHeight: menuColumn.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
+        implicitHeight: menuColumn.implicitHeight + snapBlock.height + root.menuPad * 2 + root.menuShadow * 2
 
         onVisibleChanged: {
           revealState.set("menu", contextMenu.visible)
@@ -3664,12 +3671,48 @@ Item {
             id: menuHover
           }
 
-          Column {
-            id: menuColumn
+          // docs/SPEC.md "Snap layouts": the layouts, above the usual rows.
+          Item {
+            id: snapBlock
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.margins: root.menuPad
+            visible: contextMenu.snapAvailable
+            height: contextMenu.snapAvailable ? snapView.implicitHeight + root.menuPad * 2 + 1 : 0
+
+            SnapLayouts {
+              id: snapView
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.top: parent.top
+              fg: previewPopup.textColor
+              accent: previewPopup.accentColor
+              hairline: root.colHairline
+              onPick: function (zone) {
+                var command = DockHyprland.snapWindow(contextMenu.menuItem.window.id, zone)
+                if (command) Quickshell.execDetached(command)
+                contextMenu.close()
+              }
+            }
+
+            Rectangle {
+              anchors.bottom: parent.bottom
+              anchors.left: parent.left
+              anchors.right: parent.right
+              height: 1
+              color: root.colHairline
+            }
+          }
+
+          Column {
+            id: menuColumn
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: snapBlock.bottom
+            anchors.leftMargin: root.menuPad
+            anchors.rightMargin: root.menuPad
+            anchors.topMargin: root.menuPad
 
             Repeater {
               model: contextMenu.rows
