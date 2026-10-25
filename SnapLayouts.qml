@@ -1,7 +1,7 @@
 // The layout picker at the top of a Window's menu (docs/SPEC.md "Snap
 // layouts"): one small thumbnail per layout of SnapLayouts.js, each zone of it
-// lighting up under the pointer. Choosing a zone emits pick(zone, others): the
-// zone as fractions of the monitor's usable area, and the layout's other zones.
+// lighting up under the pointer. Choosing a zone emits pick(zone, layout): the
+// zone and the layout it is in, for SnapLayouts.js plan().
 pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons
@@ -17,7 +17,7 @@ Item {
   // The zone the keyboard has selected, lit like a hovered one: kbLayout < 0 for none.
   property int kbLayout: -1
   property int kbZone: 0
-  signal pick(var zone, var others)
+  signal pick(var zone, var layout)
 
   implicitHeight: grid.implicitHeight
 
@@ -40,19 +40,7 @@ Item {
   function pickSelected() {
     if (snap.kbLayout < 0 || snap.kbLayout >= snap.layouts.length) return
     var layout = snap.layouts[snap.kbLayout]
-    snap.pick(layout[snap.kbZone], snap.othersOf(layout, layout[snap.kbZone]))
-  }
-
-  // A layout's other zones, as plain {x, y, w, h}. Zones are told apart by
-  // value: the model hands out a copy each time, so identity does not hold.
-  function othersOf(layout, zone) {
-    var out = []
-    for (var i = 0; i < layout.length; i++) {
-      var z = layout[i]
-      if (z.x === zone.x && z.y === zone.y && z.w === zone.w && z.h === zone.h) continue
-      out.push({ x: z.x, y: z.y, w: z.w, h: z.h })
-    }
-    return out
+    snap.pick(layout[snap.kbZone], layout)
   }
 
   Grid {
@@ -95,7 +83,7 @@ Item {
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: snap.pick(zone.modelData, snap.othersOf(thumb.modelData, zone.modelData))
+              onClicked: snap.pick(zone.modelData, thumb.modelData)
             }
           }
         }

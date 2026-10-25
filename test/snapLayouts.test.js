@@ -5,7 +5,8 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { LAYOUTS } = require("../SnapLayouts.js");
-const H = require("../DockHyprland.js");
+const H = require("../DockSnap.js");
+const Hypr = require("../DockHyprland.js");
 
 const ADDR = "0x56538020a4f0";
 const HALVES = LAYOUTS.find((l) => l.length === 2 && l[0].h === 1);
@@ -275,4 +276,112 @@ test("a window-mode window leaves room for its titlebar above the zone; others a
   assert.match(moveOf(off), /y = 35,/, "the plugin is off");
   const absent = snap(HALVES[0], modeWindow, monitor);
   assert.match(moveOf(absent), /y = 35,/, "the plugin is not there");
+});
+
+// --- What a Window is offered and what a pick does (layoutsFor, windowAt, plan) ---
+
+const { layoutsFor, windowAt, plan, FULL } = require("../SnapLayouts.js");
+
+// Tiles of workspace "1", laid out as `n` columns of 100 px, plus extras.
+function tiles(n, extra = []) {
+  const items = [];
+  for (let i = 0; i < n; i++) {
+    items.push({ window: { id: "t" + i, workspace: "1", floating: false, rect: { x: i * 100, y: 0, w: 100, h: 800 } } });
+  }
+  return items.concat(extra);
+}
+
+test("layoutsFor: a floating Window is offered every layout, ending with full", () => {
+  const win = { id: "f", workspace: "1", floating: true };
+  assert.equal(layoutsFor([], win), LAYOUTS);
+  assert.equal(LAYOUTS[LAYOUTS.length - 1], FULL);
+});
+
+test("layoutsFor: two or three tiles are offered their shapes then full; more, their arrangement then full", () => {
+  const two = tiles(2);
+  assert.deepEqual(layoutsFor(two, two[0].window).map((l) => l[0].shape || (l[0].maximize ? "full" : "?")), ["H", "V", "full"]);
+  const three = tiles(3);
+  assert.deepEqual(layoutsFor(three, three[1].window).map((l) => l[0].shape || (l[0].maximize ? "full" : "?")), ["HV", "HH", "VH", "VV", "full"]);
+  const four = tiles(4);
+  const offered = layoutsFor(four, four[0].window);
+  assert.equal(offered.length, 2);
+  assert.deepEqual(offered[0].map((z) => z.id), ["t0", "t1", "t2", "t3"], "the tiles as they are, to swap with");
+  assert.equal(offered[1], FULL);
+});
+
+test("layoutsFor: a lone tile, no Window, or one without an id gets no picker", () => {
+  const one = tiles(1);
+  assert.deepEqual(layoutsFor(one, one[0].window), []);
+  assert.deepEqual(layoutsFor(one, null), []);
+  assert.deepEqual(layoutsFor(one, { floating: true }), []);
+  assert.deepEqual(layoutsFor(one, { id: "x" }), [], "a Preview menu's unknown Window: not floating, no workspace");
+});
+
+test("layoutsFor: floating Windows on a tiled workspace do not count as tiles", () => {
+  const items = tiles(2, [{ window: { id: "f", workspace: "1", floating: true, rect: { x: 0, y: 0, w: 10, h: 10 } } }]);
+  assert.deepEqual(layoutsFor(items, items[0].window).map((l) => l[0].shape || "full"), ["H", "V", "full"]);
+});
+
+test("windowAt finds a Window by address with or without 0x, in Window and Group Items, never on a special workspace", () => {
+  const items = [
+    { window: { id: "aa11", workspace: "1" } },
+    { windows: [{ id: "bb22", workspace: "2" }, { id: "cc33", workspace: "special:minimized" }] },
+  ];
+  assert.equal(windowAt(items, "0xaa11").id, "aa11");
+  assert.equal(windowAt(items, "bb22").id, "bb22");
+  assert.equal(windowAt(items, "0xcc33"), null);
+  assert.equal(windowAt(items, ""), null);
+  assert.equal(windowAt(items, "0xdead"), null);
+  assert.equal(windowAt(null, "aa11"), null);
+});
+
+test("plan: the full thumbnail maximizes, floating or tiled", () => {
+  assert.deepEqual(plan({ id: "f", floating: true }, FULL, FULL[0], true), { action: "maximize", id: "f" });
+  assert.deepEqual(plan({ id: "t", floating: false }, FULL, FULL[0], true), { action: "maximize", id: "t" });
+});
+
+test("plan: a tile is reshaped into a shape, or swapped with the tile clicked, and never filled or floated", () => {
+  const two = tiles(2);
+  const [h] = layoutsFor(two, two[0].window);
+  assert.deepEqual(plan(two[0].window, h, h[1], true),
+    { action: "reshape", id: "t0", shape: "H", zone: { x: 0.5, y: 0, w: 0.5, h: 1 } });
+  const four = tiles(4);
+  const [arrangement] = layoutsFor(four, four[0].window);
+  assert.deepEqual(plan(four[0].window, arrangement, arrangement[2], true), { action: "swap", id: "t0", other: "t2" });
+});
+
+test("plan: a floating Window snaps to the zone, filling the layout's other zones only with fillOthers", () => {
+  const win = { id: "f", floating: true };
+  const quarters = LAYOUTS.find((l) => l.length === 4);
+  // A copy of the zone, as QML hands it over: matched by value.
+  const picked = { ...quarters[1] };
+  assert.deepEqual(plan(win, quarters, picked, false),
+    { action: "snap", id: "f", zone: { x: 0.5, y: 0, w: 0.5, h: 0.5 }, others: [] });
+  assert.deepEqual(plan(win, quarters, picked, true).others,
+    [{ x: 0, y: 0, w: 0.5, h: 0.5 }, { x: 0, y: 0.5, w: 0.5, h: 0.5 }, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }]);
+});
+
+test("plan: nothing without a Window, an id or a zone", () => {
+  assert.equal(plan(null, FULL, FULL[0], false), null);
+  assert.equal(plan({ floating: true }, FULL, FULL[0], false), null);
+  assert.equal(plan({ id: "f", floating: true }, FULL, null, false), null);
+  assert.equal(plan({ id: "t", floating: false }, [], { x: 0, y: 0, w: 1, h: 1 }, false), null, "a tile zone with neither shape nor id");
+});
+
+test("snapCommand turns each plan into its DockSnap command", () => {
+  const z = { x: 0, y: 0, w: 0.5, h: 1 };
+  assert.deepEqual(H.snapCommand({ action: "maximize", id: ADDR }), H.maximizeWindow(ADDR));
+  assert.deepEqual(H.snapCommand({ action: "reshape", id: ADDR, shape: "H", zone: z }), H.reshapeTiles(ADDR, "H", z));
+  assert.deepEqual(H.snapCommand({ action: "swap", id: ADDR, other: "0xcd" }), H.swapTiles(ADDR, "0xcd"));
+  assert.deepEqual(H.snapCommand({ action: "snap", id: ADDR, zone: z, others: [] }), H.snapWindow(ADDR, z, []));
+  assert.equal(H.snapCommand(null), null);
+  assert.equal(H.snapCommand({ action: "nope", id: ADDR }), null);
+});
+
+test("DockSnap's copies of normalizedAddress and argv agree with DockHyprland's", () => {
+  for (const input of ["56538020a4f0", "0x56538020a4f0", "0xAB", "", "0x", "xyz", "0x12; rm -rf /", " 0x12", null, undefined, 12, {}]) {
+    assert.equal(H.normalizedAddress(input), Hypr.normalizedAddress(input), JSON.stringify(input));
+  }
+  assert.deepEqual(H.argv("echo", "a"), ["bash", "-lc", "echo", "bash", "a"]);
+  assert.deepEqual(H.argv("echo"), ["bash", "-lc", "echo", "bash"]);
 });
