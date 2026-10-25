@@ -49,10 +49,10 @@ test("snapWindow refuses a bad address or zone", () => {
 
 // Runs snapWindow's script against a stand-in hyprctl that answers the two
 // queries from the given JSON and records every dispatch.
-function snap(zone, client, monitor, layers = {}) {
+function snap(zone, client, monitor, layers = {}, others, extra = []) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "snap-"));
   const log = path.join(dir, "log");
-  fs.writeFileSync(path.join(dir, "clients.json"), JSON.stringify([client]));
+  fs.writeFileSync(path.join(dir, "clients.json"), JSON.stringify([client, ...extra]));
   fs.writeFileSync(path.join(dir, "monitors.json"), JSON.stringify([monitor]));
   fs.writeFileSync(path.join(dir, "layers.json"), JSON.stringify(layers));
   fs.writeFileSync(path.join(dir, "hyprctl"), [
@@ -60,7 +60,7 @@ function snap(zone, client, monitor, layers = {}) {
     'if [ "$1" = -j ]; then cat "$(dirname "$0")/$2.json"; exit 0; fi',
     `echo "$2" >> ${log}`,
   ].join("\n"), { mode: 0o755 });
-  const argv = H.snapWindow(ADDR, zone);
+  const argv = H.snapWindow(ADDR, zone, others);
   const result = spawnSync(argv[0], argv.slice(1), { env: { ...process.env, PATH: dir + ":" + process.env.PATH } });
   assert.equal(result.status, 0, String(result.stderr));
   const calls = fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : [];
@@ -123,4 +123,49 @@ test("a window an app moved above the bar is put back below it", () => {
 test("a window already below the bar is left alone", () => {
   const calls = snap(HALVES[0], { ...client, at: [9, 35] }, monitor, bar(0, 26));
   assert.equal(calls.filter((c) => c.includes("window.move")).length, 1);
+});
+
+const peer = (n, focus, over = {}) => ({ address: "0x" + n, monitor: 0, floating: false, fullscreen: 0, mapped: true, hidden: false,
+  workspace: { id: 1 }, focusHistoryID: focus, at: [100, 100], ...over });
+const main = { ...client, mapped: true, hidden: false, workspace: { id: 1 }, focusHistoryID: 0 };
+const addr = (c) => (c.match(/address:(0x\w+)/) || [])[1];
+
+test("the other windows of the workspace take the remaining zones, most recent first", () => {
+  const calls = snap(HALVES[0], main, monitor, {}, [HALVES[1]], [peer("b1", 2), peer("b2", 1)]);
+  const moved = calls.filter((c) => c.includes("window.move")).map(addr);
+  assert.deepEqual(moved, [ADDR, "0xb2"], "the more recent one (b2) fills the one remaining zone");
+});
+
+test("more zones than windows leave zones empty; more windows than zones leave the rest alone", () => {
+  const three = LAYOUTS.find((l) => l.length === 3 && l[0].h === 1 && l[1].h === 1);
+  const rest = three.slice(1);
+  let calls = snap(three[0], main, monitor, {}, rest, [peer("b1", 1)]);
+  assert.deepEqual(calls.filter((c) => c.includes("window.move")).map(addr), [ADDR, "0xb1"]);
+  calls = snap(three[0], main, monitor, {}, rest, [peer("b1", 1), peer("b2", 2), peer("b3", 3)]);
+  assert.deepEqual(calls.filter((c) => c.includes("window.move")).map(addr), [ADDR, "0xb1", "0xb2"]);
+});
+
+test("windows on another workspace or monitor, hidden ones and special workspaces are not placed", () => {
+  const calls = snap(HALVES[0], main, monitor, {}, [HALVES[1]], [
+    peer("c1", 1, { workspace: { id: 2 } }), peer("c2", 2, { monitor: 1 }), peer("c3", 3, { hidden: true }),
+    peer("c4", 4, { workspace: { id: -98 } }), peer("c5", 5, { mapped: false }),
+  ]);
+  assert.deepEqual(calls.filter((c) => c.includes("window.move")).map(addr), [ADDR]);
+});
+
+test("without other zones only the chosen window is placed", () => {
+  const calls = snap(HALVES[0], main, monitor, {}, [], [peer("d1", 1)]);
+  assert.deepEqual(calls.filter((c) => c.includes("window.move")).map(addr), [ADDR]);
+});
+
+test("snapWindow refuses a bad other zone", () => {
+  assert.equal(H.snapWindow(ADDR, HALVES[0], [{ x: "a", y: 0, w: 1, h: 1 }]), null);
+});
+
+test("snapWindow reads an array-like list of other zones, as QML hands it over", () => {
+  const arrayLike = { 0: HALVES[1], length: 1 };
+  const a = H.snapWindow(ADDR, HALVES[0], arrayLike);
+  const b = H.snapWindow(ADDR, HALVES[0], [HALVES[1]]);
+  assert.deepEqual(a, b);
+  assert.notEqual(a[a.length - 1], "[]");
 });

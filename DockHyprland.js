@@ -189,29 +189,59 @@ var SNAP_GEOMETRY = "first(.[] | select(.address == $a)) as $w | "
   + "w: ($aw * $f[2] - $g | floor), h: ($ah * $f[3] - $g | floor), "
   + "limit: ($o.y + $top), fs: $w.fullscreen, fl: $w.floating }";
 
-function snapWindow(address, zone) {
+function snapWindow(address, zone, others) {
   var normalized = normalizedAddress(address);
   if (!normalized || !zone) return null;
   var fr = [zone.x, zone.y, zone.w, zone.h].map(Number);
   if (fr.some(function (n) { return !isFinite(n); })) return null;
+  var rest = [];
+  // QML hands over a list that is array-like but not an Array.
+  var list = [];
+  for (var k = 0; others && k < others.length && k < 8; k++) list.push(others[k]);
+  for (var i = 0; i < list.length; i++) {
+    var f = [list[i].x, list[i].y, list[i].w, list[i].h].map(Number);
+    if (f.some(function (n) { return !isFinite(n); })) return null;
+    rest.push(f);
+  }
   var script = [
     "a=$1; shift",
-    "geo=$(hyprctl -j clients | jq -c --arg a \"$a\" --argjson m \"$(hyprctl -j monitors)\" "
-      + "--argjson l \"$(hyprctl -j layers)\" --argjson f \"[$1,$2,$3,$4]\" '" + SNAP_GEOMETRY + "') || exit 0",
-    "[ -n \"$geo\" ] || exit 0",
-    "get() { jq -r \".$1\" <<<\"$geo\"; }",
-    "t=\"window = \\\"address:$a\\\"\"",
-    "[ \"$(get fs)\" != 0 ] && hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"fullscreen\\\", action = \\\"unset\\\", $t })\" >/dev/null",
-    "[ \"$(get fl)\" != true ] && hyprctl dispatch \"hl.dsp.window.float({ action = \\\"set\\\", $t })\" >/dev/null",
-    "hyprctl dispatch \"hl.dsp.window.resize({ x = $(get w), y = $(get h), exact = true, $t })\" >/dev/null",
-    "hyprctl dispatch \"hl.dsp.window.move({ x = $(get x), y = $(get y), $t })\" >/dev/null",
+    "fr=\"[$1,$2,$3,$4]\"; others=$5",
+    "mon=$(hyprctl -j monitors); lay=$(hyprctl -j layers)",
+    // place ADDRESS FRACTIONS: float it, size it, move it, then read it back.
+    "place() {",
+    "  local a=$1 f=$2 geo t at",
+    "  geo=$(hyprctl -j clients | jq -c --arg a \"$a\" --argjson m \"$mon\" --argjson l \"$lay\" --argjson f \"$f\" '" + SNAP_GEOMETRY + "') || return 0",
+    "  [ -n \"$geo\" ] || return 0",
+    "  get() { jq -r \".$1\" <<<\"$geo\"; }",
+    "  t=\"window = \\\"address:$a\\\"\"",
+    "  [ \"$(get fs)\" != 0 ] && hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"fullscreen\\\", action = \\\"unset\\\", $t })\" >/dev/null",
+    "  [ \"$(get fl)\" != true ] && hyprctl dispatch \"hl.dsp.window.float({ action = \\\"set\\\", $t })\" >/dev/null",
+    "  hyprctl dispatch \"hl.dsp.window.resize({ x = $(get w), y = $(get h), exact = true, $t })\" >/dev/null",
+    "  hyprctl dispatch \"hl.dsp.window.move({ x = $(get x), y = $(get y), $t })\" >/dev/null",
     // Some apps settle on a position of their own after a resize: read it back.
-    "sleep 0.2",
-    "at=$(hyprctl -j clients | jq -r --arg a \"$a\" '.[] | select(.address == $a) | \"\\(.at[0]) \\(.at[1])\"')",
-    "[ -n \"$at\" ] && [ \"${at#* }\" -lt \"$(get limit)\" ] && hyprctl dispatch \"hl.dsp.window.move({ x = ${at% *}, y = $(get y), $t })\" >/dev/null",
+    "  sleep 0.2",
+    "  at=$(hyprctl -j clients | jq -r --arg a \"$a\" '.[] | select(.address == $a) | \"\\(.at[0]) \\(.at[1])\"')",
+    "  [ -n \"$at\" ] && [ \"${at#* }\" -lt \"$(get limit)\" ] && hyprctl dispatch \"hl.dsp.window.move({ x = ${at% *}, y = $(get y), $t })\" >/dev/null",
+    "  return 0",
+    "}",
+    // The other Windows on its workspace, most recently used first, one per remaining zone.
+    "n=$(jq 'length' <<<\"$others\")",
+    "ids=",
+    "[ \"$n\" -gt 0 ] && ids=$(hyprctl -j clients | jq -r --arg a \"$a\" --argjson n \"$n\" "
+      + "'first(.[] | select(.address == $a)) as $w | [.[] | select(.address != $a and .mapped and (.hidden | not) "
+      + "and .monitor == $w.monitor and .workspace.id == $w.workspace.id and .workspace.id > 0)] "
+      + "| sort_by(.focusHistoryID) | .[:$n][].address')",
+    "place \"$a\" \"$fr\"",
+    "i=0",
+    "for id in $ids; do",
+    "  place \"$id\" \"$(jq -c \".[$i]\" <<<\"$others\")\"",
+    "  i=$((i + 1))",
+    "done",
     "exit 0",
-  ].join("; ");
-  return ["bash", "-lc", script, "bash", normalized].concat(fr.map(String));
+  ].join("\n");
+  var fractions = fr.map(String);
+  var asObjects = rest.map(function (f) { return [f[0], f[1], f[2], f[3]]; });
+  return ["bash", "-lc", script, "bash", normalized].concat(fractions, [JSON.stringify(asObjects)]);
 }
 
 // Peek: hovering a Preview thumbnail focuses its Window to show it. The first

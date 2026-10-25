@@ -3693,10 +3693,11 @@ Item {
               fg: previewPopup.textColor
               accent: previewPopup.accentColor
               hairline: root.colHairline
-              onPick: function (zone) {
+              onPick: function (zone, others) {
                 // From a Preview, keep the peeked Window shown, as a state row does.
                 if (contextMenu.forPreview) previewState.send({ type: "menuRowChosen" })
-                var command = DockHyprland.snapWindow(contextMenu.snapTarget.id, zone)
+                var command = DockHyprland.snapWindow(contextMenu.snapTarget.id, zone,
+                  root.taskbar.snapFillOthers ? others : [])
                 if (command) Quickshell.execDetached(command)
                 contextMenu.close()
               }
