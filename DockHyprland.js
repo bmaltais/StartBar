@@ -268,16 +268,20 @@ function reshapeTiles(address, shape, zone) {
 // reserves there, or the Omarchy bar's own layer while it is showing, whichever
 // reaches lower. A moment after the move the Window is read back and, if an app
 // has put itself above that line, moved down to it.
+// A window on one of Omarchy's window-mode workspaces carries a titlebar (the
+// hyprbars plugin) drawn above its top edge, outside its own rectangle: `$tb`
+// is that bar's height, so the zone starts at the bar rather than the window.
 var SNAP_GEOMETRY = "first(.[] | select(.address == $a)) as $w | "
+  + "(if (($w.tags // []) | index(\"omarchy-floating-workspace\")) != null then $bh else 0 end) as $tb | "
   + "first($m[] | select(.id == $w.monitor)) as $o | ($o.scale // 1) as $s | 6 as $g | "
   + "([$o.reserved[1], ([($l[$o.name].levels // {}) | to_entries[].value[] "
   + "| select(.namespace == \"omarchy-bar\" and .y <= $o.y + 1) | .y + .h - $o.y] | max // 0)] | max) as $top | "
   + "($o.x + $o.reserved[0] + $g) as $x0 | ($o.y + $top + $g) as $y0 | "
   + "(($o.width / $s) - $o.reserved[0] - $o.reserved[2] - 2 * $g) as $aw | "
   + "(($o.height / $s) - $top - $o.reserved[3] - 2 * $g) as $ah | "
-  + "{ x: ($x0 + $aw * $f[0] + ($g / 2) | floor), y: ($y0 + $ah * $f[1] + ($g / 2) | floor), "
-  + "w: ($aw * $f[2] - $g | floor), h: ($ah * $f[3] - $g | floor), "
-  + "limit: ($o.y + $top), fs: $w.fullscreen, fl: $w.floating }";
+  + "{ x: ($x0 + $aw * $f[0] + ($g / 2) | floor), y: ($y0 + $ah * $f[1] + ($g / 2) + $tb | floor), "
+  + "w: ($aw * $f[2] - $g | floor), h: ($ah * $f[3] - $g - $tb | floor), "
+  + "limit: ($o.y + $top + $tb), fs: $w.fullscreen, fl: $w.floating }";
 
 function snapWindow(address, zone, others) {
   var normalized = normalizedAddress(address);
@@ -297,10 +301,14 @@ function snapWindow(address, zone, others) {
     "a=$1; shift",
     "fr=\"[$1,$2,$3,$4]\"; others=$5",
     "mon=$(hyprctl -j monitors); lay=$(hyprctl -j layers)",
+    // The window-mode titlebar's height, when the plugin is on.
+    "bh=0",
+    "[ \"$(hyprctl -j getoption plugin:hyprbars:enabled 2>/dev/null | jq -r '.bool // false' 2>/dev/null)\" = true ] && bh=$(hyprctl -j getoption plugin:hyprbars:bar_height 2>/dev/null | jq -r '.int // 0' 2>/dev/null)",
+    "[ -n \"$bh\" ] || bh=0",
     // place ADDRESS FRACTIONS: float it, size it, move it, then read it back.
     "place() {",
     "  local a=$1 f=$2 geo t at",
-    "  geo=$(hyprctl -j clients | jq -c --arg a \"$a\" --argjson m \"$mon\" --argjson l \"$lay\" --argjson f \"$f\" '" + SNAP_GEOMETRY + "') || return 0",
+    "  geo=$(hyprctl -j clients | jq -c --arg a \"$a\" --argjson m \"$mon\" --argjson l \"$lay\" --argjson f \"$f\" --argjson bh \"$bh\" '" + SNAP_GEOMETRY + "') || return 0",
     "  [ -n \"$geo\" ] || return 0",
     "  get() { jq -r \".$1\" <<<\"$geo\"; }",
     "  t=\"window = \\\"address:$a\\\"\"",

@@ -49,12 +49,13 @@ test("snapWindow refuses a bad address or zone", () => {
 
 // Runs snapWindow's script against a stand-in hyprctl that answers the two
 // queries from the given JSON and records every dispatch.
-function snap(zone, client, monitor, layers = {}, others, extra = []) {
+function snap(zone, client, monitor, layers = {}, others, extra = [], option) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "snap-"));
   const log = path.join(dir, "log");
   fs.writeFileSync(path.join(dir, "clients.json"), JSON.stringify([client, ...extra]));
   fs.writeFileSync(path.join(dir, "monitors.json"), JSON.stringify([monitor]));
   fs.writeFileSync(path.join(dir, "layers.json"), JSON.stringify(layers));
+  if (option) fs.writeFileSync(path.join(dir, "getoption.json"), JSON.stringify(option));
   fs.writeFileSync(path.join(dir, "hyprctl"), [
     "#!/bin/bash",
     'if [ "$1" = -j ]; then cat "$(dirname "$0")/$2.json"; exit 0; fi',
@@ -259,4 +260,19 @@ test("the menu offers wide and narrow side by side, 2/3 and 1/3", () => {
   const wn = LAYOUTS.find((l) => l.length === 2 && Math.abs(l[0].w - 2 / 3) < 1e-9);
   assert.ok(wn, "wide and narrow");
   assert.ok(Math.abs(wn[1].x - 2 / 3) < 1e-9 && Math.abs(wn[1].w - 1 / 3) < 1e-9 && wn.every((z) => z.h === 1));
+});
+
+test("a window-mode window leaves room for its titlebar above the zone; others and a disabled plugin do not", () => {
+  const modeWindow = { ...client, tags: ["omarchy-floating-workspace"] };
+  const bar = { int: 30, bool: true };
+  // The zone starts 6 + 3 below the reserved 26, and the titlebar takes 30 of it.
+  const calls = snap(HALVES[0], modeWindow, monitor, {}, undefined, [], bar);
+  assert.match(moveOf(calls), /x = 9, y = 65,/);
+  assert.match(resizeOf(calls), /y = 726, exact = true/);
+  const plain = snap(HALVES[0], client, monitor, {}, undefined, [], bar);
+  assert.match(moveOf(plain), /y = 35,/, "a window not on a window-mode workspace has no titlebar");
+  const off = snap(HALVES[0], modeWindow, monitor, {}, undefined, [], { int: 30, bool: false });
+  assert.match(moveOf(off), /y = 35,/, "the plugin is off");
+  const absent = snap(HALVES[0], modeWindow, monitor);
+  assert.match(moveOf(absent), /y = 35,/, "the plugin is not there");
 });
