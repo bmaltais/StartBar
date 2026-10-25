@@ -15,6 +15,14 @@ const sourceFiles = () =>
   fs.readdirSync(root).filter((name) => /\.(qml|js)$/.test(name))
     .concat(fs.readdirSync(path.join(root, "test")).filter((name) => name !== "docs.test.js").map((name) => "test/" + name));
 
+test("every JS module has a row in the module table of CONTRIBUTING.md", () => {
+  const contributing = read("CONTRIBUTING.md");
+  const modules = fs.readdirSync(root).filter((name) => /\.js$/.test(name));
+  assert.ok(modules.length > 0);
+  const missing = modules.filter((name) => !contributing.includes("| `" + name + "` |"));
+  assert.deepEqual(missing, [], "add these to the table under CONTRIBUTING.md \"Tests\"");
+});
+
 test("every setting in the settings window has a row in docs/SETTINGS.md", () => {
   const reference = read("docs/SETTINGS.md");
   const keys = DockConfig.settingsSchema().flatMap((group) => group.fields.map((field) => field.key));
