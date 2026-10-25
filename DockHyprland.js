@@ -170,27 +170,43 @@ function windowAction(id, address) {
 // Snap layouts (docs/SPEC.md "Snap layouts"): put a Window in a zone of its monitor's usable
 // area, as fractions of it: `snapWindow(address, {x, y, w, h})`. Floats the
 // Window first if it is tiled, leaves full screen, then resizes and moves it.
+// The usable area starts below whatever the top edge holds: the space Hyprland
+// reserves there, or the Omarchy bar's own layer while it is showing, whichever
+// reaches lower. A moment after the move the Window is read back and, if an app
+// has put itself above that line, moved down to it.
+var SNAP_GEOMETRY = "first(.[] | select(.address == $a)) as $w | "
+  + "first($m[] | select(.id == $w.monitor)) as $o | ($o.scale // 1) as $s | 6 as $g | "
+  + "([$o.reserved[1], ([($l[$o.name].levels // {}) | to_entries[].value[] "
+  + "| select(.namespace == \"omarchy-bar\" and .y <= $o.y + 1) | .y + .h - $o.y] | max // 0)] | max) as $top | "
+  + "($o.x + $o.reserved[0] + $g) as $x0 | ($o.y + $top + $g) as $y0 | "
+  + "(($o.width / $s) - $o.reserved[0] - $o.reserved[2] - 2 * $g) as $aw | "
+  + "(($o.height / $s) - $top - $o.reserved[3] - 2 * $g) as $ah | "
+  + "{ x: ($x0 + $aw * $f[0] + ($g / 2) | floor), y: ($y0 + $ah * $f[1] + ($g / 2) | floor), "
+  + "w: ($aw * $f[2] - $g | floor), h: ($ah * $f[3] - $g | floor), "
+  + "limit: ($o.y + $top), fs: $w.fullscreen, fl: $w.floating }";
+
 function snapWindow(address, zone) {
   var normalized = normalizedAddress(address);
   if (!normalized || !zone) return null;
   var fr = [zone.x, zone.y, zone.w, zone.h].map(Number);
   if (fr.some(function (n) { return !isFinite(n); })) return null;
-  var script = "a=$1; shift; "
-    + "geo=$(hyprctl -j clients | jq -c --arg a \"$a\" --argjson m \"$(hyprctl -j monitors)\" --argjson f \"[$1,$2,$3,$4]\" "
-    + "'first(.[] | select(.address == $a)) as $w | first($m[] | select(.id == $w.monitor)) as $o | "
-    + "($o.scale // 1) as $s | 6 as $g | "
-    + "($o.x + $o.reserved[0] + $g) as $x0 | ($o.y + $o.reserved[1] + $g) as $y0 | "
-    + "(($o.width / $s) - $o.reserved[0] - $o.reserved[2] - 2 * $g) as $aw | "
-    + "(($o.height / $s) - $o.reserved[1] - $o.reserved[3] - 2 * $g) as $ah | "
-    + "{ x: ($x0 + $aw * $f[0] + ($g / 2) | floor), y: ($y0 + $ah * $f[1] + ($g / 2) | floor), "
-    + "w: ($aw * $f[2] - $g | floor), h: ($ah * $f[3] - $g | floor), "
-    + "fs: ($w.fullscreen), fl: ($w.floating) }') || exit 0; "
-    + "[ -n \"$geo\" ] || exit 0; "
-    + "t=\"window = \\\"address:$a\\\"\"; "
-    + "[ \"$(jq -r .fs <<<\"$geo\")\" != 0 ] && hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"fullscreen\\\", action = \\\"unset\\\", $t })\" >/dev/null; "
-    + "[ \"$(jq -r .fl <<<\"$geo\")\" != true ] && hyprctl dispatch \"hl.dsp.window.float({ action = \\\"set\\\", $t })\" >/dev/null; "
-    + "hyprctl dispatch \"hl.dsp.window.resize({ x = $(jq -r .w <<<\"$geo\"), y = $(jq -r .h <<<\"$geo\"), exact = true, $t })\" >/dev/null; "
-    + "hyprctl dispatch \"hl.dsp.window.move({ x = $(jq -r .x <<<\"$geo\"), y = $(jq -r .y <<<\"$geo\"), $t })\" >/dev/null";
+  var script = [
+    "a=$1; shift",
+    "geo=$(hyprctl -j clients | jq -c --arg a \"$a\" --argjson m \"$(hyprctl -j monitors)\" "
+      + "--argjson l \"$(hyprctl -j layers)\" --argjson f \"[$1,$2,$3,$4]\" '" + SNAP_GEOMETRY + "') || exit 0",
+    "[ -n \"$geo\" ] || exit 0",
+    "get() { jq -r \".$1\" <<<\"$geo\"; }",
+    "t=\"window = \\\"address:$a\\\"\"",
+    "[ \"$(get fs)\" != 0 ] && hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"fullscreen\\\", action = \\\"unset\\\", $t })\" >/dev/null",
+    "[ \"$(get fl)\" != true ] && hyprctl dispatch \"hl.dsp.window.float({ action = \\\"set\\\", $t })\" >/dev/null",
+    "hyprctl dispatch \"hl.dsp.window.resize({ x = $(get w), y = $(get h), exact = true, $t })\" >/dev/null",
+    "hyprctl dispatch \"hl.dsp.window.move({ x = $(get x), y = $(get y), $t })\" >/dev/null",
+    // Some apps settle on a position of their own after a resize: read it back.
+    "sleep 0.2",
+    "at=$(hyprctl -j clients | jq -r --arg a \"$a\" '.[] | select(.address == $a) | \"\\(.at[0]) \\(.at[1])\"')",
+    "[ -n \"$at\" ] && [ \"${at#* }\" -lt \"$(get limit)\" ] && hyprctl dispatch \"hl.dsp.window.move({ x = ${at% *}, y = $(get y), $t })\" >/dev/null",
+    "exit 0",
+  ].join("; ");
   return ["bash", "-lc", script, "bash", normalized].concat(fr.map(String));
 }
 

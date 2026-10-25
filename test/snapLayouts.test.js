@@ -49,11 +49,12 @@ test("snapWindow refuses a bad address or zone", () => {
 
 // Runs snapWindow's script against a stand-in hyprctl that answers the two
 // queries from the given JSON and records every dispatch.
-function snap(zone, client, monitor) {
+function snap(zone, client, monitor, layers = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "snap-"));
   const log = path.join(dir, "log");
   fs.writeFileSync(path.join(dir, "clients.json"), JSON.stringify([client]));
   fs.writeFileSync(path.join(dir, "monitors.json"), JSON.stringify([monitor]));
+  fs.writeFileSync(path.join(dir, "layers.json"), JSON.stringify(layers));
   fs.writeFileSync(path.join(dir, "hyprctl"), [
     "#!/bin/bash",
     'if [ "$1" = -j ]; then cat "$(dirname "$0")/$2.json"; exit 0; fi',
@@ -67,8 +68,8 @@ function snap(zone, client, monitor) {
   return calls;
 }
 
-const client = { address: ADDR, monitor: 0, floating: true, fullscreen: 0 };
-const monitor = { id: 0, x: 0, y: 0, width: 1280, height: 800, scale: 1, reserved: [0, 26, 0, 0] };
+const client = { address: ADDR, monitor: 0, floating: true, fullscreen: 0, at: [100, 100] };
+const monitor = { id: 0, name: "M-1", x: 0, y: 0, width: 1280, height: 800, scale: 1, reserved: [0, 26, 0, 0] };
 const resizeOf = (c) => c.find((x) => x.includes("window.resize"));
 const moveOf = (c) => c.find((x) => x.includes("window.move"));
 
@@ -96,4 +97,30 @@ test("a tiled or full screen window is floated first, and leaves full screen", (
 test("a window the compositor does not know does nothing", () => {
   const calls = snap(HALVES[0], { ...client, address: "0xdead" }, monitor);
   assert.deepEqual(calls, []);
+});
+
+const bar = (y, h) => ({ "M-1": { levels: { 3: [{ namespace: "omarchy-bar", y, h }] } } });
+
+test("the Omarchy bar's layer keeps the window below it when Hyprland reserves nothing for it", () => {
+  const calls = snap(HALVES[0], client, { ...monitor, reserved: [0, 0, 0, 0] }, bar(0, 30));
+  // usable top is 30; the zone starts 6 + 3 below it.
+  assert.match(moveOf(calls), /x = 9, y = 39,/);
+  assert.match(resizeOf(calls), /y = 752,/); // 800 less the bar, less 12, less the gap
+});
+
+test("with no bar showing the whole reserved-free area is used", () => {
+  const calls = snap(HALVES[0], client, { ...monitor, reserved: [0, 0, 0, 0] });
+  assert.match(moveOf(calls), /x = 9, y = 9,/);
+});
+
+test("a window an app moved above the bar is put back below it", () => {
+  const calls = snap(HALVES[0], { ...client, at: [9, 4] }, monitor, bar(0, 26));
+  const moves = calls.filter((c) => c.includes("window.move"));
+  assert.equal(moves.length, 2, "the placement, then the correction");
+  assert.match(moves[1], /x = 9, y = 35,/);
+});
+
+test("a window already below the bar is left alone", () => {
+  const calls = snap(HALVES[0], { ...client, at: [9, 35] }, monitor, bar(0, 26));
+  assert.equal(calls.filter((c) => c.includes("window.move")).length, 1);
 });
