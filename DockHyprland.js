@@ -171,6 +171,15 @@ function windowAction(id, address) {
   return argv("hyprctl dispatch \"$1\"", make("window = \"address:" + normalized + "\""));
 }
 
+// Swap two tiled Windows' places in the layout: both stay tiled and Hyprland
+// rearranges the rest.
+function swapTiles(address, other) {
+  var a = normalizedAddress(address), b = normalizedAddress(other);
+  if (!a || !b || a === b) return null;
+  // Both are validated hex, so they go straight into the dispatch.
+  return argv("hyprctl dispatch \"hl.dsp.window.swap({ target = \\\"address:" + b + "\\\", window = \\\"address:" + a + "\\\" })\"");
+}
+
 // Snap layouts (docs/SPEC.md "Snap layouts"): put a Window in a zone of its monitor's usable
 // area, as fractions of it: `snapWindow(address, {x, y, w, h})`. Floats the
 // Window first if it is tiled, leaves full screen, then resizes and moves it.
@@ -364,6 +373,7 @@ if (typeof module !== "undefined" && module.exports) {
     closeWindow: closeWindow,
     windowAction: windowAction,
     snapWindow: snapWindow,
+    swapTiles: swapTiles,
     windowActionIds: Object.keys(WINDOW_ACTIONS),
     peekWindow: peekWindow,
     peekRestore: peekRestore,

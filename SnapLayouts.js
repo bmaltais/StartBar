@@ -1,4 +1,5 @@
-// The layouts the Item menu offers for a floating Window (docs/SPEC.md "Snap
+// The layouts the Item menu offers for a floating Window, and the tile
+// arrangement it offers for a tiled one (docs/SPEC.md "Snap
 // layouts"). Each layout is a list of zones, each zone a rectangle given as
 // fractions of a monitor's usable area: x and y from its top-left corner, w and
 // h its size. DockHyprland.snapWindow turns a zone into pixels. No Quickshell
@@ -22,12 +23,6 @@ var LAYOUTS = [
   [{ x: 0, y: 0, w: 1, h: 0.5 }, { x: 0, y: 0.5, w: 0.5, h: 0.5 }, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }],
 ];
 
-// The layouts with exactly `count` zones: what a tiled workspace with that many
-// Windows can be arranged as.
-function layoutsFor(count) {
-  return LAYOUTS.filter(function (layout) { return layout.length === count; });
-}
-
 // The Windows on one workspace, from the Dock's Items (a Window Item has
 // `window`, a Group Item `windows`); special workspaces (the scratchpad,
 // Omarchy's minimized) hold none. A Window is counted once.
@@ -49,6 +44,25 @@ function windowsOn(items, workspace) {
   return found;
 }
 
+// The tiled Windows of a workspace as one layout: each zone is a tile's current
+// rectangle as fractions of the tiles' bounding box, carrying the Window's `id`.
+// Empty when fewer than two tiles have a known rectangle (nothing to swap with).
+function tileLayout(items, workspace) {
+  var tiles = windowsOn(items, workspace).filter(function (w) { return !w.floating && w.rect; });
+  if (tiles.length < 2) return [];
+  var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  tiles.forEach(function (w) {
+    x0 = Math.min(x0, w.rect.x); y0 = Math.min(y0, w.rect.y);
+    x1 = Math.max(x1, w.rect.x + w.rect.w); y1 = Math.max(y1, w.rect.y + w.rect.h);
+  });
+  var width = x1 - x0, height = y1 - y0;
+  if (width <= 0 || height <= 0) return [];
+  return tiles.map(function (w) {
+    return { x: (w.rect.x - x0) / width, y: (w.rect.y - y0) / height,
+             w: w.rect.w / width, h: w.rect.h / height, id: w.id };
+  });
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { LAYOUTS: LAYOUTS, layoutsFor: layoutsFor, windowsOn: windowsOn };
+  module.exports = { LAYOUTS: LAYOUTS, windowsOn: windowsOn, tileLayout: tileLayout };
 }

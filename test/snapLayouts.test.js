@@ -170,14 +170,25 @@ test("snapWindow reads an array-like list of other zones, as QML hands it over",
   assert.notEqual(a[a.length - 1], "[]");
 });
 
-const { layoutsFor, windowsOn } = require("../SnapLayouts.js");
+const { windowsOn, tileLayout } = require("../SnapLayouts.js");
 
-test("a tiled workspace is offered the layouts with as many zones as it has windows", () => {
-  assert.deepEqual(layoutsFor(2).map((l) => l.length), [2, 2], "halves and two stacked");
-  assert.equal(layoutsFor(3).length, 3, "thirds, main pane with two, one on top with two");
-  assert.ok(layoutsFor(3).every((l) => l.length === 3));
-  assert.equal(layoutsFor(4).length, 1, "quarters");
-  assert.deepEqual([layoutsFor(0), layoutsFor(1), layoutsFor(5)], [[], [], []]);
+test("a tiled workspace is offered its own tile arrangement, normalised, tiles only", () => {
+  const t = (id, x, y, w, h, floating) => ({ window: { id, workspace: "1", floating: !!floating, rect: { x, y, w, h } } });
+  const items = [t("a", 10, 30, 400, 800), t("b", 410, 30, 400, 400), t("c", 410, 430, 400, 400), t("f", 0, 0, 50, 50, true)];
+  assert.deepEqual(tileLayout(items, "1"), [
+    { x: 0, y: 0, w: 0.5, h: 1, id: "a" },
+    { x: 0.5, y: 0, w: 0.5, h: 0.5, id: "b" },
+    { x: 0.5, y: 0.5, w: 0.5, h: 0.5, id: "c" },
+  ]);
+  assert.deepEqual(tileLayout([t("a", 0, 0, 10, 10)], "1"), [], "one tile has nothing to swap with");
+  assert.deepEqual(tileLayout([{ window: { id: "a", workspace: "1" } }, t("b", 0, 0, 5, 5)], "1"), [], "no rectangle known");
+});
+
+test("swapTiles dispatches a swap of two valid addresses", () => {
+  const cmd = H.swapTiles("0xab", "cd");
+  assert.match(cmd[2], /hl\.dsp\.window\.swap\(\{ target = \\"address:0xcd\\", window = \\"address:0xab\\" \}\)/);
+  assert.equal(H.swapTiles("0xab", "0xab"), null);
+  assert.equal(H.swapTiles("0xab", "x; rm"), null);
 });
 
 test("windowsOn counts a workspace's windows once, across Window and Group Items, and none on a special one", () => {

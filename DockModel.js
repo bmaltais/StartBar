@@ -455,6 +455,7 @@ function windowFromToplevel(toplevel, openedAt) {
     attention: !!toplevel.urgent,
     fullscreen: info.fullscreen || 0,
     floating: !!info.floating,
+    rect: info.at && info.size ? { x: info.at[0], y: info.at[1], w: info.size[0], h: info.size[1] } : null,
     pinned: !!info.pinned,
   };
 }

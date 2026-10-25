@@ -3541,9 +3541,9 @@ Item {
 
         // docs/SPEC.md "Snap layouts": the layout picker tops the menu of a
         // Window, from its Item (a Window Item alone) or its Preview, when the
-        // setting is on. A floating Window gets every layout; a tiled one only
-        // the layouts with as many zones as its workspace has Windows, since a
-        // choice then arranges all of them.
+        // setting is on. A floating Window gets every layout; a tiled one the
+        // current arrangement of its workspace's tiles, and a click swaps it
+        // with that tile, so it stays tiled and the layout rearranges the rest.
         readonly property var snapTarget: {
           if (contextMenu.forPreview) return previewPopup.windowFor(contextMenu.previewWindowId)
           var item = contextMenu.menuItem
@@ -3553,7 +3553,8 @@ Item {
         readonly property var snapLayoutList: {
           if (!contextMenu.snapTarget) return []
           if (!contextMenu.snapTiled) return SnapLayoutData.LAYOUTS
-          return SnapLayoutData.layoutsFor(SnapLayoutData.windowsOn(dockState.items, contextMenu.snapTarget.workspace).length)
+          var tiles = SnapLayoutData.tileLayout(dockState.items, contextMenu.snapTarget.workspace)
+          return tiles.length > 0 ? [tiles] : []
         }
         readonly property bool snapAvailable: !!root.taskbar && root.taskbar.snapLayouts
           && !!contextMenu.snapTarget && !!contextMenu.snapTarget.id && contextMenu.snapLayoutList.length > 0
@@ -3706,8 +3707,10 @@ Item {
               onPick: function (zone, others) {
                 // From a Preview, keep the peeked Window shown, as a state row does.
                 if (contextMenu.forPreview) previewState.send({ type: "menuRowChosen" })
-                var command = DockHyprland.snapWindow(contextMenu.snapTarget.id, zone,
-                  root.taskbar.snapFillOthers || contextMenu.snapTiled ? others : [])
+                // A tile swaps places with the tile it is dropped on, and stays tiled.
+                var command = contextMenu.snapTiled
+                  ? DockHyprland.swapTiles(contextMenu.snapTarget.id, zone.id)
+                  : DockHyprland.snapWindow(contextMenu.snapTarget.id, zone, root.taskbar.snapFillOthers ? others : [])
                 if (command) Quickshell.execDetached(command)
                 contextMenu.close()
               }
