@@ -3539,11 +3539,15 @@ Item {
         function close() { contextMenu.visible = false }
 
         // docs/SPEC.md "Snap layouts": the layout picker tops the menu of a
-        // floating Window Item, when the setting is on.
+        // floating Window, from its Item (a Window Item alone) or its Preview,
+        // when the setting is on.
+        readonly property var snapTarget: {
+          if (contextMenu.forPreview) return previewPopup.windowFor(contextMenu.previewWindowId)
+          var item = contextMenu.menuItem
+          return item && item.kind === "window" && !(item.count > 1) ? item.window : null
+        }
         readonly property bool snapAvailable: !!root.taskbar && root.taskbar.snapLayouts
-          && !contextMenu.forPreview && !!contextMenu.menuItem
-          && contextMenu.menuItem.kind === "window" && !(contextMenu.menuItem.count > 1)
-          && !!contextMenu.menuItem.window && !!contextMenu.menuItem.window.floating
+          && !!contextMenu.snapTarget && !!contextMenu.snapTarget.floating
 
         // The menu stays open until a row is chosen, an outside click closes
         // it (the focus grab below), or the pointer leaves it: leaving only
@@ -3690,7 +3694,9 @@ Item {
               accent: previewPopup.accentColor
               hairline: root.colHairline
               onPick: function (zone) {
-                var command = DockHyprland.snapWindow(contextMenu.menuItem.window.id, zone)
+                // From a Preview, keep the peeked Window shown, as a state row does.
+                if (contextMenu.forPreview) previewState.send({ type: "menuRowChosen" })
+                var command = DockHyprland.snapWindow(contextMenu.snapTarget.id, zone)
                 if (command) Quickshell.execDetached(command)
                 contextMenu.close()
               }
