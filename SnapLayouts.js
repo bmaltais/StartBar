@@ -22,6 +22,33 @@ var LAYOUTS = [
   [{ x: 0, y: 0, w: 1, h: 0.5 }, { x: 0, y: 0.5, w: 0.5, h: 0.5 }, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }],
 ];
 
+// The layouts with exactly `count` zones: what a tiled workspace with that many
+// Windows can be arranged as.
+function layoutsFor(count) {
+  return LAYOUTS.filter(function (layout) { return layout.length === count; });
+}
+
+// The Windows on one workspace, from the Dock's Items (a Window Item has
+// `window`, a Group Item `windows`); special workspaces (the scratchpad,
+// Omarchy's minimized) hold none. A Window is counted once.
+function windowsOn(items, workspace) {
+  var seen = {};
+  var found = [];
+  var name = String(workspace || "");
+  if (!name || name.indexOf("special") === 0) return found;
+  for (var i = 0; i < (items || []).length; i++) {
+    var item = items[i];
+    var list = item.windows || (item.window ? [item.window] : []);
+    for (var j = 0; j < list.length; j++) {
+      var w = list[j];
+      if (!w || seen[w.id] || String(w.workspace || "") !== name) continue;
+      seen[w.id] = true;
+      found.push(w);
+    }
+  }
+  return found;
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { LAYOUTS: LAYOUTS };
+  module.exports = { LAYOUTS: LAYOUTS, layoutsFor: layoutsFor, windowsOn: windowsOn };
 }

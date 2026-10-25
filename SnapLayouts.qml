@@ -13,6 +13,7 @@ Item {
   property color fg: "white"
   property color accent: "dodgerblue"
   property color hairline: "#1fffffff"
+  property var layouts: SnapLayouts.LAYOUTS
   signal pick(var zone, var others)
 
   implicitHeight: grid.implicitHeight
@@ -37,7 +38,7 @@ Item {
     padding: Style.space(8)
 
     Repeater {
-      model: SnapLayouts.LAYOUTS
+      model: snap.layouts
       delegate: Rectangle {
         id: thumb
         required property var modelData

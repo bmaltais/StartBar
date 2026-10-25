@@ -169,3 +169,28 @@ test("snapWindow reads an array-like list of other zones, as QML hands it over",
   assert.deepEqual(a, b);
   assert.notEqual(a[a.length - 1], "[]");
 });
+
+const { layoutsFor, windowsOn } = require("../SnapLayouts.js");
+
+test("a tiled workspace is offered the layouts with as many zones as it has windows", () => {
+  assert.deepEqual(layoutsFor(2).map((l) => l.length), [2, 2], "halves and two stacked");
+  assert.equal(layoutsFor(3).length, 3, "thirds, main pane with two, one on top with two");
+  assert.ok(layoutsFor(3).every((l) => l.length === 3));
+  assert.equal(layoutsFor(4).length, 1, "quarters");
+  assert.deepEqual([layoutsFor(0), layoutsFor(1), layoutsFor(5)], [[], [], []]);
+});
+
+test("windowsOn counts a workspace's windows once, across Window and Group Items, and none on a special one", () => {
+  const w = (id, workspace) => ({ id, workspace });
+  const items = [
+    { window: w("a", "2") },
+    { windows: [w("b", "2"), w("c", "3")] },
+    { window: w("b", "2") },
+    { window: w("d", "special:scratchpad") },
+    { windows: [] },
+  ];
+  assert.deepEqual(windowsOn(items, "2").map((x) => x.id), ["a", "b"]);
+  assert.deepEqual(windowsOn(items, "special:scratchpad"), []);
+  assert.deepEqual(windowsOn(items, ""), []);
+  assert.deepEqual(windowsOn(null, "2"), []);
+});

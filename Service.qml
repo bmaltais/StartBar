@@ -22,6 +22,7 @@ import "DockGeometry.js" as DockGeometry
 import "DockPlacement.js" as DockPlacement
 import "DockPreview.js" as DockPreview
 import "DockHyprland.js" as DockHyprland
+import "SnapLayouts.js" as SnapLayoutData
 
 Item {
   id: root
@@ -3540,14 +3541,22 @@ Item {
 
         // docs/SPEC.md "Snap layouts": the layout picker tops the menu of a
         // Window, from its Item (a Window Item alone) or its Preview, when the
-        // setting is on.
+        // setting is on. A floating Window gets every layout; a tiled one only
+        // the layouts with as many zones as its workspace has Windows, since a
+        // choice then arranges all of them.
         readonly property var snapTarget: {
           if (contextMenu.forPreview) return previewPopup.windowFor(contextMenu.previewWindowId)
           var item = contextMenu.menuItem
           return item && item.kind === "window" && !(item.count > 1) ? item.window : null
         }
+        readonly property bool snapTiled: !!contextMenu.snapTarget && !contextMenu.snapTarget.floating
+        readonly property var snapLayoutList: {
+          if (!contextMenu.snapTarget) return []
+          if (!contextMenu.snapTiled) return SnapLayoutData.LAYOUTS
+          return SnapLayoutData.layoutsFor(SnapLayoutData.windowsOn(dockState.items, contextMenu.snapTarget.workspace).length)
+        }
         readonly property bool snapAvailable: !!root.taskbar && root.taskbar.snapLayouts
-          && !!contextMenu.snapTarget && !!contextMenu.snapTarget.id
+          && !!contextMenu.snapTarget && !!contextMenu.snapTarget.id && contextMenu.snapLayoutList.length > 0
 
         // The menu stays open until a row is chosen, an outside click closes
         // it (the focus grab below), or the pointer leaves it: leaving only
@@ -3687,6 +3696,7 @@ Item {
 
             SnapLayouts {
               id: snapView
+              layouts: contextMenu.snapLayoutList
               anchors.left: parent.left
               anchors.right: parent.right
               anchors.top: parent.top
@@ -3697,7 +3707,7 @@ Item {
                 // From a Preview, keep the peeked Window shown, as a state row does.
                 if (contextMenu.forPreview) previewState.send({ type: "menuRowChosen" })
                 var command = DockHyprland.snapWindow(contextMenu.snapTarget.id, zone,
-                  root.taskbar.snapFillOthers ? others : [])
+                  root.taskbar.snapFillOthers || contextMenu.snapTiled ? others : [])
                 if (command) Quickshell.execDetached(command)
                 contextMenu.close()
               }
