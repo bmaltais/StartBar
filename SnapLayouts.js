@@ -7,6 +7,9 @@
 
 var THIRD = 1 / 3;
 
+// The whole area: choosing it maximizes the Window (it is not a zone to size to).
+var FULL = [{ x: 0, y: 0, w: 1, h: 1, maximize: true }];
+
 var LAYOUTS = [
   // Halves.
   [{ x: 0, y: 0, w: 0.5, h: 1 }, { x: 0.5, y: 0, w: 0.5, h: 1 }],
@@ -21,6 +24,7 @@ var LAYOUTS = [
   [{ x: 0, y: 0, w: 2 * THIRD, h: 1 }, { x: 2 * THIRD, y: 0, w: THIRD, h: 0.5 }, { x: 2 * THIRD, y: 0.5, w: THIRD, h: 0.5 }],
   // One on top, two side by side below it.
   [{ x: 0, y: 0, w: 1, h: 0.5 }, { x: 0, y: 0.5, w: 0.5, h: 0.5 }, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }],
+  FULL,
 ];
 
 // The Windows on one workspace, from the Dock's Items (a Window Item has
@@ -89,5 +93,5 @@ function tileLayout(items, workspace) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { LAYOUTS: LAYOUTS, windowsOn: windowsOn, tileLayout: tileLayout, shapeLayouts: shapeLayouts };
+  module.exports = { LAYOUTS: LAYOUTS, FULL: FULL, windowsOn: windowsOn, tileLayout: tileLayout, shapeLayouts: shapeLayouts };
 }

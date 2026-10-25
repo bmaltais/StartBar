@@ -176,6 +176,14 @@ function windowAction(id, address) {
 var UNSET_FULLSCREEN = "[ \"$(hyprctl -j clients | jq -r --arg a \"$a\" 'first(.[] | select(.address == $a)).fullscreen // 0')\" != 0 ] "
   + "&& { for m in maximized fullscreen; do hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$m\\\", action = \\\"unset\\\", window = \\\"address:$a\\\" })\" >/dev/null; done; sleep 0.3; }";
 
+// Maximize a Window (not a toggle: a Window already maximized stays so), the "full"
+// thumbnail of the snap picker. It keeps its tiled or floating state underneath.
+function maximizeWindow(address) {
+  var normalized = normalizedAddress(address);
+  if (!normalized) return null;
+  return argv("hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"maximized\\\", action = \\\"set\\\", window = \\\"address:$1\\\" })\"", normalized);
+}
+
 // Swap two tiled Windows' places in the layout: both stay tiled and Hyprland
 // rearranges the rest.
 function swapTiles(address, other) {
@@ -448,6 +456,7 @@ if (typeof module !== "undefined" && module.exports) {
     windowAction: windowAction,
     snapWindow: snapWindow,
     swapTiles: swapTiles,
+    maximizeWindow: maximizeWindow,
     reshapeTiles: reshapeTiles,
     TILE_SHAPE: TILE_SHAPE,
     windowActionIds: Object.keys(WINDOW_ACTIONS),

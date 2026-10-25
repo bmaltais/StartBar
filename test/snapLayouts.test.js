@@ -244,3 +244,13 @@ test("reshapeTiles refuses a bad address, shape or zone", () => {
   assert.equal(H.reshapeTiles(ADDR, "H", { x: "a", y: 0, w: 1, h: 1 }), null);
   assert.equal(H.reshapeTiles(ADDR, "HV", z)[3], "bash");
 });
+
+test("the picker ends with a full layout that maximizes, and maximizeWindow sets rather than toggles", () => {
+  const { FULL } = require("../SnapLayouts.js");
+  assert.deepEqual(LAYOUTS[LAYOUTS.length - 1], FULL);
+  assert.deepEqual(FULL, [{ x: 0, y: 0, w: 1, h: 1, maximize: true }]);
+  const cmd = H.maximizeWindow("0xab");
+  assert.match(cmd[2], /mode = \\"maximized\\", action = \\"set\\"/);
+  assert.equal(cmd[4], "0xab");
+  assert.equal(H.maximizeWindow("nope"), null);
+});

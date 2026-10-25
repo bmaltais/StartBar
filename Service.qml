@@ -3556,7 +3556,8 @@ Item {
           var tiles = SnapLayoutData.tileLayout(dockState.items, contextMenu.snapTarget.workspace)
           // Two or three tiles can be reshaped; more can only be swapped.
           var shapes = SnapLayoutData.shapeLayouts(tiles.length)
-          return shapes.length > 0 ? shapes : (tiles.length > 0 ? [tiles] : [])
+          var list = shapes.length > 0 ? shapes : (tiles.length > 0 ? [tiles] : [])
+          return list.length > 0 ? list.concat([SnapLayoutData.FULL]) : []
         }
         readonly property bool snapAvailable: !!root.taskbar && root.taskbar.snapLayouts
           && !!contextMenu.snapTarget && !!contextMenu.snapTarget.id && contextMenu.snapLayoutList.length > 0
@@ -3711,7 +3712,8 @@ Item {
                 if (contextMenu.forPreview) previewState.send({ type: "menuRowChosen" })
                 // A tile never floats: it is reshaped to the thumbnail (two or three tiles)
                 // and swapped into the zone, or just swapped with the tile clicked.
-                var command = contextMenu.snapTiled
+                var command = zone.maximize ? DockHyprland.maximizeWindow(contextMenu.snapTarget.id)
+                  : contextMenu.snapTiled
                   ? (zone.shape ? DockHyprland.reshapeTiles(contextMenu.snapTarget.id, zone.shape, zone)
                                 : DockHyprland.swapTiles(contextMenu.snapTarget.id, zone.id))
                   : DockHyprland.snapWindow(contextMenu.snapTarget.id, zone, root.taskbar.snapFillOthers ? others : [])
