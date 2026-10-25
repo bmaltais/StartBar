@@ -663,13 +663,20 @@ Item {
 
   Process {
     id: activeAsk
-    command: ["bash", "-lc", "hyprctl -j activewindow | jq -r '.address // empty'"]
+    // "ADDRESS X Y": the active Window and where the pointer is.
+    command: ["bash", "-lc", "echo \"$(hyprctl -j activewindow | jq -r '.address // empty') "
+      + "$(hyprctl -j cursorpos | jq -r '\"\\(.x | floor) \\(.y | floor)\"')\""]
     stdout: StdioCollector {
       onStreamFinished: {
-        var win = root.windowAt(this.text.trim())
+        var parts = this.text.trim().split(/\s+/)
+        var win = root.windowAt(parts[0])
         if (!win || !win.id || root.snapLayoutsFor(win).length === 0) return
         snapPopup.target = win
         snapPopup.popupScreen = root.focusedScreen()
+        var scr = snapPopup.popupScreen
+        // Where the pointer is on that monitor; unknown puts the card in the middle.
+        snapPopup.pointerX = parts.length >= 3 && scr ? Number(parts[1]) - scr.x : -1
+        snapPopup.pointerY = parts.length >= 3 && scr ? Number(parts[2]) - scr.y : -1
         snapPopup.wanted = true
       }
     }
@@ -723,6 +730,8 @@ Item {
     property bool wanted: false
     property var target: null
     property var popupScreen: null
+    property real pointerX: -1
+    property real pointerY: -1
     readonly property var layouts: root.snapLayoutsFor(snapPopup.target)
 
     screen: snapPopup.popupScreen
@@ -757,7 +766,16 @@ Item {
 
     Rectangle {
       id: snapCard
-      anchors.centerIn: parent
+      // Under the pointer, centred on it across and clamped to the monitor; above
+      // it when there is no room below. In the middle when the pointer is unknown.
+      readonly property real gap: Style.space(8)
+      readonly property bool placed: snapPopup.pointerX >= 0 && snapPopup.pointerY >= 0
+      x: placed ? Math.max(gap, Math.min(snapPopup.width - width - gap, snapPopup.pointerX - width / 2))
+                : (snapPopup.width - width) / 2
+      y: placed ? (snapPopup.pointerY + gap + height <= snapPopup.height - gap
+                    ? snapPopup.pointerY + gap
+                    : Math.max(gap, snapPopup.pointerY - gap - height))
+                : (snapPopup.height - height) / 2
       width: Style.space(190)
       height: snapView.implicitHeight + root.menuPad * 2
       radius: root.menuRadius
