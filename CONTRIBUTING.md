@@ -43,6 +43,8 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 | --- | --- |
 | `DockModel.js` | Which Items the Dock shows and in what order: Launch Order, Pins, Placed. It also takes Hyprland's toplevels to Items (`refreshItems`: Launch Order ranks, Windows held back until they have a class, App lookup, what changed) and decides where a drop is stored (`dropPlaced`: a Pin's position for settings, a Window's or Group's in memory). Tests give it plain objects shaped like the toplevels |
 | `DockConfig.js` | Settings: defaults, the effective view of the config entry, and every change to it |
+| `DockBarMenu.js` | The Bar menu: its rows (`barMenuRows`, each with the `setSettings` patch it writes) and the labels that size it and its submenu |
+| `DockSettingsWindow.js` | The settings window's search over `settingsSchema` and whether a field is enabled |
 | `DockInteraction.js` | Reveal and hide (one hold per holder: strip, dock, menus, Start menu, drag), and where a dragged Item lands |
 | `DockGeometry.js` | Where the bar and what stands on it sit on each of the four edges (`layout`: the bar, Reveal Strip, Start button, clock and Items as rectangles; `iconSize`; `slot` and `dots` for an Item's icon and running dots). The QML binds to these instead of choosing per edge |
 | `DockPlacement.js` | Where popups stand for the Dock's edge: a Preview and the Item menu beside their Item, the Bar menu beside the bar, its submenu, the Start menu (`beside`, `barTarget`, `submenu`, `startMenu`, `slide`) |
@@ -52,6 +54,9 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 | `PlainText.js` | What a plain text field does with a key or a paste (`PlainField.qml` draws it): typing, Backspace, Ctrl+U, and the bounded `wl-paste` command |
 | `DockPreview.js` | The hover Preview, Peek and the Preview menu: when a Preview shows and goes, what is peeked, kept or put back, and that the Preview's menu holds it up |
 | `StartMenu.js` | The Start menu: opening and closing, Hover mode, search, selection, Escape, Start Pin reorder |
+| `StartMenuApps.js` | The Start menu's app lists: search results (`filterApps`), the A-Z groups and jump letters, and saved Pins and recents mapped to installed Apps (`catalog`, `resolveApps`) |
+| `StartPlaces.js` | The Places the Start menu lists: the user's XDG folders or a `startPlaces` setting |
+| `StartMenuActions.js` | The rows the Start menu's overlays offer (`overlayRows`), the account's name and the command that opens a Place |
 
 Every `Text` in the QML says `textFormat: Text.PlainText`: Qt's default renders anything that looks like HTML, and rich text loads `<img>` files synchronously, so a window title or a pasted string could hang the shell. `test/textFormat.test.js` fails on one that doesn't. [docs/SECURITY.md](docs/SECURITY.md) lists every place outside data reaches the plugin and what bounds it; add a row when you add one.
 
@@ -92,6 +97,8 @@ Run it on every commit with the pre-commit hook:
 ```sh
 git config core.hooksPath .githooks   # or: scripts/devkit/bin/pre-commit --install
 ```
+
+The hook also runs `scripts/check-file-size.sh`, which rejects a staged source file over ~5000 tokens (bytes/4) and says how to split it. Files already over are listed in `.file-size-guard-ignore`; `scripts/check-file-size.sh --all` audits every tracked file.
 
 Pull requests run the devkit's `check` on GitHub (its shell, rules and `npm test` steps); the manifest and QML checks need Omarchy and Qt, so they only run locally.
 
