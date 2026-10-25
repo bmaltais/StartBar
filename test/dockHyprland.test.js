@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
 const H = require("../DockHyprland.js");
+const Snap = require("../DockSnap.js");
 const { windowActions } = require("../DockModel.js");
 
 const ADDR = "0x56538020a4f0";
@@ -17,8 +18,12 @@ const all = {
   peekCommit: H.peekCommit(),
   rescueWindows: H.rescueWindows([ADDR, "0xabc"]),
   glassRule: H.glassRule(),
-  snapWindow: H.snapWindow(ADDR, { x: 0, y: 0, w: 0.5, h: 1 }),
-  snapWindowFill: H.snapWindow(ADDR, { x: 0, y: 0, w: 0.5, h: 1 }, [{ x: 0.5, y: 0, w: 0.5, h: 1 }]),
+  snapWindow: Snap.snapWindow(ADDR, { x: 0, y: 0, w: 0.5, h: 1 }),
+  snapWindowFill: Snap.snapWindow(ADDR, { x: 0, y: 0, w: 0.5, h: 1 }, [{ x: 0.5, y: 0, w: 0.5, h: 1 }]),
+  maximizeWindow: Snap.maximizeWindow(ADDR),
+  swapTiles: Snap.swapTiles(ADDR, "0xabc"),
+  reshapeTiles: Snap.reshapeTiles(ADDR, "H", { x: 0, y: 0, w: 0.5, h: 1 }),
+  reshapeTilesThree: Snap.reshapeTiles(ADDR, "HV", { x: 0, y: 0, w: 0.5, h: 1 }),
   openOnOwnWorkspace: H.openOnOwnWorkspace(ADDR, "maximized"),
   openOnOwnWorkspaceFullscreen: H.openOnOwnWorkspace(ADDR, "fullscreen"),
   openOnOwnWorkspaceNormal: H.openOnOwnWorkspace(ADDR, "normal"),

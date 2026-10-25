@@ -49,6 +49,7 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 | `DockGeometry.js` | Where the bar and what stands on it sit on each of the four edges (`layout`: the bar, Reveal Strip, Start button, clock and Items as rectangles; `iconSize`; `slot` and `dots` for an Item's icon and running dots). The QML binds to these instead of choosing per edge |
 | `DockPlacement.js` | Where popups stand for the Dock's edge: a Preview and the Item menu beside their Item, the Bar menu beside the bar, its submenu, the Start menu (`beside`, `barTarget`, `submenu`, `startMenu`, `slide`) |
 | `DockHyprland.js` | How to ask Hyprland for each thing the Dock wants: focus, raise, close, Window-state rows, Peek. Returns the command; tests run `bash -n` over every script |
+| `DockSnap.js` | How snap layouts are applied to Hyprland: snap a floating Window to a zone (filling the others if asked), maximize, reshape two or three tiles, swap tiles. Returns the command, like `DockHyprland.js`, from which it keeps its own copy of the address check |
 | `DockIcons.js` | Finding an App's icon file when Qt's lookup has missed: the command that searches the icon directories, which file is best, and when to search again |
 | `IconResolver.qml` | The QML side of `DockIcons.js`, one instance shared by the Dock and the Start menu: `source(name)` is Qt's icon path, else a found file, else "" while it searches |
 | `PlainText.js` | What a plain text field does with a key or a paste (`PlainField.qml` draws it): typing, Backspace, Ctrl+U, and the bounded `wl-paste` command |
@@ -57,6 +58,8 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 | `StartMenuApps.js` | The Start menu's app lists: search results (`filterApps`), the A-Z groups and jump letters, and saved Pins and recents mapped to installed Apps (`catalog`, `resolveApps`) |
 | `StartPlaces.js` | The Places the Start menu lists: the user's XDG folders or a `startPlaces` setting |
 | `StartMenuActions.js` | The rows the Start menu's overlays offer (`overlayRows`), the account's name and the command that opens a Place |
+| `SnapLayouts.js` | Snap layouts: the layouts a Window's picker shows (`layoutsFor`), the Window the Super+Z key means (`windowAt`), and what a picked zone does (`plan`: maximize, reshape tiles, swap tiles or snap a floating Window, with or without filling the other zones). `DockSnap.snapCommand` turns a plan into the command |
+| `PopupDismiss.js` | When the Item menu closes because the pointer left it (the settle time after the grab, entered, the leave timer), and when the snap popup does (`farOutside`) |
 
 Every `Text` in the QML says `textFormat: Text.PlainText`: Qt's default renders anything that looks like HTML, and rich text loads `<img>` files synchronously, so a window title or a pasted string could hang the shell. `test/textFormat.test.js` fails on one that doesn't. [docs/SECURITY.md](docs/SECURITY.md) lists every place outside data reaches the plugin and what bounds it; add a row when you add one.
 
@@ -73,7 +76,8 @@ It is one long file. Search for these names:
 | `focusWindow`, `focusWindowAndWarp`, `runWindowAction`, `closeWindow` | Run what `DockHyprland.js` builds for a click or a menu row |
 | `peekWindow`, `peekRestore`, `peekCommit` | Peek: run the scripts (`DockHyprland.js`) that show a Window and put things back (`DockPreview.js` decides when) |
 | `previewState`, `previewPopup` | The state, timers and effects of `DockPreview.js`, and the Preview itself with its thumbnails |
-| `contextMenu` | The Item menu, and the Preview menu (`previewWindowId`) |
+| `contextMenu` | The Item menu, and the Preview menu (`previewWindowId`); `sendDismiss` runs `PopupDismiss.js` |
+| `applySnap`, `snapPopup`, `activeAsk` | Snap layouts: run what `SnapLayouts.plan` decides; the Super+Z card and the query for the active Window it opens for |
 | `barMenu` | The Bar menu |
 | `dockState` | Holds what `DockModel.refreshItems` returns and calls it on every Hyprland event; `placeItem` stores a drop through `DockModel.dropPlaced` |
 | `dockRow` | The Items, drag and drop |

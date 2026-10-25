@@ -24,7 +24,9 @@ import "DockGeometry.js" as DockGeometry
 import "DockPlacement.js" as DockPlacement
 import "DockPreview.js" as DockPreview
 import "DockHyprland.js" as DockHyprland
+import "DockSnap.js" as DockSnap
 import "SnapLayouts.js" as SnapLayoutData
+import "PopupDismiss.js" as PopupDismiss
 
 Item {
   id: root
@@ -615,44 +617,11 @@ Item {
   }
 
   // Snap layouts (docs/SPEC.md "Snap layouts"), shared by the Item and Preview
-  // menus and the Super+Z popup. What a Window is offered: a floating one every
-  // layout, a tiled one the shapes its workspace's tiles can take (or, with
-  // more than three, the tiles to swap with), and each ends with "full".
-  function snapLayoutsFor(win) {
-    if (!win) return []
-    if (win.floating) return SnapLayoutData.LAYOUTS
-    var tiles = SnapLayoutData.tileLayout(dockState.items, win.workspace)
-    var shapes = SnapLayoutData.shapeLayouts(tiles.length)
-    var list = shapes.length > 0 ? shapes : (tiles.length > 0 ? [tiles] : [])
-    return list.length > 0 ? list.concat([SnapLayoutData.FULL]) : []
-  }
-
-  // The command that applies a chosen zone to a Window. A tile never floats: it
-  // is reshaped to the thumbnail (two or three tiles) and swapped into the
-  // zone, or just swapped with the tile clicked.
-  function snapCommand(win, zone, others) {
-    if (zone.maximize) return DockHyprland.maximizeWindow(win.id)
-    if (!win.floating) {
-      return zone.shape ? DockHyprland.reshapeTiles(win.id, zone.shape, zone)
-                        : DockHyprland.swapTiles(win.id, zone.id)
-    }
-    return DockHyprland.snapWindow(win.id, zone, root.taskbar.snapFillOthers ? others : [])
-  }
-
-  // The Window with this address (as `hyprctl` prints it, with or without 0x),
-  // if it is on an ordinary workspace.
-  function windowAt(address) {
-    var focused = String(address || "").replace(/^0x/, "")
-    if (!focused) return null
-    var items = dockState.items || []
-    for (var i = 0; i < items.length; i++) {
-      var list = items[i].windows || (items[i].window ? [items[i].window] : [])
-      for (var j = 0; j < list.length; j++) {
-        var w = list[j]
-        if (w && String(w.id).replace(/^0x/, "") === focused && String(w.workspace || "").indexOf("special") !== 0) return w
-      }
-    }
-    return null
+  // menus and the Super+Z popup. SnapLayouts.js decides what a Window is offered
+  // and what a pick does; this only runs the result.
+  function applySnap(win, layout, zone) {
+    var command = DockSnap.snapCommand(SnapLayoutData.plan(win, layout, zone, root.taskbar.snapFillOthers))
+    if (command) Quickshell.execDetached(command)
   }
 
   // Asks Hyprland which Window is active (Quickshell's own idea of it is empty
@@ -671,8 +640,8 @@ Item {
     stdout: StdioCollector {
       onStreamFinished: {
         var parts = this.text.trim().split(/\s+/)
-        var win = root.windowAt(parts[0])
-        if (!win || !win.id || root.snapLayoutsFor(win).length === 0) return
+        var win = SnapLayoutData.windowAt(dockState.items, parts[0])
+        if (SnapLayoutData.layoutsFor(dockState.items, win).length === 0) return
         snapPopup.target = win
         snapPopup.popupScreen = root.focusedScreen()
         var scr = snapPopup.popupScreen
@@ -734,7 +703,7 @@ Item {
     property var popupScreen: null
     property real pointerX: -1
     property real pointerY: -1
-    readonly property var layouts: root.snapLayoutsFor(snapPopup.target)
+    readonly property var layouts: SnapLayoutData.layoutsFor(dockState.items, snapPopup.target)
 
     screen: snapPopup.popupScreen
     visible: snapPopup.wanted && !!snapPopup.target && !!snapPopup.popupScreen
@@ -749,7 +718,7 @@ Item {
     anchors.bottom: true
 
     onVisibleChanged: if (snapPopup.visible) {
-      snapView.kbLayout = -1
+      popupSnapView.kbLayout = -1
       snapKeys.forceActiveFocus()
     }
 
@@ -763,11 +732,8 @@ Item {
     // (just above the card, which opens below it) does not close it.
     HoverHandler {
       onPointChanged: {
-        var px = point.position.x, py = point.position.y
-        var far = Style.space(48)
-        var dx = Math.max(snapCard.x - px, 0, px - (snapCard.x + snapCard.width))
-        var dy = Math.max(snapCard.y - py, 0, py - (snapCard.y + snapCard.height))
-        if (dx > far || dy > far) snapPopup.wanted = false
+        var card = { x: snapCard.x, y: snapCard.y, width: snapCard.width, height: snapCard.height }
+        if (PopupDismiss.farOutside(card, point.position, Style.space(48))) snapPopup.wanted = false
       }
     }
 
@@ -792,7 +758,7 @@ Item {
                     : Math.max(gap, snapPopup.pointerY - gap - height))
                 : (snapPopup.height - height) / 2
       width: Style.space(190)
-      height: snapView.implicitHeight + root.menuPad * 2
+      height: popupSnapView.implicitHeight + root.menuPad * 2
       radius: root.menuRadius
       color: root.colPopupBackground
       border.width: Style.normalBorderWidth
@@ -808,19 +774,19 @@ Item {
         Keys.onEscapePressed: snapPopup.wanted = false
         Keys.onPressed: function (event) {
           var k = event.key
-          if (k >= Qt.Key_1 && k <= Qt.Key_9) snapView.selectLayout(k - Qt.Key_1)
-          else if (k === Qt.Key_Left) snapView.stepZone(-1)
-          else if (k === Qt.Key_Right) snapView.stepZone(1)
-          else if (k === Qt.Key_Up) snapView.stepRow(-1)
-          else if (k === Qt.Key_Down) snapView.stepRow(1)
-          else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) snapView.pickSelected()
+          if (k >= Qt.Key_1 && k <= Qt.Key_9) popupSnapView.selectLayout(k - Qt.Key_1)
+          else if (k === Qt.Key_Left) popupSnapView.stepZone(-1)
+          else if (k === Qt.Key_Right) popupSnapView.stepZone(1)
+          else if (k === Qt.Key_Up) popupSnapView.stepRow(-1)
+          else if (k === Qt.Key_Down) popupSnapView.stepRow(1)
+          else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) popupSnapView.pickSelected()
           else return
           event.accepted = true
         }
       }
 
       SnapLayouts {
-        id: snapView
+        id: popupSnapView
         layouts: snapPopup.layouts
         anchors.left: parent.left
         anchors.right: parent.right
@@ -829,10 +795,10 @@ Item {
         fg: root.colPopupText
         accent: root.colAccent
         hairline: root.colHairline
-        onPick: function (zone, others) {
-          var command = root.snapCommand(snapPopup.target, zone, others)
+        onPick: function (zone, layout) {
+          var target = snapPopup.target
           snapPopup.wanted = false
-          if (command) Quickshell.execDetached(command)
+          root.applySnap(target, layout, zone)
         }
       }
     }
@@ -1912,12 +1878,10 @@ Item {
       // one as well, which would leave the Dock floating beside an empty
       // strip: a negative margin on the Dock's own edge takes the room back.
       readonly property real reserved: root.taskbar.reserveSpace && !root.autoHide ? root.taskbar.barHeight : 0
-      margins {
-        top: panel.edge.top ? -panel.reserved : 0
-        bottom: panel.edge.bottom ? -panel.reserved : 0
-        left: panel.edge.left ? -panel.reserved : 0
-        right: panel.edge.right ? -panel.reserved : 0
-      }
+      margins.top: panel.edge.top ? -panel.reserved : 0
+      margins.bottom: panel.edge.bottom ? -panel.reserved : 0
+      margins.left: panel.edge.left ? -panel.reserved : 0
+      margins.right: panel.edge.right ? -panel.reserved : 0
 
       // The input region is the union of the Reveal Strip and the Dock
       // itself: whichever one the Row's slide currently makes zero-area
@@ -3740,25 +3704,25 @@ Item {
           var item = contextMenu.menuItem
           return item && item.kind === "window" && !(item.count > 1) ? item.window : null
         }
-        readonly property bool snapTiled: !!contextMenu.snapTarget && !contextMenu.snapTarget.floating
-        readonly property var snapLayoutList: root.snapLayoutsFor(contextMenu.snapTarget)
-        readonly property bool snapAvailable: !!root.taskbar && root.taskbar.snapLayouts
-          && !!contextMenu.snapTarget && !!contextMenu.snapTarget.id && contextMenu.snapLayoutList.length > 0
+        readonly property var snapLayoutList: SnapLayoutData.layoutsFor(dockState.items, contextMenu.snapTarget)
+        readonly property bool snapAvailable: !!root.taskbar && root.taskbar.snapLayouts && contextMenu.snapLayoutList.length > 0
 
         // The menu stays open until a row is chosen, an outside click closes
-        // it (the focus grab below), or the pointer leaves it: leaving only
-        // counts once the pointer has actually been on the menu
-        // (enteredMenu), so one that is still travelling up from the
-        // right-clicked Item never closes it, however long that takes.
-        // Leaving closes after hideDelayMs, the same delay the Dock's own
-        // auto-hide uses, so a brief crossing between rows doesn't.
+        // it (the focus grab below), or the pointer leaves it. When leaving
+        // counts, and the settle time after the grab, are PopupDismiss.js's;
+        // the leave delay is hideDelayMs, the same as the Dock's auto-hide.
         readonly property bool hoveringMenu: menuHover.hovered
-        property bool enteredMenu: false
-        // The compositor's grab (grabFocus below) moves pointer focus to the popup the moment it opens and sends an enter at the
-        // popup's corner before it has placed the popup, whether or not the pointer is anywhere near it; on a Dock at the top or left
-        // edge that read as the pointer entering and then leaving the menu, which closed it a moment later. Hover changes during
-        // that moment (menuSettleTimer) are not the pointer's own, so they do not count as having entered the menu.
-        property bool settling: false
+        property var dismissState: PopupDismiss.initial()
+
+        function sendDismiss(event) {
+          var result = PopupDismiss.transition(contextMenu.dismissState, event)
+          contextMenu.dismissState = result.state
+          if (result.timers.settle === "stop") menuSettleTimer.stop()
+          else if (result.timers.settle === "start") menuSettleTimer.restart()
+          if (result.timers.leave === "stop") menuLeaveTimer.stop()
+          else if (result.timers.leave === "start") menuLeaveTimer.restart()
+          for (let i = 0; i < result.effects.length; i++) if (result.effects[i].type === "close") contextMenu.close()
+        }
 
         // Without this, the popup renders on top but never actually
         // becomes the surface Hyprland routes pointer input to — hover
@@ -3773,38 +3737,22 @@ Item {
 
         onVisibleChanged: {
           revealState.set("menu", contextMenu.visible)
-          contextMenu.enteredMenu = false
-          menuLeaveTimer.stop()
-          contextMenu.settling = contextMenu.visible
-          if (contextMenu.visible) menuSettleTimer.restart()
-          else menuSettleTimer.stop()
+          contextMenu.sendDismiss({ type: contextMenu.visible ? "opened" : "closed" })
           previewState.send({ type: "menuVisible", visible: contextMenu.visible, forPreview: contextMenu.forPreview })
         }
 
-        onHoveringMenuChanged: {
-          if (contextMenu.settling) return
-          if (contextMenu.hoveringMenu) {
-            contextMenu.enteredMenu = true
-            menuLeaveTimer.stop()
-          } else if (contextMenu.visible && contextMenu.enteredMenu) {
-            menuLeaveTimer.restart()
-          }
-        }
+        onHoveringMenuChanged: contextMenu.sendDismiss({ type: "hover", hovered: contextMenu.hoveringMenu })
 
-        // Once the grab has settled, a pointer that is on the menu counts as having entered it.
         Timer {
           id: menuSettleTimer
-          interval: 250
-          onTriggered: {
-            contextMenu.settling = false
-            if (contextMenu.visible && contextMenu.hoveringMenu) contextMenu.enteredMenu = true
-          }
+          interval: PopupDismiss.SETTLE_MS
+          onTriggered: contextMenu.sendDismiss({ type: "settleFired", hovered: contextMenu.hoveringMenu })
         }
 
         Timer {
           id: menuLeaveTimer
           interval: root.hideDelayMs
-          onTriggered: contextMenu.close()
+          onTriggered: contextMenu.sendDismiss({ type: "leaveFired" })
         }
 
         // Outside-click dismissal: grabFocus's own compositor grab already
@@ -3879,10 +3827,10 @@ Item {
             anchors.top: parent.top
             anchors.margins: root.menuPad
             visible: contextMenu.snapAvailable
-            height: contextMenu.snapAvailable ? snapView.implicitHeight + root.menuPad * 2 + 1 : 0
+            height: contextMenu.snapAvailable ? menuSnapView.implicitHeight + root.menuPad * 2 + 1 : 0
 
             SnapLayouts {
-              id: snapView
+              id: menuSnapView
               layouts: contextMenu.snapLayoutList
               anchors.left: parent.left
               anchors.right: parent.right
@@ -3890,11 +3838,10 @@ Item {
               fg: previewPopup.textColor
               accent: previewPopup.accentColor
               hairline: root.colHairline
-              onPick: function (zone, others) {
+              onPick: function (zone, layout) {
                 // From a Preview, keep the peeked Window shown, as a state row does.
                 if (contextMenu.forPreview) previewState.send({ type: "menuRowChosen" })
-                var command = root.snapCommand(contextMenu.snapTarget, zone, others)
-                if (command) Quickshell.execDetached(command)
+                root.applySnap(contextMenu.snapTarget, layout, zone)
                 contextMenu.close()
               }
             }
