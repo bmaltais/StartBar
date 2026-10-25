@@ -17,6 +17,8 @@ const all = {
   peekCommit: H.peekCommit(),
   rescueWindows: H.rescueWindows([ADDR, "0xabc"]),
   glassRule: H.glassRule(),
+  snapWindow: H.snapWindow(ADDR, { x: 0, y: 0, w: 0.5, h: 1 }),
+  snapWindowFill: H.snapWindow(ADDR, { x: 0, y: 0, w: 0.5, h: 1 }, [{ x: 0.5, y: 0, w: 0.5, h: 1 }]),
   openOnOwnWorkspace: H.openOnOwnWorkspace(ADDR, "maximized"),
   openOnOwnWorkspaceFullscreen: H.openOnOwnWorkspace(ADDR, "fullscreen"),
   openOnOwnWorkspaceNormal: H.openOnOwnWorkspace(ADDR, "normal"),
@@ -70,7 +72,7 @@ test("every Window-state row has a dispatch aimed by address, and no others exis
     { fullscreen: 0, floating: false, workspace: "1" },
     { fullscreen: 1, floating: true, pinned: true, workspace: "1" },
     { fullscreen: 2, floating: true, workspace: "special:scratchpad" },
-  ]) for (const a of windowActions(window)) ids.add(a.id);
+  ]) for (const a of windowActions(window, { move: true })) ids.add(a.id);
   assert.deepEqual([...ids].sort(), [...H.windowActionIds].sort());
   for (const id of ids) {
     const argv = H.windowAction(id, ADDR);

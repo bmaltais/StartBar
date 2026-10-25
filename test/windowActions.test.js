@@ -40,3 +40,11 @@ test("missing fields are treated as off", () => {
   assert.deepEqual(ids(windowActions({})), ["maximize", "fullscreen", "float", "scratchpad"]);
   assert.deepEqual(windowActions(null), []);
 });
+
+test("with moving on, a tiled window can be sent left, right, up or down; a floating one cannot", () => {
+  const tiled = windowActions({ floating: false, workspace: "1" }, { move: true });
+  assert.deepEqual(ids(tiled), ["maximize", "fullscreen", "float", "moveLeft", "moveRight", "moveUp", "moveDown", "scratchpad"]);
+  assert.equal(label(tiled, "moveLeft"), "Move left");
+  assert.equal(ids(windowActions({ floating: true, workspace: "1" }, { move: true })).includes("moveLeft"), false);
+  assert.equal(ids(windowActions({ floating: false, workspace: "1" })).includes("moveLeft"), false, "off by default");
+});

@@ -49,6 +49,8 @@ test("bar defaults: always visible, left-aligned, theme colours, built-in Start 
     hideOmarchyDock: true,
     focusFollowsMouse: false,
     raiseOnFocus: false,
+    snapLayouts: false,
+    snapFillOthers: false,
     newWindowWorkspace: "off",
   });
 });

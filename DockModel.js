@@ -348,7 +348,7 @@ function menuFor(item) {
 // Pin on top/Unpin from top). Center and Pin on top only make sense for a
 // floating window; Move to scratchpad is hidden once there. Service.qml
 // maps each id to its Hyprland dispatch.
-function windowActions(window) {
+function windowActions(window, options) {
   if (!window) return [];
   var fullscreen = Number(window.fullscreen) || 0;
   var actions = [
@@ -356,6 +356,14 @@ function windowActions(window) {
     { id: "fullscreen", label: fullscreen === 2 ? "Exit full screen" : "Full screen" },
     { id: "float", label: window.floating ? "Tile" : "Float" },
   ];
+  // With Snap layouts on, a tiled Window can also be sent to a neighbour's
+  // side (Hyprland swaps it with the Window there).
+  if (!window.floating && options && options.move) {
+    actions.push({ id: "moveLeft", label: "Move left" });
+    actions.push({ id: "moveRight", label: "Move right" });
+    actions.push({ id: "moveUp", label: "Move up" });
+    actions.push({ id: "moveDown", label: "Move down" });
+  }
   if (window.floating) {
     actions.push({ id: "center", label: "Center" });
     actions.push({ id: "pin", label: window.pinned ? "Unpin from top" : "Pin on top" });
@@ -447,6 +455,7 @@ function windowFromToplevel(toplevel, openedAt) {
     attention: !!toplevel.urgent,
     fullscreen: info.fullscreen || 0,
     floating: !!info.floating,
+    rect: info.at && info.size ? { x: info.at[0], y: info.at[1], w: info.size[0], h: info.size[1] } : null,
     pinned: !!info.pinned,
   };
 }
