@@ -612,6 +612,69 @@ Item {
     return null
   }
 
+  // Snap layouts (docs/SPEC.md "Snap layouts"), shared by the Item and Preview
+  // menus and the Super+Z popup. What a Window is offered: a floating one every
+  // layout, a tiled one the shapes its workspace's tiles can take (or, with
+  // more than three, the tiles to swap with), and each ends with "full".
+  function snapLayoutsFor(win) {
+    if (!win) return []
+    if (win.floating) return SnapLayoutData.LAYOUTS
+    var tiles = SnapLayoutData.tileLayout(dockState.items, win.workspace)
+    var shapes = SnapLayoutData.shapeLayouts(tiles.length)
+    var list = shapes.length > 0 ? shapes : (tiles.length > 0 ? [tiles] : [])
+    return list.length > 0 ? list.concat([SnapLayoutData.FULL]) : []
+  }
+
+  // The command that applies a chosen zone to a Window. A tile never floats: it
+  // is reshaped to the thumbnail (two or three tiles) and swapped into the
+  // zone, or just swapped with the tile clicked.
+  function snapCommand(win, zone, others) {
+    if (zone.maximize) return DockHyprland.maximizeWindow(win.id)
+    if (!win.floating) {
+      return zone.shape ? DockHyprland.reshapeTiles(win.id, zone.shape, zone)
+                        : DockHyprland.swapTiles(win.id, zone.id)
+    }
+    return DockHyprland.snapWindow(win.id, zone, root.taskbar.snapFillOthers ? others : [])
+  }
+
+  // The Window with this address (as `hyprctl` prints it, with or without 0x),
+  // if it is on an ordinary workspace.
+  function windowAt(address) {
+    var focused = String(address || "").replace(/^0x/, "")
+    if (!focused) return null
+    var items = dockState.items || []
+    for (var i = 0; i < items.length; i++) {
+      var list = items[i].windows || (items[i].window ? [items[i].window] : [])
+      for (var j = 0; j < list.length; j++) {
+        var w = list[j]
+        if (w && String(w.id).replace(/^0x/, "") === focused && String(w.workspace || "").indexOf("special") !== 0) return w
+      }
+    }
+    return null
+  }
+
+  // Asks Hyprland which Window is active (Quickshell's own idea of it is empty
+  // until the first focus change after a restart), then opens the popup for it.
+  function toggleSnapPicker() {
+    if (snapPopup.wanted) { snapPopup.wanted = false; return }
+    if (!root.taskbar || !root.taskbar.snapLayouts || activeAsk.running) return
+    activeAsk.running = true
+  }
+
+  Process {
+    id: activeAsk
+    command: ["bash", "-lc", "hyprctl -j activewindow | jq -r '.address // empty'"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var win = root.windowAt(this.text.trim())
+        if (!win || !win.id || root.snapLayoutsFor(win).length === 0) return
+        snapPopup.target = win
+        snapPopup.popupScreen = root.focusedScreen()
+        snapPopup.wanted = true
+      }
+    }
+  }
+
   // Asked (by IPC) to toggle or close the Start menu on one monitor; each
   // monitor's panel owns a menu and answers only for its own screen.
   signal startMenuRequested(string screenName, string action)
@@ -634,6 +697,9 @@ Item {
     // For a Super-key binding: `omarchy-shell io.github.bmaltais.startbar startMenu`.
     function startMenu(): void { root.startMenuRequested(root.focusedScreenName(), "toggle") }
     function closeStartMenu(): void { root.startMenuRequested(root.focusedScreenName(), "close") }
+    // For a key binding: the snap layouts of the active Window, centred on the focused monitor.
+    function snapPicker(): void { root.toggleSnapPicker() }
+    function closeSnapPicker(): void { snapPopup.wanted = false }
     // Where the Dock's Items and any open menu are on the focused monitor, as
     // JSON (see `layout` in the panel). For the scripts that drive the pointer.
     function layout(): string {
@@ -644,6 +710,98 @@ Item {
         }
       }
       return "{}"
+    }
+  }
+
+  // The snap picker of the active Window on its own (IPC snapPicker, bound to a
+  // key): a centred card on the focused monitor. Digits choose a layout, the
+  // arrows move through its zones and rows, Return applies, Escape or a click
+  // outside closes.
+  PanelWindow {
+    id: snapPopup
+
+    property bool wanted: false
+    property var target: null
+    property var popupScreen: null
+    readonly property var layouts: root.snapLayoutsFor(snapPopup.target)
+
+    screen: snapPopup.popupScreen
+    visible: snapPopup.wanted && !!snapPopup.target && !!snapPopup.popupScreen
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-startbar-snap"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+    exclusionMode: ExclusionMode.Ignore
+    anchors.left: true
+    anchors.right: true
+    anchors.top: true
+    anchors.bottom: true
+
+    onVisibleChanged: if (snapPopup.visible) {
+      snapView.kbLayout = -1
+      snapKeys.forceActiveFocus()
+    }
+
+    MouseArea {
+      anchors.fill: parent
+      onClicked: snapPopup.wanted = false
+    }
+
+    RectangularShadow {
+      anchors.fill: snapCard
+      radius: snapCard.radius
+      blur: root.menuShadow
+      offset.y: Style.space(4)
+      color: Qt.rgba(0, 0, 0, 0.6)
+    }
+
+    Rectangle {
+      id: snapCard
+      anchors.centerIn: parent
+      width: Style.space(190)
+      height: snapView.implicitHeight + root.menuPad * 2
+      radius: root.menuRadius
+      color: root.colPopupBackground
+      border.width: Style.normalBorderWidth
+      border.color: root.colHairline
+
+      // Clicks on the card's own padding must not reach the closing area behind.
+      MouseArea { anchors.fill: parent }
+
+      Item {
+        id: snapKeys
+        anchors.fill: parent
+        focus: true
+        Keys.onEscapePressed: snapPopup.wanted = false
+        Keys.onPressed: function (event) {
+          var k = event.key
+          if (k >= Qt.Key_1 && k <= Qt.Key_9) snapView.selectLayout(k - Qt.Key_1)
+          else if (k === Qt.Key_Left) snapView.stepZone(-1)
+          else if (k === Qt.Key_Right) snapView.stepZone(1)
+          else if (k === Qt.Key_Up) snapView.stepRow(-1)
+          else if (k === Qt.Key_Down) snapView.stepRow(1)
+          else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) snapView.pickSelected()
+          else return
+          event.accepted = true
+        }
+      }
+
+      SnapLayouts {
+        id: snapView
+        layouts: snapPopup.layouts
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.topMargin: root.menuPad
+        fg: root.colPopupText
+        accent: root.colAccent
+        hairline: root.colHairline
+        onPick: function (zone, others) {
+          var command = root.snapCommand(snapPopup.target, zone, others)
+          snapPopup.wanted = false
+          if (command) Quickshell.execDetached(command)
+        }
+      }
     }
   }
 
@@ -3550,15 +3708,7 @@ Item {
           return item && item.kind === "window" && !(item.count > 1) ? item.window : null
         }
         readonly property bool snapTiled: !!contextMenu.snapTarget && !contextMenu.snapTarget.floating
-        readonly property var snapLayoutList: {
-          if (!contextMenu.snapTarget) return []
-          if (!contextMenu.snapTiled) return SnapLayoutData.LAYOUTS
-          var tiles = SnapLayoutData.tileLayout(dockState.items, contextMenu.snapTarget.workspace)
-          // Two or three tiles can be reshaped; more can only be swapped.
-          var shapes = SnapLayoutData.shapeLayouts(tiles.length)
-          var list = shapes.length > 0 ? shapes : (tiles.length > 0 ? [tiles] : [])
-          return list.length > 0 ? list.concat([SnapLayoutData.FULL]) : []
-        }
+        readonly property var snapLayoutList: root.snapLayoutsFor(contextMenu.snapTarget)
         readonly property bool snapAvailable: !!root.taskbar && root.taskbar.snapLayouts
           && !!contextMenu.snapTarget && !!contextMenu.snapTarget.id && contextMenu.snapLayoutList.length > 0
 
@@ -3710,13 +3860,7 @@ Item {
               onPick: function (zone, others) {
                 // From a Preview, keep the peeked Window shown, as a state row does.
                 if (contextMenu.forPreview) previewState.send({ type: "menuRowChosen" })
-                // A tile never floats: it is reshaped to the thumbnail (two or three tiles)
-                // and swapped into the zone, or just swapped with the tile clicked.
-                var command = zone.maximize ? DockHyprland.maximizeWindow(contextMenu.snapTarget.id)
-                  : contextMenu.snapTiled
-                  ? (zone.shape ? DockHyprland.reshapeTiles(contextMenu.snapTarget.id, zone.shape, zone)
-                                : DockHyprland.swapTiles(contextMenu.snapTarget.id, zone.id))
-                  : DockHyprland.snapWindow(contextMenu.snapTarget.id, zone, root.taskbar.snapFillOthers ? others : [])
+                var command = root.snapCommand(contextMenu.snapTarget, zone, others)
                 if (command) Quickshell.execDetached(command)
                 contextMenu.close()
               }
