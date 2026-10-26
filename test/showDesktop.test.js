@@ -38,7 +38,7 @@ exit 0
   });
   const places = () => Object.fromEntries(JSON.parse(fs.readFileSync(file)).map((c) => [c.address, c.workspace.name]));
   const edit = (fn) => fs.writeFileSync(file, JSON.stringify(fn(JSON.parse(fs.readFileSync(file)))));
-  return { run, places, edit };
+  return { run, places, edit, log: path.join(dir, "log") };
 }
 
 const w = (address, id, name = String(id), mapped = true) => ({ address, mapped, workspace: { id, name } });
@@ -89,4 +89,18 @@ test("hovering a hidden window peeks nothing", () => {
   s.run();
   assert.equal(s.run(H.peekWindow("0xaa")).status, 0);
   assert.deepEqual(s.places(), { "0xaa": "special:showdesktop", "0xbb": "special:showdesktop" });
+});
+
+test("DockHyprland's place() is a copy of DockShowDesktop's", () => {
+  assert.equal(H.SHOWDESKTOP_PLACE, require("../DockShowDesktop.js").PLACE);
+});
+
+test("floating windows come back floating at their saved position and size", () => {
+  const s = session([{ ...w("0xaa", 1), floating: true, at: [10, 20], size: [300, 200] }, w("0xbb", 2)]);
+  s.run();
+  s.run();
+  const log = fs.readFileSync(s.log, "utf8");
+  assert.match(log, /resize\(\{ x = 300, y = 200, exact = true, window = "address:0xaa"/);
+  assert.match(log, /move\(\{ x = 10, y = 20, window = "address:0xaa"/);
+  assert.doesNotMatch(log, /resize.*0xbb/);
 });
