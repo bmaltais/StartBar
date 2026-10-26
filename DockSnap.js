@@ -114,7 +114,9 @@ function reshapeTiles(address, shape, zone) {
 // Window first if it is tiled, leaves full screen, then resizes and moves it.
 // The usable area starts below whatever the top edge holds: the space Hyprland
 // reserves there, or the Omarchy bar's own layer while it is showing, whichever
-// reaches lower. A moment after the move the Window is read back and, if an app
+// reaches lower. A bar layer taller than half the monitor is ignored: on some
+// setups it is one surface over the whole monitor (the bar's popups share it),
+// and counting it left no area at all. An area under 200 px does nothing. A moment after the move the Window is read back and, if an app
 // has put itself above that line, moved down to it.
 // A window on one of Omarchy's window-mode workspaces carries a titlebar (the
 // hyprbars plugin) drawn above its top edge, outside its own rectangle: `$tb`
@@ -123,13 +125,14 @@ var SNAP_GEOMETRY = "first(.[] | select(.address == $a)) as $w | "
   + "(if (($w.tags // []) | index(\"omarchy-floating-workspace\")) != null then $bh else 0 end) as $tb | "
   + "first($m[] | select(.id == $w.monitor)) as $o | ($o.scale // 1) as $s | 6 as $g | "
   + "([$o.reserved[1], ([($l[$o.name].levels // {}) | to_entries[].value[] "
-  + "| select(.namespace == \"omarchy-bar\" and .y <= $o.y + 1) | .y + .h - $o.y] | max // 0)] | max) as $top | "
+  + "| select(.namespace == \"omarchy-bar\" and .y <= $o.y + 1 and .h < ($o.height / $s) / 2) | .y + .h - $o.y] | max // 0)] | max) as $top | "
   + "($o.x + $o.reserved[0] + $g) as $x0 | ($o.y + $top + $g) as $y0 | "
   + "(($o.width / $s) - $o.reserved[0] - $o.reserved[2] - 2 * $g) as $aw | "
   + "(($o.height / $s) - $top - $o.reserved[3] - 2 * $g) as $ah | "
+  + "if $aw < 200 or $ah < 200 then empty else "
   + "{ x: ($x0 + $aw * $f[0] + ($g / 2) | floor), y: ($y0 + $ah * $f[1] + ($g / 2) + $tb | floor), "
   + "w: ($aw * $f[2] - $g | floor), h: ($ah * $f[3] - $g - $tb | floor), "
-  + "limit: ($o.y + $top + $tb), fs: $w.fullscreen, fl: $w.floating }";
+  + "limit: ($o.y + $top + $tb), fs: $w.fullscreen, fl: $w.floating } end";
 
 function snapWindow(address, zone, others) {
   var normalized = normalizedAddress(address);

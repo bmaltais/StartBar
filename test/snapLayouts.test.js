@@ -112,6 +112,17 @@ test("the Omarchy bar's layer keeps the window below it when Hyprland reserves n
   assert.match(resizeOf(calls), /y = 752,/); // 800 less the bar, less 12, less the gap
 });
 
+test("a bar layer that covers the whole monitor is ignored: Hyprland's reserved top is used", () => {
+  const calls = snap(HALVES[0], client, monitor, bar(0, 800));
+  assert.match(moveOf(calls), /x = 9, y = 35,/); // reserved top 26, plus 6 and 3
+  assert.match(resizeOf(calls), /y = 7\d\d,/);
+});
+
+test("an area too small to use leaves the window alone", () => {
+  const calls = snap(HALVES[0], client, { ...monitor, height: 150 });
+  assert.deepEqual(calls, []);
+});
+
 test("with no bar showing the whole reserved-free area is used", () => {
   const calls = snap(HALVES[0], client, { ...monitor, reserved: [0, 0, 0, 0] });
   assert.match(moveOf(calls), /x = 9, y = 9,/);
