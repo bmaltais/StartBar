@@ -346,7 +346,8 @@ function menuFor(item) {
 // each is { id, label }, in menu order. Labels flip to their undo while the
 // state is on (Maximize/Restore, Full screen/Exit full screen, Float/Tile,
 // Pin on top/Unpin from top). Center and Pin on top only make sense for a
-// floating window; Move to scratchpad is hidden once there. Service.qml
+// floating window; Move to scratchpad is replaced by Restore from scratchpad
+// once there. Service.qml
 // maps each id to its Hyprland dispatch.
 function windowActions(window, options) {
   if (!window) return [];
@@ -370,6 +371,8 @@ function windowActions(window, options) {
   }
   if (String(window.workspace || "") !== "special:scratchpad") {
     actions.push({ id: "scratchpad", label: "Move to scratchpad" });
+  } else {
+    actions.push({ id: "unscratchpad", label: "Restore from scratchpad" });
   }
   return actions;
 }
