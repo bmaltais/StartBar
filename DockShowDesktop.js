@@ -8,6 +8,13 @@
 // Hyprland instance, so a second press knows what to put back and a nested test
 // session never restores another's.
 
+// Focusing a Window can warp the pointer to it, even on another monitor: toggle
+// cursor:no_warps around the restore and put the old value back (as
+// DockHyprland.js does).
+var NO_WARPS = "orig=false; hyprctl -j getoption cursor:no_warps | grep -q '\"bool\": true' && orig=true; "
+  + "hyprctl eval 'hl.config({ cursor = { no_warps = true } })' >/dev/null; ";
+var WARPS_BACK = "hyprctl eval \"hl.config({ cursor = { no_warps = $orig } })\" >/dev/null\n";
+
 var DESKTOP_STATE = "\"${XDG_RUNTIME_DIR:-/tmp}/startbar-showdesktop-${HYPRLAND_INSTANCE_SIGNATURE:-0}\"";
 
 // Windows on a special workspace (the scratchpad, Omarchy's minimized Windows)
@@ -32,6 +39,7 @@ function showDesktop() {
     + "move() { hyprctl dispatch \"hl.dsp.window.move({ workspace = \\\"$1\\\", follow = false, window = \\\"address:$2\\\" })\" >/dev/null; }\n"
     + "if [ -f \"$state\" ]; then\n"
     + "  # Second press: put back each saved Window that is still hidden here.\n"
+    + "  " + NO_WARPS + "\n"
     + "  prev=$(head -n1 \"$state\")\n"
     + "  hidden=$(hyprctl -j clients | jq -r '.[] | select(.workspace.name == \"special:showdesktop\") | .address')\n"
     + "  # Tiled Windows are placed in the order they come back: left to right, top to bottom.\n"
@@ -46,12 +54,15 @@ function showDesktop() {
     + "  rm -f \"$state.rows\"\n"
     + "  rm -f \"$state\"\n"
     + "  [ -n \"$prev\" ] && hyprctl dispatch \"hl.dsp.focus({ window = \\\"address:$prev\\\" })\" >/dev/null\n"
+    + "  " + WARPS_BACK
     + "  exit 0\n"
     + "fi\n"
     + "list=$(hyprctl -j clients | jq -r '.[] | select(.mapped and .workspace.id > 0) | \"\\(.address) \\(.workspace.id) \\(.floating) \\(.at[0]) \\(.at[1]) \\(.size[0]) \\(.size[1])\"')\n"
     + "[ -n \"$list\" ] || exit 0\n"
+    + NO_WARPS + "\n"
     + "{ hyprctl -j activewindow | jq -r '.address // \"\"'; echo \"$list\"; } > \"$state\"\n"
-    + "echo \"$list\" | while read -r addr ws fl x y w h; do move special:showdesktop \"$addr\"; done\n";
+    + "echo \"$list\" | while read -r addr ws fl x y w h; do move special:showdesktop \"$addr\"; done\n"
+    + WARPS_BACK;
   return ["bash", "-lc", script, "bash"];
 }
 
