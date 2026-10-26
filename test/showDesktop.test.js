@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { showDesktop } = require("../DockShowDesktop.js");
+const H = require("../DockHyprland.js");
 
 test("showDesktop is a bash -lc argv whose script parses", () => {
   const argv = showDesktop();
@@ -21,6 +22,7 @@ function session(clients) {
 if [ "$1" = -j ]; then
   case "$2" in
     clients) cat "${file}" ;;
+    monitors) echo '[{"id":0,"name":"M0","focused":true,"activeWorkspace":{"id":7}}]' ;;
     activewindow) echo '{"address":"0xaa"}' ;;
   esac
 else
@@ -29,8 +31,9 @@ else
   addr=$(echo "$2" | sed -n 's/.*address:\\([0-9a-fx]*\\)".*/\\1/p')
   [ -n "$ws" ] && jq --arg a "$addr" --arg w "$ws" 'map(if .address == $a then .workspace = (if ($w | startswith("special:")) then {id: -99, name: $w} else {id: ($w | tonumber), name: $w} end) else . end)' "${file}" > "${file}.new" && mv "${file}.new" "${file}"
 fi
+exit 0
 `, { mode: 0o755 });
-  const run = () => spawnSync("bash", [...showDesktop().slice(1, 3), "bash"], {
+  const run = (argv = showDesktop()) => spawnSync("bash", [...argv.slice(1)], {
     env: { ...process.env, PATH: dir + ":" + process.env.PATH, XDG_RUNTIME_DIR: dir, HYPRLAND_INSTANCE_SIGNATURE: "t" },
   });
   const places = () => Object.fromEntries(JSON.parse(fs.readFileSync(file)).map((c) => [c.address, c.workspace.name]));
@@ -60,4 +63,30 @@ test("with no windows a press saves nothing, so the next press hides again", () 
   const s = session([]);
   assert.equal(s.run().status, 0);
   assert.equal(s.run().status, 0);
+});
+
+test("clicking a hidden window brings back only it; the rest stay hidden until the next press", () => {
+  const s = session([w("0xaa", 1), w("0xbb", 2), w("0xcc", 3)]);
+  s.run();
+  assert.equal(s.run(H.focusWindow("0xbb")).status, 0);
+  assert.deepEqual(s.places(), { "0xaa": "special:showdesktop", "0xbb": "2", "0xcc": "special:showdesktop" });
+  assert.equal(s.run().status, 0);
+  assert.deepEqual(s.places(), { "0xaa": "1", "0xbb": "2", "0xcc": "3" });
+});
+
+test("clicking the last hidden window forgets the state, so the next press hides again", () => {
+  const s = session([w("0xaa", 1), w("0xbb", 2)]);
+  s.run();
+  s.run(H.focusWindow("0xaa"));
+  s.run(H.focusWindow("0xbb"));
+  assert.deepEqual(s.places(), { "0xaa": "1", "0xbb": "2" });
+  s.run();
+  assert.deepEqual(s.places(), { "0xaa": "special:showdesktop", "0xbb": "special:showdesktop" });
+});
+
+test("hovering a hidden window peeks nothing", () => {
+  const s = session([w("0xaa", 1), w("0xbb", 2)]);
+  s.run();
+  assert.equal(s.run(H.peekWindow("0xaa")).status, 0);
+  assert.deepEqual(s.places(), { "0xaa": "special:showdesktop", "0xbb": "special:showdesktop" });
 });
