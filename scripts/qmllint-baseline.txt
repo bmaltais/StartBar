@@ -1,8 +1,9 @@
 IconResolver.qml	confusing-expression-statement	Expression statement has no obvious effect.
-Service.qml	import	Failed to import qs.Commons. Are your import paths set up properly?
+MonitorPicker.qml	import	Failed to import qs.Commons. Are your import paths set up properly?
+MonitorPicker.qml	import	Warnings occurred while importing module "qs.Commons":
+MonitorPicker.qml	unqualified	Style
 Service.qml	import	Failed to import qs.Ui. Are your import paths set up properly?
 Service.qml	import	PanelToolTip was not found. Did you add all imports and dependencies?
-Service.qml	import	Warnings occurred while importing module "qs.Commons":
 Service.qml	import	Warnings occurred while importing module "qs.Ui":
 Service.qml	incompatible-type	Cannot assign binding of type PopupAdjustment::Enum to PopupAdjustment::Flags
 Service.qml	incompatible-type	Cannot assign binding of type int to Edges::Flags

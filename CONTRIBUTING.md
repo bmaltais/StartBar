@@ -50,6 +50,7 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 | `DockPlacement.js` | Where popups stand for the Dock's edge: a Preview and the Item menu beside their Item, the Bar menu beside the bar, its submenu, the Start menu (`beside`, `barTarget`, `submenu`, `startMenu`, `slide`) |
 | `DockHyprland.js` | How to ask Hyprland for each thing the Dock wants: focus, raise, close, Window-state rows, Peek. Returns the command; tests run `bash -n` over every script |
 | `DockShowDesktop.js` | Show desktop: the one toggle command that moves every Window to a hidden special workspace and, on the next press, puts back the ones it moved |
+| `DockMonitors.js` | Move to monitor: the command that sends a Window to the workspace a monitor is showing (Omarchy's workspace modes then float or tile it), which monitor a Window is on, and the scaled map of the monitors that `MonitorPicker.qml` draws |
 | `DockSnap.js` | How snap layouts are applied to Hyprland: snap a floating Window to a zone (filling the others if asked), maximize, reshape two or three tiles, swap tiles. Returns the command, like `DockHyprland.js`, from which it keeps its own copy of the address check |
 | `DockIcons.js` | Finding an App's icon file when Qt's lookup has missed: the command that searches the icon directories, which file is best, and when to search again |
 | `IconResolver.qml` | The QML side of `DockIcons.js`, one instance shared by the Dock and the Start menu: `source(name)` is Qt's icon path, else a found file, else "" while it searches |

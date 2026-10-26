@@ -49,3 +49,11 @@ test("with moving on, a tiled window can be sent left, right, up or down; a floa
   assert.equal(ids(windowActions({ floating: true, workspace: "1" }, { move: true })).includes("moveLeft"), false);
   assert.equal(ids(windowActions({ floating: false, workspace: "1" })).includes("moveLeft"), false, "off by default");
 });
+
+test("with more than one monitor a flyout row sits above the scratchpad row", () => {
+  const tiled = windowActions({ floating: false, workspace: "1" }, { monitors: true });
+  assert.deepEqual(ids(tiled), ["maximize", "fullscreen", "float", "monitor", "scratchpad"]);
+  assert.equal(tiled.find((a) => a.id === "monitor").flyout, true);
+  assert.deepEqual(ids(windowActions({ floating: false, workspace: "special:scratchpad" }, { monitors: true })).slice(-2), ["monitor", "unscratchpad"]);
+  assert.equal(ids(windowActions({ floating: false, workspace: "1" })).includes("monitor"), false, "one monitor: no row");
+});
