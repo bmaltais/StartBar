@@ -159,6 +159,8 @@ var WINDOW_ACTIONS = {
   center: function (target) { return "hl.dsp.window.center({ " + target + " })"; },
   pin: function (target) { return "hl.dsp.window.pin({ " + target + " })"; },
   scratchpad: function (target) { return "hl.dsp.window.move({ workspace = \"special:scratchpad\", follow = false, " + target + " })"; },
+  // "+0" is the workspace now shown on the focused monitor.
+  unscratchpad: function (target) { return "hl.dsp.window.move({ workspace = \"+0\", " + target + " })"; },
 };
 
 // One dispatch aimed at the Window by address, whether or not it is the

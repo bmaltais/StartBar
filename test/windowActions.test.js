@@ -31,9 +31,10 @@ test("a floating window also offers Center and Pin on top; Tile replaces Float",
   assert.equal(label(windowActions({ floating: true, pinned: true, workspace: "2" }), "pin"), "Unpin from top");
 });
 
-test("a window already in the scratchpad can't be moved there again", () => {
+test("a window already in the scratchpad offers restore instead of move", () => {
   const actions = windowActions({ floating: false, workspace: "special:scratchpad" });
   assert.equal(ids(actions).includes("scratchpad"), false);
+  assert.equal(ids(actions).at(-1), "unscratchpad");
 });
 
 test("missing fields are treated as off", () => {
