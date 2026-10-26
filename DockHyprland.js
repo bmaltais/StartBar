@@ -28,16 +28,35 @@ var RAISE = "raise() { hyprctl -j clients | jq -e --arg a \"$1\" '.[] | select(.
   + "&& hyprctl dispatch \"hl.dsp.window.alter_zorder({ mode = \\\"top\\\", window = \\\"address:$1\\\" })\" >/dev/null; }; ";
 
 // Omarchy's window mode minimizes a Window by moving it to the special
-// workspace "special:minimized", where focusing it does not bring it back. A
-// shell function: `restore ADDRESS` moves such a Window to the workspace in
-// front of the user, without animating it in, and does nothing for any other.
-var RESTORE = "restore() { "
-  + "hyprctl -j clients | jq -e --arg a \"$1\" '.[] | select(.address == $a and .workspace.name == \"special:minimized\")' >/dev/null || return 0; "
+// workspace "special:minimized", where focusing it does not bring it back, and
+// Show desktop (DockShowDesktop.js) hides Windows on "special:showdesktop",
+// where focusing one would show them all. A shell function: `restore ADDRESS`
+// moves such a Window to the workspace in front of the user (to the workspace
+// Show desktop saved for it, which also forgets it, so the next press brings
+// back only the rest), without animating it in, and does nothing for any other.
+var SHOWDESKTOP_STATE = "\"${XDG_RUNTIME_DIR:-/tmp}/startbar-showdesktop-${HYPRLAND_INSTANCE_SIGNATURE:-0}\"";
+// A copy of DockShowDesktop.js's PLACE (a test keeps them equal).
+var SHOWDESKTOP_PLACE = "place() { [ \"$2\" = true ] || return 0; "
+  + "hyprctl -j clients | jq -e --arg a \"$1\" '.[] | select(.address == $a and .floating)' >/dev/null "
+  + "|| hyprctl dispatch \"hl.dsp.window.float({ action = \\\"toggle\\\", window = \\\"address:$1\\\" })\" >/dev/null; "
+  + "hyprctl dispatch \"hl.dsp.window.resize({ x = $5, y = $6, exact = true, window = \\\"address:$1\\\" })\" >/dev/null; "
+  + "hyprctl dispatch \"hl.dsp.window.move({ x = $3, y = $4, window = \\\"address:$1\\\" })\" >/dev/null; }\n";
+var RESTORE = SHOWDESKTOP_PLACE + "restore() { "
+  + "hidden=$(hyprctl -j clients | jq -r --arg a \"$1\" '.[] | select(.address == $a) | .workspace.name'); "
+  + "case \"$hidden\" in special:minimized|special:showdesktop) ;; *) return 0 ;; esac; "
   + "ws=$(hyprctl -j monitors | jq -r 'first(.[] | select(.focused) | .activeWorkspace.id) // empty'); "
+  + "if [ \"$hidden\" = special:showdesktop ]; then "
+  + "state=" + SHOWDESKTOP_STATE + "; "
+  + "read -r saved fl x y w h <<< \"$(awk -v a=\"$1\" 'NR > 1 && $1 == a { print $2, $3, $4, $5, $6, $7 }' \"$state\" 2>/dev/null)\"; "
+  + "[ -n \"$saved\" ] && ws=$saved; "
+  + "[ -f \"$state\" ] && { grep -v \"^$1 \" \"$state\" > \"$state.new\"; "
+  + "if [ \"$(wc -l < \"$state.new\")\" -le 1 ]; then rm -f \"$state\" \"$state.new\"; else mv \"$state.new\" \"$state\"; fi; }; "
+  + "fi; "
   + "[ \"${ws:-0}\" -ge 1 ] 2>/dev/null || return 0; "
   + "hyprctl dispatch \"hl.dsp.window.set_prop({ prop = \\\"no_anim\\\", value = \\\"1\\\", window = \\\"address:$1\\\" })\" >/dev/null; "
   + "hyprctl dispatch \"hl.dsp.window.move({ workspace = \\\"$ws\\\", window = \\\"address:$1\\\" })\" >/dev/null; "
   + "(sleep 0.4; hyprctl dispatch \"hl.dsp.window.set_prop({ prop = \\\"no_anim\\\", value = \\\"unset\\\", window = \\\"address:$1\\\" })\" >/dev/null) & "
+  + "[ \"$hidden\" = special:showdesktop ] && (sleep 0.4; place \"$1\" \"$fl\" \"$x\" \"$y\" \"$w\" \"$h\") & "
   + "}; ";
 
 // WORKAROUND, may need revisiting if Omarchy fixes it. A floating Window can be
@@ -182,6 +201,8 @@ function peekWindow(address) {
   var script = PEEK_LOCK
     + PEEK_UNDO
     + "addr=\"$1\"; state=" + PEEK_STATE + "\n"
+    + "# Focusing a Window Show desktop hid would show every hidden Window.\n"
+    + "hyprctl -j clients | jq -e --arg a \"$addr\" '.[] | select(.address == $a and .workspace.name == \"special:showdesktop\")' >/dev/null && exit 0\n"
     + NO_WARPS
     + "if [ -f \"$state\" ]; then\n"
     + "  # Moving on from an earlier peek: put its changes back first, keeping the\n"
@@ -293,6 +314,7 @@ if (typeof module !== "undefined" && module.exports) {
     closeWindow: closeWindow,
     windowAction: windowAction,
     windowActionIds: Object.keys(WINDOW_ACTIONS),
+    SHOWDESKTOP_PLACE: SHOWDESKTOP_PLACE,
     peekWindow: peekWindow,
     peekRestore: peekRestore,
     peekCommit: peekCommit,
