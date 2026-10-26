@@ -38,12 +38,12 @@ fi
   return { run, places, edit };
 }
 
-const w = (address, id, name = String(id), mapped = true) => ({ address, mapped, workspace: { id, name } });
+const w = (address, id, name = String(id), mapped = true) => ({ address, mapped, monitor: id % 2, workspace: { id, name } });
 
 test("the first press hides every window, the second puts back only those", () => {
   const s = session([w("0xaa", 1), w("0xbb", 2), w("0xcc", 3), w("0xdd", -98, "special:scratchpad")]);
   assert.equal(s.run().status, 0);
-  assert.deepEqual(s.places(), { "0xaa": "special:showdesktop", "0xbb": "special:showdesktop", "0xcc": "special:showdesktop", "0xdd": "special:scratchpad" });
+  assert.deepEqual(s.places(), { "0xaa": "special:showdesktop1", "0xbb": "special:showdesktop0", "0xcc": "special:showdesktop1", "0xdd": "special:scratchpad" });
   assert.equal(s.run().status, 0);
   assert.deepEqual(s.places(), { "0xaa": "1", "0xbb": "2", "0xcc": "3", "0xdd": "special:scratchpad" });
 });
