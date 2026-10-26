@@ -22,7 +22,7 @@ function session(clients) {
 if [ "$1" = -j ]; then
   case "$2" in
     clients) cat "${file}" ;;
-    monitors) echo '[{"id":0,"name":"M0","focused":true,"activeWorkspace":{"id":7}}]' ;;
+    monitors) echo '[{"id":0,"name":"M0","focused":true,"activeWorkspace":{"id":7}},{"id":1,"name":"M1","focused":false,"activeWorkspace":{"id":8}}]' ;;
     activewindow) echo '{"address":"0xaa"}' ;;
   esac
 else
@@ -41,12 +41,12 @@ exit 0
   return { run, places, edit, log: path.join(dir, "log") };
 }
 
-const w = (address, id, name = String(id), mapped = true) => ({ address, mapped, workspace: { id, name } });
+const w = (address, id, name = String(id), mapped = true) => ({ address, mapped, monitor: id % 2, workspace: { id, name } });
 
 test("the first press hides every window, the second puts back only those", () => {
   const s = session([w("0xaa", 1), w("0xbb", 2), w("0xcc", 3), w("0xdd", -98, "special:scratchpad")]);
   assert.equal(s.run().status, 0);
-  assert.deepEqual(s.places(), { "0xaa": "special:showdesktop", "0xbb": "special:showdesktop", "0xcc": "special:showdesktop", "0xdd": "special:scratchpad" });
+  assert.deepEqual(s.places(), { "0xaa": "special:showdesktop1", "0xbb": "special:showdesktop0", "0xcc": "special:showdesktop1", "0xdd": "special:scratchpad" });
   assert.equal(s.run().status, 0);
   assert.deepEqual(s.places(), { "0xaa": "1", "0xbb": "2", "0xcc": "3", "0xdd": "special:scratchpad" });
 });
@@ -69,7 +69,7 @@ test("clicking a hidden window brings back only it; the rest stay hidden until t
   const s = session([w("0xaa", 1), w("0xbb", 2), w("0xcc", 3)]);
   s.run();
   assert.equal(s.run(H.focusWindow("0xbb")).status, 0);
-  assert.deepEqual(s.places(), { "0xaa": "special:showdesktop", "0xbb": "2", "0xcc": "special:showdesktop" });
+  assert.deepEqual(s.places(), { "0xaa": "special:showdesktop1", "0xbb": "2", "0xcc": "special:showdesktop1" });
   assert.equal(s.run().status, 0);
   assert.deepEqual(s.places(), { "0xaa": "1", "0xbb": "2", "0xcc": "3" });
 });
@@ -81,14 +81,14 @@ test("clicking the last hidden window forgets the state, so the next press hides
   s.run(H.focusWindow("0xbb"));
   assert.deepEqual(s.places(), { "0xaa": "1", "0xbb": "2" });
   s.run();
-  assert.deepEqual(s.places(), { "0xaa": "special:showdesktop", "0xbb": "special:showdesktop" });
+  assert.deepEqual(s.places(), { "0xaa": "special:showdesktop1", "0xbb": "special:showdesktop0" });
 });
 
 test("hovering a hidden window peeks nothing", () => {
   const s = session([w("0xaa", 1), w("0xbb", 2)]);
   s.run();
   assert.equal(s.run(H.peekWindow("0xaa")).status, 0);
-  assert.deepEqual(s.places(), { "0xaa": "special:showdesktop", "0xbb": "special:showdesktop" });
+  assert.deepEqual(s.places(), { "0xaa": "special:showdesktop1", "0xbb": "special:showdesktop0" });
 });
 
 test("DockHyprland's place() is a copy of DockShowDesktop's", () => {
@@ -103,4 +103,16 @@ test("floating windows come back floating at their saved position and size", () 
   assert.match(log, /resize\(\{ x = 300, y = 200, exact = true, window = "address:0xaa"/);
   assert.match(log, /move\(\{ x = 10, y = 20, window = "address:0xaa"/);
   assert.doesNotMatch(log, /resize.*0xbb/);
+});
+
+test("each window is hidden on its own monitor's workspace, monitors are focused to do it, and no window is refocused afterwards", () => {
+  const s = session([w("0xaa", 1), w("0xbb", 2)]);
+  s.run();
+  const log = fs.readFileSync(s.log, "utf8");
+  assert.match(log, /focus\(\{ monitor = "M1" \}\)/);
+  assert.match(log, /focus\(\{ monitor = "M0" \}\)/);
+  assert.doesNotMatch(log, /focus\(\{ window/, "refocusing a hidden window would show its workspace again");
+  // The monitor that was focused (M0) gets the focus back, last.
+  const focuses = log.split("\n").filter((l) => l.includes("hl.dsp.focus"));
+  assert.match(focuses[focuses.length - 1], /monitor = "M0"/);
 });
