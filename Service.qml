@@ -25,6 +25,7 @@ import "DockPlacement.js" as DockPlacement
 import "DockPreview.js" as DockPreview
 import "DockHyprland.js" as DockHyprland
 import "DockSnap.js" as DockSnap
+import "DockShowDesktop.js" as DockShowDesktop
 import "SnapLayouts.js" as SnapLayoutData
 import "PopupDismiss.js" as PopupDismiss
 
@@ -678,6 +679,9 @@ Item {
     // For a key binding: the snap layouts of the active Window, centred on the focused monitor.
     function snapPicker(): void { root.toggleSnapPicker() }
     function closeSnapPicker(): void { snapPopup.wanted = false }
+    // For a key binding such as Super+D: hide every Window on every monitor, or
+    // bring back the ones the last press hid.
+    function showDesktop(): void { Quickshell.execDetached(DockShowDesktop.showDesktop()) }
     // Where the Dock's Items and any open menu are on the focused monitor, as
     // JSON (see `layout` in the panel). For the scripts that drive the pointer.
     function layout(): string {
