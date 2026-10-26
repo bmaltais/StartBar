@@ -25,6 +25,7 @@ import "DockPlacement.js" as DockPlacement
 import "DockPreview.js" as DockPreview
 import "DockHyprland.js" as DockHyprland
 import "DockSnap.js" as DockSnap
+import "DockMonitors.js" as DockMonitors
 import "DockShowDesktop.js" as DockShowDesktop
 import "SnapLayouts.js" as SnapLayoutData
 import "PopupDismiss.js" as PopupDismiss
@@ -474,6 +475,22 @@ Item {
 
   // A Window-state row of the context menu (DockModel.windowActions has the
   // ids and labels, DockHyprland.windowAction the dispatch).
+  // The monitors as plain data, for the "Move to monitor" map.
+  readonly property var monitorList: {
+    var list = []
+    for (let i = 0; i < Quickshell.screens.length; i++) {
+      let s = Quickshell.screens[i]
+      list.push({ name: s.name, x: s.x, y: s.y, width: s.width, height: s.height })
+    }
+    return list
+  }
+
+  // Move to monitor (docs/SPEC.md "Input"): onto the workspace that monitor shows.
+  function moveToMonitor(address, name) {
+    var command = DockMonitors.moveToMonitor(address, name)
+    if (command) Quickshell.execDetached(command)
+  }
+
   function runWindowAction(id, address) {
     var command = DockHyprland.windowAction(id, address)
     if (command) Quickshell.execDetached(command)
@@ -3584,12 +3601,13 @@ Item {
             // peek being put back) is reflected in the labels.
             let win = previewPopup.windowFor(contextMenu.previewWindowId)
             let previewRows = []
-            let winStates = DockModel.windowActions(win, { move: !!root.taskbar && root.taskbar.snapLayouts })
+            let winStates = DockModel.windowActions(win, { move: !!root.taskbar && root.taskbar.snapLayouts, monitors: root.monitorList.length > 1 })
             for (let s = 0; s < winStates.length; s++) {
               previewRows.push({
                 label: winStates[s].label,
                 enabled: true,
                 group: 1,
+                flyout: !!winStates[s].flyout,
                 // Choosing a state row keeps the peeked Window focused, as a
                 // click on the thumbnail does, instead of the peek being put back.
                 trigger: (function (id) { return function () { previewState.send({ type: "menuRowChosen" }); root.runWindowAction(id, win.id) } })(winStates[s].id),
@@ -3651,12 +3669,13 @@ Item {
             })
           }
           if (item.kind === "window" && !(item.count > 1)) {
-            let states = DockModel.windowActions(item.window, { move: !!root.taskbar && root.taskbar.snapLayouts })
+            let states = DockModel.windowActions(item.window, { move: !!root.taskbar && root.taskbar.snapLayouts, monitors: root.monitorList.length > 1 })
             for (let j = 0; j < states.length; j++) {
               list.push({
                 label: states[j].label,
                 enabled: true,
                 group: 1,
+                flyout: !!states[j].flyout,
                 trigger: (function (id) { return function () { root.runWindowAction(id, item.window.id) } })(states[j].id),
               })
             }
@@ -3715,7 +3734,10 @@ Item {
         // it (the focus grab below), or the pointer leaves it. When leaving
         // counts, and the settle time after the grab, are PopupDismiss.js's;
         // the leave delay is hideDelayMs, the same as the Dock's auto-hide.
-        readonly property bool hoveringMenu: menuHover.hovered
+        readonly property bool hoveringMenu: menuHover.hovered || monitorFlyoutHover.hovered
+        // The "Move to monitor" flyout beside the menu, level with its row.
+        property bool flyoutOpen: false
+        property real flyoutRowY: 0
         property var dismissState: PopupDismiss.initial()
 
         function sendDismiss(event) {
@@ -3740,6 +3762,7 @@ Item {
         implicitHeight: menuColumn.implicitHeight + snapBlock.height + root.menuPad * 2 + root.menuShadow * 2
 
         onVisibleChanged: {
+          if (!contextMenu.visible) contextMenu.flyoutOpen = false
           revealState.set("menu", contextMenu.visible)
           contextMenu.sendDismiss({ type: contextMenu.visible ? "opened" : "closed" })
           previewState.send({ type: "menuVisible", visible: contextMenu.visible, forPreview: contextMenu.forPreview })
@@ -3948,19 +3971,119 @@ Item {
                     font.pixelSize: Style.font.body
                   }
 
+                  // A row that opens a flyout (Move to monitor) points at it.
+                  Text {
+                    textFormat: Text.PlainText
+                    visible: !!menuRow.modelData.flyout
+                    anchors.right: parent.right
+                    anchors.rightMargin: Style.space(10)
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "\u203a"
+                    color: previewPopup.textColor
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                  }
+
                   MouseArea {
                     id: rowMouse
                     anchors.fill: parent
                     hoverEnabled: true
                     enabled: menuRow.modelData.enabled
                     cursorShape: Qt.PointingHandCursor
+                    onEntered: {
+                      contextMenu.flyoutOpen = !!menuRow.modelData.flyout
+                      if (contextMenu.flyoutOpen) contextMenu.flyoutRowY = menuRow.mapToItem(null, 0, 0).y
+                    }
                     onClicked: {
+                      if (menuRow.modelData.flyout) {
+                        contextMenu.flyoutRowY = menuRow.mapToItem(null, 0, 0).y
+                        contextMenu.flyoutOpen = true
+                        return
+                      }
                       menuRow.modelData.trigger()
                       contextMenu.close()
                     }
                   }
                 }
               }
+            }
+          }
+        }
+      }
+
+      // docs/SPEC.md "Input": the "Move to monitor" flyout of a Window's menu: a
+      // popup of its own beside the menu, level with its row, holding the map
+      // of the monitors (MonitorPicker.qml). The menu counts a pointer on it as
+      // on the menu (hoveringMenu), so moving across to it does not close
+      // either.
+      PopupWindow {
+        id: monitorFlyout
+
+        readonly property var target: contextMenu.snapTarget
+
+        grabFocus: true
+        visible: contextMenu.visible && contextMenu.flyoutOpen && !!monitorFlyout.target && root.monitorList.length > 1
+        color: "transparent"
+        anchor.window: contextMenu
+        anchor.adjustment: PopupAdjustment.Flip | PopupAdjustment.Slide
+        readonly property var opening: DockPlacement.submenu(panel.edge, contextMenu.implicitWidth, root.menuShadow)
+        anchor.edges: monitorFlyout.opening.opensLeft ? Edges.Top | Edges.Left : Edges.Top | Edges.Right
+        anchor.gravity: monitorFlyout.opening.opensLeft ? Edges.Bottom | Edges.Left : Edges.Bottom | Edges.Right
+        anchor.rect.width: 1
+        anchor.rect.height: 1
+        anchor.onAnchoring: {
+          anchor.rect.x = monitorFlyout.opening.x
+          anchor.rect.y = contextMenu.flyoutRowY - root.menuPad - root.menuShadow
+        }
+
+        implicitWidth: monitorPicker.implicitWidth + root.menuPad * 2 + root.menuShadow * 2
+        implicitHeight: monitorPicker.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
+
+        onVisibleChanged: if (visible) monitorFlyout.anchor.updateAnchor()
+        onImplicitHeightChanged: if (visible) monitorFlyout.anchor.updateAnchor()
+
+        Connections {
+          target: contextMenu
+          function onFlyoutRowYChanged() {
+            if (monitorFlyout.visible) monitorFlyout.anchor.updateAnchor()
+          }
+        }
+
+        HoverHandler {
+          id: monitorFlyoutHover
+        }
+
+        RectangularShadow {
+          anchors.fill: monitorFlyoutFrame
+          radius: monitorFlyoutFrame.radius
+          blur: root.menuShadow
+          offset.y: Style.space(4)
+          spread: 0
+          color: Qt.rgba(0, 0, 0, 0.6)
+        }
+
+        Rectangle {
+          id: monitorFlyoutFrame
+          anchors.fill: parent
+          anchors.margins: root.menuShadow
+          radius: root.menuRadius
+          color: root.colPopupBackground
+          border.width: Style.normalBorderWidth
+          border.color: root.colHairline
+
+          MonitorPicker {
+            id: monitorPicker
+            anchors.centerIn: parent
+            screens: root.monitorList
+            current: DockMonitors.monitorOf(monitorFlyout.target ? monitorFlyout.target.rect : null, root.monitorList)
+            fg: previewPopup.textColor
+            accent: previewPopup.accentColor
+            hairline: root.colHairline
+            onPick: function (name) {
+              // From a Preview, keep the peeked Window shown, as a state row does.
+              if (contextMenu.forPreview) previewState.send({ type: "menuRowChosen" })
+              root.moveToMonitor(monitorFlyout.target.id, name)
+              contextMenu.close()
             }
           }
         }

@@ -346,8 +346,9 @@ function menuFor(item) {
 // each is { id, label }, in menu order. Labels flip to their undo while the
 // state is on (Maximize/Restore, Full screen/Exit full screen, Float/Tile,
 // Pin on top/Unpin from top). Center and Pin on top only make sense for a
-// floating window; Move to scratchpad is replaced by Restore from scratchpad
-// once there. Service.qml
+// floating window; Move to monitor (a flyout row, only with more than one
+// monitor) sits above Move to scratchpad, which is replaced by Restore from
+// scratchpad once there. Service.qml
 // maps each id to its Hyprland dispatch.
 function windowActions(window, options) {
   if (!window) return [];
@@ -368,6 +369,11 @@ function windowActions(window, options) {
   if (window.floating) {
     actions.push({ id: "center", label: "Center" });
     actions.push({ id: "pin", label: window.pinned ? "Unpin from top" : "Pin on top" });
+  }
+  // With more than one monitor: a row whose hover opens the map of them
+  // (DockMonitors.js), so it carries no command of its own.
+  if (options && options.monitors) {
+    actions.push({ id: "monitor", label: "Move to monitor", flyout: true });
   }
   if (String(window.workspace || "") !== "special:scratchpad") {
     actions.push({ id: "scratchpad", label: "Move to scratchpad" });
