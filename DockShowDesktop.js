@@ -28,8 +28,12 @@ var DESKTOP_STATE = "\"${XDG_RUNTIME_DIR:-/tmp}/startbar-showdesktop-${HYPRLAND_
 // at a default spot when it comes back, and one that floated was tiled while
 // hidden, so each Window's floating state, position and size are saved and
 // put back: `place ADDRESS FLOATING X Y W H` (a copy is in DockHyprland.js's
-// RESTORE, for the click path). Tiled Windows are re-tiled by Hyprland.
+// RESTORE, for the click path). Tiled Windows are re-tiled by Hyprland. A spot
+// whose middle is no longer on any monitor (one unplugged while hidden, such as
+// a DisplayLink dock) is not applied: the Window would be off every screen.
 var PLACE = "place() { [ \"$2\" = true ] || return 0; "
+  + "hyprctl -j monitors | jq -e --argjson x \"$3\" --argjson y \"$4\" --argjson w \"$5\" --argjson h \"$6\" "
+  + "'any(.[]; ($x + $w / 2) >= .x and ($x + $w / 2) < .x + .width / .scale and ($y + $h / 2) >= .y and ($y + $h / 2) < .y + .height / .scale)' >/dev/null || return 0; "
   + "hyprctl -j clients | jq -e --arg a \"$1\" '.[] | select(.address == $a and .floating)' >/dev/null "
   + "|| hyprctl dispatch \"hl.dsp.window.float({ action = \\\"toggle\\\", window = \\\"address:$1\\\" })\" >/dev/null; "
   + "hyprctl dispatch \"hl.dsp.window.resize({ x = $5, y = $6, exact = true, window = \\\"address:$1\\\" })\" >/dev/null; "

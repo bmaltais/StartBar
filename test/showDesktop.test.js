@@ -18,11 +18,12 @@ function session(clients) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "showdesktop-"));
   const file = path.join(dir, "clients.json");
   fs.writeFileSync(file, JSON.stringify(clients));
+  fs.writeFileSync(path.join(dir, "monitors.json"), JSON.stringify(MONITORS));
   fs.writeFileSync(path.join(dir, "hyprctl"), `#!/usr/bin/env bash
 if [ "$1" = -j ]; then
   case "$2" in
     clients) cat "${file}" ;;
-    monitors) echo '[{"id":0,"name":"M0","focused":true,"activeWorkspace":{"id":7}},{"id":1,"name":"M1","focused":false,"activeWorkspace":{"id":8}}]' ;;
+    monitors) cat "${dir}/monitors.json" ;;
     activewindow) echo '{"address":"0xaa"}' ;;
   esac
 else
@@ -38,8 +39,12 @@ exit 0
   });
   const places = () => Object.fromEntries(JSON.parse(fs.readFileSync(file)).map((c) => [c.address, c.workspace.name]));
   const edit = (fn) => fs.writeFileSync(file, JSON.stringify(fn(JSON.parse(fs.readFileSync(file)))));
-  return { run, places, edit, log: path.join(dir, "log") };
+  const setMonitors = (list) => fs.writeFileSync(path.join(dir, "monitors.json"), JSON.stringify(list));
+  return { run, places, edit, setMonitors, log: path.join(dir, "log") };
 }
+
+const mon = (id, name, x, focused = false) => ({ id, name, x, y: 0, width: 1920, height: 1080, scale: 1, focused, activeWorkspace: { id: 7 + id } });
+const MONITORS = [mon(0, "M0", 0, true), mon(1, "M1", 1920)];
 
 const w = (address, id, name = String(id), mapped = true) => ({ address, mapped, monitor: id % 2, workspace: { id, name } });
 
@@ -115,4 +120,34 @@ test("each window is hidden on its own monitor's workspace, monitors are focused
   // The monitor that was focused (M0) gets the focus back, last.
   const focuses = log.split("\n").filter((l) => l.includes("hl.dsp.focus"));
   assert.match(focuses[focuses.length - 1], /monitor = "M0"/);
+});
+
+test("a floating window's saved spot on a monitor that was unplugged while hidden is not applied", () => {
+  const spot = { floating: true, at: [2000, 20], size: [300, 200] }; // on M1
+  const s = session([{ ...w("0xaa", 1), ...spot }, { ...w("0xbb", 2), floating: true, at: [10, 20], size: [300, 200] }]);
+  s.run();
+  s.setMonitors([mon(0, "M0", 0, true)]); // M1 is gone
+  assert.equal(s.run().status, 0);
+  const log = fs.readFileSync(s.log, "utf8");
+  assert.doesNotMatch(log, /resize.*0xaa/, "no resize to a spot on no monitor");
+  assert.doesNotMatch(log, /move\(\{ x = 2000/, "no move to a spot on no monitor");
+  assert.match(log, /resize.*0xbb/, "a spot still on a monitor is applied");
+  assert.equal(s.places()["0xaa"], "1", "the window itself still goes back to its workspace");
+});
+
+test("windows come back after a monitor was added while hidden, which they never meant to use", () => {
+  const s = session([w("0xaa", 1), w("0xbb", 2)]);
+  s.setMonitors([mon(0, "M0", 0, true)]);
+  s.run();
+  s.setMonitors([mon(0, "M0", 0, true), mon(1, "M1", 1920), mon(2, "M2", 3840)]);
+  assert.equal(s.run().status, 0);
+  assert.deepEqual(s.places(), { "0xaa": "1", "0xbb": "2" });
+});
+
+test("restore does not depend on the hidden workspace's monitor still existing", () => {
+  const s = session([w("0xaa", 1), w("0xbb", 2)]);
+  s.run();
+  s.setMonitors([mon(1, "M1", 0, true)]); // monitor 0 is gone; the old names are stale
+  assert.equal(s.run().status, 0);
+  assert.deepEqual(s.places(), { "0xaa": "1", "0xbb": "2" });
 });

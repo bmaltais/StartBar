@@ -37,6 +37,8 @@ var RAISE = "raise() { hyprctl -j clients | jq -e --arg a \"$1\" '.[] | select(.
 var SHOWDESKTOP_STATE = "\"${XDG_RUNTIME_DIR:-/tmp}/startbar-showdesktop-${HYPRLAND_INSTANCE_SIGNATURE:-0}\"";
 // A copy of DockShowDesktop.js's PLACE (a test keeps them equal).
 var SHOWDESKTOP_PLACE = "place() { [ \"$2\" = true ] || return 0; "
+  + "hyprctl -j monitors | jq -e --argjson x \"$3\" --argjson y \"$4\" --argjson w \"$5\" --argjson h \"$6\" "
+  + "'any(.[]; ($x + $w / 2) >= .x and ($x + $w / 2) < .x + .width / .scale and ($y + $h / 2) >= .y and ($y + $h / 2) < .y + .height / .scale)' >/dev/null || return 0; "
   + "hyprctl -j clients | jq -e --arg a \"$1\" '.[] | select(.address == $a and .floating)' >/dev/null "
   + "|| hyprctl dispatch \"hl.dsp.window.float({ action = \\\"toggle\\\", window = \\\"address:$1\\\" })\" >/dev/null; "
   + "hyprctl dispatch \"hl.dsp.window.resize({ x = $5, y = $6, exact = true, window = \\\"address:$1\\\" })\" >/dev/null; "
