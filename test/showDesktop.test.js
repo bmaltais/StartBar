@@ -22,6 +22,7 @@ if [ "$1" = -j ]; then
   case "$2" in
     clients) cat "${file}" ;;
     activewindow) echo '{"address":"0xaa"}' ;;
+    monitors) echo '[{"id":0,"name":"M0"},{"id":1,"name":"M1"}]' ;;
   esac
 else
   echo "$2" >> "${dir}/log"
@@ -29,6 +30,7 @@ else
   addr=$(echo "$2" | sed -n 's/.*address:\\([0-9a-fx]*\\)".*/\\1/p')
   [ -n "$ws" ] && jq --arg a "$addr" --arg w "$ws" 'map(if .address == $a then .workspace = (if ($w | startswith("special:")) then {id: -99, name: $w} else {id: ($w | tonumber), name: $w} end) else . end)' "${file}" > "${file}.new" && mv "${file}.new" "${file}"
 fi
+exit 0
 `, { mode: 0o755 });
   const run = () => spawnSync("bash", [...showDesktop().slice(1, 3), "bash"], {
     env: { ...process.env, PATH: dir + ":" + process.env.PATH, XDG_RUNTIME_DIR: dir, HYPRLAND_INSTANCE_SIGNATURE: "t" },
