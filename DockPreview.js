@@ -179,13 +179,33 @@ function liveItem(shown, items) {
   return null;
 }
 
-// The ids of the thumbnails to draw. The previous array comes back while the
-// set is unchanged: the cells are keyed by it, and a peek moves focus, which
-// rebuilds the Items; rebuilding the cell under the pointer would end its
-// hover and undo the peek at once.
+// The ids of the thumbnails to draw, left to right as the Windows sit on the
+// desk: by the middle of each Window's rectangle (layout pixels, which run
+// across the monitors, so one on a monitor to the left comes first), then top
+// to bottom. A Window with no known place goes last, and ties keep the Dock's
+// order. The previous array comes back while the order is unchanged: the cells
+// are keyed by it, and a peek moves focus, which rebuilds the Items; rebuilding
+// the cell under the pointer would end its hover and undo the peek at once.
 function windowIds(previous, windows) {
-  var ids = [];
-  for (var i = 0; i < windows.length; i++) ids.push(windows[i].id);
+  var entries = [];
+  for (var i = 0; i < windows.length; i++) {
+    var rect = windows[i].rect;
+    var placed = !!rect && isFinite(rect.x) && isFinite(rect.y);
+    entries.push({
+      id: windows[i].id,
+      index: i,
+      placed: placed,
+      x: placed ? rect.x + (Number(rect.w) || 0) / 2 : 0,
+      y: placed ? rect.y + (Number(rect.h) || 0) / 2 : 0,
+    });
+  }
+  entries.sort(function (a, b) {
+    if (a.placed !== b.placed) return a.placed ? -1 : 1;
+    if (a.x !== b.x) return a.x - b.x;
+    if (a.y !== b.y) return a.y - b.y;
+    return a.index - b.index;
+  });
+  var ids = entries.map(function (e) { return e.id; });
   if (ids.length === previous.length) {
     var same = true;
     for (var j = 0; j < ids.length; j++) if (ids[j] !== previous[j]) same = false;
