@@ -466,6 +466,9 @@ function windowFromToplevel(toplevel, openedAt) {
     floating: !!info.floating,
     rect: info.at && info.size ? { x: info.at[0], y: info.at[1], w: info.size[0], h: info.size[1] } : null,
     pinned: !!info.pinned,
+    // On one of Omarchy's window-mode (floating) workspaces, where a Window the
+    // mode left tiled (a maximized one) is still one of its Windows.
+    windowMode: Array.isArray(info.tags) && info.tags.indexOf("omarchy-floating-workspace") >= 0,
   };
 }
 
@@ -671,6 +674,7 @@ if (typeof module !== "undefined" && module.exports) {
     newItemsState: newItemsState,
     resolveApp: resolveApp,
     openedWindow: openedWindow,
+    windowFromToplevel: windowFromToplevel,
     placedList: placedList,
     refreshItems: refreshItems,
     awaitingToplevels: awaitingToplevels,

@@ -396,3 +396,26 @@ test("DockSnap's copies of normalizedAddress and argv agree with DockHyprland's"
   assert.deepEqual(H.argv("echo", "a"), ["bash", "-lc", "echo", "bash", "a"]);
   assert.deepEqual(H.argv("echo"), ["bash", "-lc", "echo", "bash"]);
 });
+
+// A maximized Window on a window-mode (floating) workspace stays tiled: Omarchy
+// leaves a fullscreen or maximized Window as it is. It is still that mode's Window.
+const modeWin = (over = {}) => ({ id: "0xaa", workspace: "131", floating: false, fullscreen: 1, windowMode: true, rect: { x: 0, y: 0, w: 1900, h: 980 }, ...over });
+const SL = require("../SnapLayouts.js");
+
+test("a tiled Window on a window-mode workspace is offered the floating layouts, even alone", () => {
+  const win = modeWin();
+  assert.equal(SL.layoutsFor([{ kind: "window", window: win }], win), SL.LAYOUTS);
+  assert.equal(SL.floats(win), true);
+});
+
+test("a lone tiled Window on a tiled workspace still has no layouts", () => {
+  const win = modeWin({ windowMode: false });
+  assert.deepEqual(SL.layoutsFor([{ kind: "window", window: win }], win), []);
+  assert.equal(SL.floats(win), false);
+});
+
+test("a zone picked for a tiled Window on a window-mode workspace snaps it (floating it), not a tile reshape", () => {
+  const action = SL.plan(modeWin(), SL.LAYOUTS[0], SL.LAYOUTS[0][0], false);
+  assert.equal(action.action, "snap");
+  assert.equal(action.id, "0xaa");
+});
