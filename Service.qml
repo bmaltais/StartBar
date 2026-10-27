@@ -659,7 +659,9 @@ Item {
       onStreamFinished: {
         var parts = this.text.trim().split(/\s+/)
         var win = SnapLayoutData.windowAt(dockState.items, parts[0])
-        if (SnapLayoutData.layoutsFor(dockState.items, win).length === 0) return
+        // With nothing to snap to (a lone tiled Window), the card still opens for
+        // its "Move to monitor" row when there is more than one monitor.
+        if (!win || (SnapLayoutData.layoutsFor(dockState.items, win).length === 0 && root.monitorList.length < 2)) return
         snapPopup.target = win
         snapPopup.popupScreen = root.focusedScreen()
         var scr = snapPopup.popupScreen
@@ -667,6 +669,8 @@ Item {
         snapPopup.pointerX = parts.length >= 3 && scr ? Number(parts[1]) - scr.x : -1
         snapPopup.pointerY = parts.length >= 3 && scr ? Number(parts[2]) - scr.y : -1
         snapPopup.wanted = true
+        // The card has nothing else to show then: open the map at once.
+        snapPopup.monitorsOpen = SnapLayoutData.layoutsFor(dockState.items, win).length === 0
       }
     }
   }
@@ -728,6 +732,7 @@ Item {
     // the row under the layouts (or by M), closed when the popup goes.
     property bool monitorsOpen: false
     readonly property bool monitorRow: root.monitorList.length > 1
+    readonly property bool hasLayouts: snapPopup.layouts.length > 0
     readonly property var layouts: SnapLayoutData.layoutsFor(dockState.items, snapPopup.target)
 
     screen: snapPopup.popupScreen
@@ -792,8 +797,8 @@ Item {
                 : (snapPopup.height - height) / 2
       width: Style.space(190)
       // The layouts and, with more than one monitor, the row; open, the map under it.
-      readonly property real collapsedHeight: popupSnapView.implicitHeight + root.menuPad * 2
-        + (snapPopup.monitorRow ? root.menuPad * 2 + 1 + root.menuRowHeight : 0)
+      readonly property real collapsedHeight: root.menuPad * 2 + (snapPopup.hasLayouts ? popupSnapView.implicitHeight : 0)
+        + (snapPopup.monitorRow ? (snapPopup.hasLayouts ? root.menuPad * 2 + 1 : 0) + root.menuRowHeight : 0)
       readonly property real mapHeight: snapPopup.monitorRow ? root.menuPad + popupMonitorPicker.implicitHeight : 0
       readonly property real fullHeight: snapCard.collapsedHeight + snapCard.mapHeight
       height: snapPopup.monitorsOpen ? snapCard.fullHeight : snapCard.collapsedHeight
@@ -860,7 +865,7 @@ Item {
       // (or M) opens the map of the monitors beside the card.
       Rectangle {
         id: monitorSep
-        visible: snapPopup.monitorRow
+        visible: snapPopup.monitorRow && snapPopup.hasLayouts
         anchors.top: popupSnapView.bottom
         anchors.topMargin: root.menuPad
         anchors.left: parent.left
@@ -874,7 +879,7 @@ Item {
       Rectangle {
         id: monitorRowBody
         visible: snapPopup.monitorRow
-        anchors.top: monitorSep.bottom
+        anchors.top: snapPopup.hasLayouts ? monitorSep.bottom : parent.top
         anchors.topMargin: root.menuPad
         anchors.left: parent.left
         anchors.right: parent.right

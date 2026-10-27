@@ -132,9 +132,15 @@ function tileLayout(items, workspace) {
 // shapes its workspace's two or three tiles can take, or with more tiles their
 // current arrangement (to swap with one); each list ends with "full". A tile
 // alone on its workspace, or no Window, gets nothing.
+// A Window that floats, or sits on a window-mode workspace, where the mode
+// floats every Window and one it left tiled (a maximized one) is floated by a
+// snap, as the mode would: it is offered the floating layouts, not a tiled one's.
+function floats(win) {
+  return !!win && (!!win.floating || !!win.windowMode);
+}
 function layoutsFor(items, win) {
   if (!win || !win.id) return [];
-  if (win.floating) return LAYOUTS;
+  if (floats(win)) return LAYOUTS;
   var tiles = tileLayout(items, win.workspace);
   var shapes = shapeLayouts(tiles.length);
   var list = shapes.length > 0 ? shapes : (tiles.length > 0 ? [tiles] : []);
@@ -152,7 +158,7 @@ function sameZone(a, b) {
 function plan(win, layout, zone, fillOthers) {
   if (!win || !win.id || !zone) return null;
   if (zone.maximize) return { action: "maximize", id: win.id };
-  if (!win.floating) {
+  if (!floats(win)) {
     if (zone.shape) return { action: "reshape", id: win.id, shape: zone.shape, zone: { x: zone.x, y: zone.y, w: zone.w, h: zone.h } };
     return zone.id ? { action: "swap", id: win.id, other: zone.id } : null;
   }
@@ -166,6 +172,7 @@ function plan(win, layout, zone, fillOthers) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
+    floats: floats,
     LAYOUTS: LAYOUTS, FULL: FULL, windowsOn: windowsOn, tileLayout: tileLayout, shapeLayouts: shapeLayouts,
     windowAt: windowAt, layoutsFor: layoutsFor, plan: plan,
   };

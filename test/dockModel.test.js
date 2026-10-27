@@ -696,3 +696,11 @@ test("chromeAppClass maps a Chromium-family web app class to the chrome- one Oma
   assert.equal(chromeAppClass(""), null);
   assert.equal(chromeAppClass(undefined), null);
 });
+
+test("a window on a window-mode workspace is marked, from its tags", () => {
+  const { windowFromToplevel } = require("../DockModel.js");
+  const top = (tags) => ({ address: "0xaa", workspace: { name: "131" }, lastIpcObject: { class: "x", tags } });
+  assert.equal(windowFromToplevel(top(["omarchy-floating-workspace", "omarchy-mode-opened*"]), 0).windowMode, true);
+  assert.equal(windowFromToplevel(top(["terminal*"]), 0).windowMode, false);
+  assert.equal(windowFromToplevel(top(undefined), 0).windowMode, false);
+});
