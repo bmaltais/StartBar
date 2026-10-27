@@ -2,6 +2,8 @@
 // CONTEXT.md). No Quickshell or QML imports, so the exact same file loads
 // as a JS import inside the shell and via `require` under Node for the
 // test suite.
+
+.import "HiddenWindows.js" as Hidden
 //
 // Placed positions (CONTEXT.md "Placed"; docs/SPEC.md "Ordering" and
 // "Input"): every Item carries a stable `key` ("pin:<appId>" for a Pin
@@ -44,7 +46,6 @@
 // belonging to an unpinned App follows in Launch Order, exactly as
 // buildDockItems ordered every Window before Pins existed.
 
-var SPECIAL_WORKSPACE_PREFIX = "special:";
 
 // The key of the Pin Item for an App id, and the test for one. The one place
 // that knows the format: Placed positions are stored under these keys, and
@@ -75,8 +76,8 @@ function resolveWindowApp(window, resolveApp) {
 // Hyprland's "special:" prefix stripped.
 function badgeFor(workspace) {
   var name = workspace || "";
-  if (name.indexOf(SPECIAL_WORKSPACE_PREFIX) === 0) {
-    return name.slice(SPECIAL_WORKSPACE_PREFIX.length) || name;
+  if (name.indexOf(Hidden.SPECIAL_PREFIX) === 0) {
+    return name.slice(Hidden.SPECIAL_PREFIX.length) || name;
   }
   return name;
 }
@@ -375,7 +376,7 @@ function windowActions(window, options) {
   if (options && options.monitors) {
     actions.push({ id: "monitor", label: "Move to monitor", flyout: true });
   }
-  if (String(window.workspace || "") !== "special:scratchpad") {
+  if (Hidden.kind(window.workspace) !== "scratchpad") {
     actions.push({ id: "scratchpad", label: "Move to scratchpad" });
   } else {
     actions.push({ id: "unscratchpad", label: "Restore from scratchpad" });

@@ -3,17 +3,7 @@
 // Quickshell or QML imports, so the same file loads as a JS import inside the
 // shell and via `require` under Node.
 
-// The address check and argv shape DockHyprland.js uses, copied so this file
-// imports nothing (a test keeps them in step).
-function normalizedAddress(address) {
-  if (typeof address !== "string") return null;
-  var hex = address.indexOf("0x") === 0 ? address.slice(2) : address;
-  return /^[0-9a-fA-F]+$/.test(hex) ? "0x" + hex : null;
-}
-
-function argv(script, args) {
-  return ["bash", "-lc", script, "bash"].concat(args || []);
-}
+.import "HyprlandScript.js" as Script
 
 // Send a Window to a monitor by its name (DP-1, ...): onto the workspace that
 // monitor is showing, without following it. Omarchy's workspace modes then
@@ -25,15 +15,15 @@ function argv(script, args) {
 // and a Window that was moved there, not opened there, is never let over it: it
 // would show on top but could not be clicked or hovered into focus.
 function moveToMonitor(address, name) {
-  var normalized = normalizedAddress(address);
+  var normalized = Script.normalizedAddress(address);
   if (!normalized || typeof name !== "string" || !/^[A-Za-z0-9._:-]{1,64}$/.test(name)) return null;
   var script = "a=$1; name=$2; "
     + "ws=$(hyprctl -j monitors | jq -r --arg n \"$name\" '.[] | select(.name == $n) | .activeWorkspace.id'); "
     + "[ \"${ws:-0}\" -ge 1 ] 2>/dev/null || exit 0; "
     + "for o in $(hyprctl -j clients | jq -r --argjson ws \"$ws\" --arg a \"$a\" '.[] | select(.workspace.id == $ws and .fullscreen != 0 and .address != $a) | .address'); do "
-    + "for m in maximized fullscreen; do hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$m\\\", action = \\\"unset\\\", window = \\\"address:$o\\\" })\" >/dev/null; done; done; "
+    + Script.unsetFullscreen("window = \\\"address:$o\\\"") + "; done; "
     + "hyprctl dispatch \"hl.dsp.window.move({ workspace = \\\"$ws\\\", follow = false, window = \\\"address:$a\\\" })\" >/dev/null";
-  return argv(script, [normalized, name]);
+  return Script.argv(script, [normalized, name]);
 }
 
 // The name of the monitor a Window's rectangle ({x, y, w, h}, layout pixels) is
@@ -82,5 +72,5 @@ function monitorMap(screens, current, box, gap) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { normalizedAddress: normalizedAddress, moveToMonitor: moveToMonitor, monitorOf: monitorOf, monitorMap: monitorMap };
+  module.exports = { moveToMonitor: moveToMonitor, monitorOf: monitorOf, monitorMap: monitorMap };
 }

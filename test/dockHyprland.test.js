@@ -1,3 +1,4 @@
+require("./qmlimport");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
@@ -196,4 +197,24 @@ test("opening a Preview rescues each of its Windows that is outside every monito
   assert.deepEqual(centers(dispatches).map((d) => d.match(/address:(\w+)/)[1]), [ADDR]);
   assert.equal(H.rescueWindows([]), null);
   assert.equal(H.rescueWindows(["nope"]), null);
+});
+
+const Script = require("../HyprlandScript.js");
+
+test("argv takes no argument, one or a list", () => {
+  assert.deepEqual(Script.argv("echo"), ["bash", "-lc", "echo", "bash"]);
+  assert.deepEqual(Script.argv("echo", "a"), ["bash", "-lc", "echo", "bash", "a"]);
+  assert.deepEqual(Script.argv("echo", ["a", "b"]), ["bash", "-lc", "echo", "bash", "a", "b"]);
+});
+
+test("normalizedAddress takes bare or 0x hex and nothing else", () => {
+  for (const [input, want] of [["56538020a4f0", "0x56538020a4f0"], ["0xAB", "0xAB"], ["0x", null], ["", null], ["xyz", null], ["0x12; rm -rf /", null], [null, null], [12, null]]) {
+    assert.equal(Script.normalizedAddress(input), want, JSON.stringify(input));
+  }
+});
+
+test("unsetFullscreen is valid shell for the given window selector", () => {
+  const fragment = Script.unsetFullscreen('window = \\"address:$a\\"');
+  assert.match(fragment, /action = \\"unset\\", window = \\"address:\$a\\" \}\)/);
+  assert.equal(spawnSync("bash", ["-n"], { input: fragment }).status, 0);
 });
