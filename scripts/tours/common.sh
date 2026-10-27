@@ -24,7 +24,7 @@ TOUR_PINS=(org.gnome.Nautilus com.mitchellh.ghostty microsoft-edge com.microsoft
 TOUR_PLUGIN_ENTRY=$(jq -cn --argjson pins "$(printf '%s\n' "${TOUR_PINS[@]}" | jq -R . | jq -sc .)" '{
   alignment: "left", colorScheme: "theme", showStart: true, startCommand: "builtin", startHoverOpen: false, showClock: false,
   showWorkspaceBadge: false, transparent: false, groupWindows: true, showPreviews: true, previewPeek: true, previewWarpPointer: false,
-  autoHide: false, position: "bottom", reserveSpace: false, edgeSpacing: 12, pins: $pins, startPins: $pins}')
+  autoHide: false, position: "bottom", reserveSpace: true, edgeSpacing: 12, pins: $pins, startPins: $pins}')
 
 tour_requires() {
   local app missing=()
