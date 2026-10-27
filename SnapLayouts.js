@@ -3,6 +3,8 @@
 // each zone a rectangle given as fractions of a monitor's usable area: x and y
 // from its top-left corner, w and h its size. No Quickshell or QML imports, so
 // the same file loads in the shell and under Node.
+
+.import "HiddenWindows.js" as Hidden
 //
 // The interface Service.qml uses:
 //   windowAt(items, address)   the Window with that address, off special workspaces
@@ -47,7 +49,7 @@ function windowsOf(item) {
 }
 
 function isSpecial(workspace) {
-  return String(workspace || "").indexOf("special") === 0;
+  return Hidden.isSpecial(workspace);
 }
 
 // The Window with this address (as `hyprctl` prints it, with or without 0x), if

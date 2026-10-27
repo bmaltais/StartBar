@@ -1,3 +1,4 @@
+require("./qmlimport");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -6,7 +7,6 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { LAYOUTS } = require("../SnapLayouts.js");
 const H = require("../DockSnap.js");
-const Hypr = require("../DockHyprland.js");
 
 const ADDR = "0x56538020a4f0";
 const HALVES = LAYOUTS.find((l) => l.length === 2 && l[0].h === 1);
@@ -387,14 +387,6 @@ test("snapCommand turns each plan into its DockSnap command", () => {
   assert.deepEqual(H.snapCommand({ action: "snap", id: ADDR, zone: z, others: [] }), H.snapWindow(ADDR, z, []));
   assert.equal(H.snapCommand(null), null);
   assert.equal(H.snapCommand({ action: "nope", id: ADDR }), null);
-});
-
-test("DockSnap's copies of normalizedAddress and argv agree with DockHyprland's", () => {
-  for (const input of ["56538020a4f0", "0x56538020a4f0", "0xAB", "", "0x", "xyz", "0x12; rm -rf /", " 0x12", null, undefined, 12, {}]) {
-    assert.equal(H.normalizedAddress(input), Hypr.normalizedAddress(input), JSON.stringify(input));
-  }
-  assert.deepEqual(H.argv("echo", "a"), ["bash", "-lc", "echo", "bash", "a"]);
-  assert.deepEqual(H.argv("echo"), ["bash", "-lc", "echo", "bash"]);
 });
 
 // A maximized Window on a window-mode (floating) workspace stays tiled: Omarchy

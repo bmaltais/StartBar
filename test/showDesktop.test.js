@@ -1,3 +1,4 @@
+require("./qmlimport");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
@@ -96,10 +97,6 @@ test("hovering a hidden window peeks nothing", () => {
   assert.deepEqual(s.places(), { "0xaa": "special:showdesktop1", "0xbb": "special:showdesktop0" });
 });
 
-test("DockHyprland's place() is a copy of DockShowDesktop's", () => {
-  assert.equal(H.SHOWDESKTOP_PLACE, require("../DockShowDesktop.js").PLACE);
-});
-
 test("floating windows come back floating at their saved position and size", () => {
   const s = session([{ ...w("0xaa", 1), floating: true, at: [10, 20], size: [300, 200] }, w("0xbb", 2)]);
   s.run();
@@ -169,4 +166,24 @@ test("with nothing left showing, no hidden workspace is toggled", () => {
   s.run();
   s.run();
   assert.doesNotMatch(fs.readFileSync(s.log, "utf8"), /toggle_special/);
+});
+
+const Hidden = require("../HiddenWindows.js");
+
+test("kind names how a workspace hides a Window", () => {
+  assert.equal(Hidden.kind("special:scratchpad"), "scratchpad");
+  assert.equal(Hidden.kind("special:minimized"), "minimized");
+  assert.equal(Hidden.kind(Hidden.showDesktopWorkspace(1)), "showdesktop");
+  assert.equal(Hidden.kind("special:other"), "special");
+  assert.equal(Hidden.kind("3"), "visible");
+  assert.equal(Hidden.kind(undefined), "visible");
+  assert.equal(Hidden.isSpecial("special:other"), true);
+  assert.equal(Hidden.isSpecial("3"), false);
+});
+
+test("the click path and Show desktop share one place() and one state file", () => {
+  assert.ok(Hidden.RESTORE.startsWith(Hidden.PLACE));
+  assert.ok(showDesktop()[2].includes(Hidden.PLACE));
+  assert.ok(showDesktop()[2].includes(`state=${Hidden.STATE}`));
+  assert.ok(Hidden.RESTORE.includes(`state=${Hidden.STATE}`));
 });

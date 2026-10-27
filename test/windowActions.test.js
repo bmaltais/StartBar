@@ -1,3 +1,4 @@
+require("./qmlimport");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { windowActions } = require("../DockModel.js");

@@ -5,37 +5,27 @@
 //
 // Like DockHyprland.js every function returns the argv to run (`["bash", "-lc",
 // script, "bash", arg...]`), or null for an address or zone it cannot use, and an
-// address is passed as an argument, never spliced into the script. Modules here do
-// not import each other, so `normalizedAddress` and `argv` are copies of
-// DockHyprland.js's; test/snapLayouts.test.js checks they agree.
+// address is passed as an argument, never spliced into the script.
 
-function normalizedAddress(address) {
-  if (typeof address !== "string") return null;
-  var hex = address.indexOf("0x") === 0 ? address.slice(2) : address;
-  return /^[0-9a-fA-F]+$/.test(hex) ? "0x" + hex : null;
-}
-
-function argv(script, arg) {
-  return arg === undefined ? ["bash", "-lc", script, "bash"] : ["bash", "-lc", script, "bash", arg];
-}
+.import "HyprlandScript.js" as Script
 
 // A maximized or full screen Window refuses layout changes ("Can't swap
 // fullscreen window") and fills the area, so snapping one starts by taking it out.
 var UNSET_FULLSCREEN = "[ \"$(hyprctl -j clients | jq -r --arg a \"$a\" 'first(.[] | select(.address == $a)).fullscreen // 0')\" != 0 ] "
-  + "&& { for m in maximized fullscreen; do hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$m\\\", action = \\\"unset\\\", window = \\\"address:$a\\\" })\" >/dev/null; done; sleep 0.3; }";
+  + "&& { " + Script.unsetFullscreen("window = \\\"address:$a\\\"") + "; sleep 0.3; }";
 
 // Maximize a Window (not a toggle: a Window already maximized stays so), the "full"
 // thumbnail of the snap picker. It keeps its tiled or floating state underneath.
 function maximizeWindow(address) {
-  var normalized = normalizedAddress(address);
+  var normalized = Script.normalizedAddress(address);
   if (!normalized) return null;
-  return argv("hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"maximized\\\", action = \\\"set\\\", window = \\\"address:$1\\\" })\"", normalized);
+  return Script.argv("hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"maximized\\\", action = \\\"set\\\", window = \\\"address:$1\\\" })\"", normalized);
 }
 
 // Swap two tiled Windows' places in the layout: both stay tiled and Hyprland
 // rearranges the rest.
 function swapTiles(address, other) {
-  var a = normalizedAddress(address), b = normalizedAddress(other);
+  var a = Script.normalizedAddress(address), b = Script.normalizedAddress(other);
   if (!a || !b || a === b) return null;
   // Both are validated hex, so they go straight into the script.
   return ["bash", "-lc", "a=" + a + "\n" + UNSET_FULLSCREEN + "\n"
@@ -69,7 +59,7 @@ var TILE_SHAPE = "def tiles($a): . as $c | first($c[] | select(.address == $a)) 
   + "else { n: ($t | length) } end; ";
 
 function reshapeTiles(address, shape, zone) {
-  var a = normalizedAddress(address);
+  var a = Script.normalizedAddress(address);
   if (!a || !/^(H|V|HV|HH|VH|VV)$/.test(String(shape)) || !zone) return null;
   var fr = [zone.x, zone.y, zone.w, zone.h].map(Number);
   if (fr.some(function (n) { return !isFinite(n); })) return null;
@@ -135,7 +125,7 @@ var SNAP_GEOMETRY = "first(.[] | select(.address == $a)) as $w | "
   + "limit: ($o.y + $top + $tb), fs: $w.fullscreen, fl: $w.floating } end";
 
 function snapWindow(address, zone, others) {
-  var normalized = normalizedAddress(address);
+  var normalized = Script.normalizedAddress(address);
   if (!normalized || !zone) return null;
   var fr = [zone.x, zone.y, zone.w, zone.h].map(Number);
   if (fr.some(function (n) { return !isFinite(n); })) return null;
@@ -164,7 +154,7 @@ function snapWindow(address, zone, others) {
     "  get() { jq -r \".$1\" <<<\"$geo\"; }",
     "  t=\"window = \\\"address:$a\\\"\"",
     // The unset must name the mode the Window is in: maximized (1) or full screen (2), or both (3).
-    "  [ \"$(get fs)\" != 0 ] && for m in maximized fullscreen; do hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$m\\\", action = \\\"unset\\\", $t })\" >/dev/null; done",
+    "  [ \"$(get fs)\" != 0 ] && " + Script.unsetFullscreen("$t"),
     "  [ \"$(get fl)\" != true ] && hyprctl dispatch \"hl.dsp.window.float({ action = \\\"set\\\", $t })\" >/dev/null",
     "  hyprctl dispatch \"hl.dsp.window.resize({ x = $(get w), y = $(get h), exact = true, $t })\" >/dev/null",
     "  hyprctl dispatch \"hl.dsp.window.move({ x = $(get x), y = $(get y), $t })\" >/dev/null",
@@ -208,8 +198,6 @@ function snapCommand(plan) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    normalizedAddress: normalizedAddress,
-    argv: argv,
     snapWindow: snapWindow,
     snapCommand: snapCommand,
     swapTiles: swapTiles,

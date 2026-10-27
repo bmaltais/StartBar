@@ -1,3 +1,4 @@
+require("./qmlimport");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
@@ -5,19 +6,12 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const M = require("../DockMonitors.js");
-const H = require("../DockHyprland.js");
 
 const SCREENS = [
   { name: "L", x: -515, y: -1080, width: 1920, height: 1080 },
   { name: "M", x: 1405, y: -1080, width: 1920, height: 1080 },
   { name: "R", x: 3325, y: -1080, width: 1920, height: 1080 },
 ];
-
-test("normalizedAddress agrees with DockHyprland's", () => {
-  for (const a of ["56538020a4f0", "0x56538020a4f0", "nope", "", null, 5]) {
-    assert.equal(M.normalizedAddress(a), H.normalizedAddress(a));
-  }
-});
 
 test("moveToMonitor refuses an unusable address or monitor name", () => {
   assert.equal(M.moveToMonitor("zz", "DP-1"), null);
