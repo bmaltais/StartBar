@@ -762,18 +762,7 @@ Item {
     // (just above the card, which opens below it) does not close it.
     HoverHandler {
       onPointChanged: {
-        // The card and, while it is open, the monitor flyout beside it, as one.
-        var left = snapCard.x
-        var top = snapCard.y
-        var right = snapCard.x + snapCard.width
-        var bottom = snapCard.y + snapCard.height
-        if (monitorFly.visible) {
-          left = Math.min(left, monitorFly.x)
-          top = Math.min(top, monitorFly.y)
-          right = Math.max(right, monitorFly.x + monitorFly.width)
-          bottom = Math.max(bottom, monitorFly.y + monitorFly.height)
-        }
-        var card = { x: left, y: top, width: right - left, height: bottom - top }
+        var card = { x: snapCard.x, y: snapCard.y, width: snapCard.width, height: snapCard.height }
         if (PopupDismiss.farOutside(card, point.position, Style.space(48))) snapPopup.wanted = false
       }
     }
@@ -794,13 +783,20 @@ Item {
       readonly property bool placed: snapPopup.pointerX >= 0 && snapPopup.pointerY >= 0
       x: placed ? Math.max(gap, Math.min(snapPopup.width - width - gap, snapPopup.pointerX - width / 2))
                 : (snapPopup.width - width) / 2
-      y: placed ? (snapPopup.pointerY + gap + height <= snapPopup.height - gap
-                    ? snapPopup.pointerY + gap
-                    : Math.max(gap, snapPopup.pointerY - gap - height))
+      // Below the pointer when even the card with its monitor map open fits there,
+      // so opening the map never moves the row under the pointer; above it, the
+      // card's top stays put and the map grows downwards.
+      readonly property bool below: snapPopup.pointerY + gap + snapCard.fullHeight <= snapPopup.height - gap
+      y: placed ? Math.min(below ? snapPopup.pointerY + gap : Math.max(gap, snapPopup.pointerY - gap - snapCard.collapsedHeight),
+                           snapPopup.height - gap - height)
                 : (snapPopup.height - height) / 2
       width: Style.space(190)
-      height: popupSnapView.implicitHeight + root.menuPad * 2
+      // The layouts and, with more than one monitor, the row; open, the map under it.
+      readonly property real collapsedHeight: popupSnapView.implicitHeight + root.menuPad * 2
         + (snapPopup.monitorRow ? root.menuPad * 2 + 1 + root.menuRowHeight : 0)
+      readonly property real mapHeight: snapPopup.monitorRow ? root.menuPad + popupMonitorPicker.implicitHeight : 0
+      readonly property real fullHeight: snapCard.collapsedHeight + snapCard.mapHeight
+      height: snapPopup.monitorsOpen ? snapCard.fullHeight : snapCard.collapsedHeight
       radius: root.menuRadius
       color: root.colPopupBackground
       border.width: Style.normalBorderWidth
@@ -920,40 +916,32 @@ Item {
           onClicked: snapPopup.monitorsOpen = true
         }
       }
-    }
 
-    // The monitor flyout: beside the card (on its left when there is no room on
-    // the right), level with the row, and counted as part of the card by the
-    // rule that closes it when the pointer leaves.
-    Rectangle {
-      id: monitorFly
-      readonly property real gap: Style.space(4)
-      visible: snapPopup.monitorsOpen && snapPopup.monitorRow
-      width: popupMonitorPicker.implicitWidth + root.menuPad * 2
-      height: popupMonitorPicker.implicitHeight + root.menuPad * 2
-      readonly property bool onLeft: snapCard.x + snapCard.width + gap + width > snapPopup.width - Style.space(8)
-      x: onLeft ? snapCard.x - width - gap : snapCard.x + snapCard.width + gap
-      y: Math.max(Style.space(8), Math.min(snapPopup.height - height - Style.space(8), snapCard.y + monitorRowBody.y - root.menuPad))
-      radius: root.menuRadius
-      color: root.colPopupBackground
-      border.width: Style.normalBorderWidth
-      border.color: root.colHairline
+      // The map of the monitors, expanding below the row, centred under it.
+      Item {
+        id: monitorArea
+        visible: snapPopup.monitorsOpen && snapPopup.monitorRow
+        anchors.top: monitorRowBody.bottom
+        anchors.topMargin: root.menuPad
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: popupMonitorPicker.implicitWidth
+        height: popupMonitorPicker.implicitHeight
 
-      // Clicks on its padding must not reach the closing area behind.
-      MouseArea { anchors.fill: parent }
-
-      MonitorPicker {
-        id: popupMonitorPicker
-        anchors.centerIn: parent
-        screens: root.monitorList
-        current: DockMonitors.monitorOf(snapPopup.target ? snapPopup.target.rect : null, root.monitorList)
-        fg: root.colPopupText
-        accent: root.colAccent
-        hairline: root.colHairline
-        onPick: function (name) {
-          var target = snapPopup.target
-          snapPopup.wanted = false
-          if (target) root.moveToMonitor(target.id, name)
+        MonitorPicker {
+          id: popupMonitorPicker
+          boxWidth: snapCard.width - root.menuPad * 2
+          boxHeight: Style.space(120)
+          gap: Style.space(4)
+          screens: root.monitorList
+          current: DockMonitors.monitorOf(snapPopup.target ? snapPopup.target.rect : null, root.monitorList)
+          fg: root.colPopupText
+          accent: root.colAccent
+          hairline: root.colHairline
+          onPick: function (name) {
+            var target = snapPopup.target
+            snapPopup.wanted = false
+            if (target) root.moveToMonitor(target.id, name)
+          }
         }
       }
     }
