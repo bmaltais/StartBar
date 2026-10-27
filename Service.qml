@@ -724,6 +724,10 @@ Item {
     property var popupScreen: null
     property real pointerX: -1
     property real pointerY: -1
+    // "Move to monitor": the flyout with the map of the monitors, opened by hovering
+    // the row under the layouts (or by M), closed when the popup goes.
+    property bool monitorsOpen: false
+    readonly property bool monitorRow: root.monitorList.length > 1
     readonly property var layouts: SnapLayoutData.layoutsFor(dockState.items, snapPopup.target)
 
     screen: snapPopup.popupScreen
@@ -738,9 +742,14 @@ Item {
     anchors.top: true
     anchors.bottom: true
 
-    onVisibleChanged: if (snapPopup.visible) {
-      popupSnapView.kbLayout = -1
-      snapKeys.forceActiveFocus()
+    onVisibleChanged: {
+      if (snapPopup.visible) {
+        popupSnapView.kbLayout = -1
+        snapKeys.forceActiveFocus()
+      } else {
+        snapPopup.monitorsOpen = false
+        popupMonitorPicker.kbName = ""
+      }
     }
 
     MouseArea {
@@ -753,7 +762,18 @@ Item {
     // (just above the card, which opens below it) does not close it.
     HoverHandler {
       onPointChanged: {
-        var card = { x: snapCard.x, y: snapCard.y, width: snapCard.width, height: snapCard.height }
+        // The card and, while it is open, the monitor flyout beside it, as one.
+        var left = snapCard.x
+        var top = snapCard.y
+        var right = snapCard.x + snapCard.width
+        var bottom = snapCard.y + snapCard.height
+        if (monitorFly.visible) {
+          left = Math.min(left, monitorFly.x)
+          top = Math.min(top, monitorFly.y)
+          right = Math.max(right, monitorFly.x + monitorFly.width)
+          bottom = Math.max(bottom, monitorFly.y + monitorFly.height)
+        }
+        var card = { x: left, y: top, width: right - left, height: bottom - top }
         if (PopupDismiss.farOutside(card, point.position, Style.space(48))) snapPopup.wanted = false
       }
     }
@@ -780,6 +800,7 @@ Item {
                 : (snapPopup.height - height) / 2
       width: Style.space(190)
       height: popupSnapView.implicitHeight + root.menuPad * 2
+        + (snapPopup.monitorRow ? root.menuPad * 2 + 1 + root.menuRowHeight : 0)
       radius: root.menuRadius
       color: root.colPopupBackground
       border.width: Style.normalBorderWidth
@@ -792,10 +813,21 @@ Item {
         id: snapKeys
         anchors.fill: parent
         focus: true
-        Keys.onEscapePressed: snapPopup.wanted = false
+        Keys.onEscapePressed: {
+          if (snapPopup.monitorsOpen) snapPopup.monitorsOpen = false
+          else snapPopup.wanted = false
+        }
         Keys.onPressed: function (event) {
           var k = event.key
-          if (k >= Qt.Key_1 && k <= Qt.Key_9) popupSnapView.selectLayout(k - Qt.Key_1)
+          // M opens the monitor map; then Left and Right choose a monitor and
+          // Return or Space sends the Window there.
+          if (k === Qt.Key_M && snapPopup.monitorRow) {
+            snapPopup.monitorsOpen = !snapPopup.monitorsOpen
+            if (snapPopup.monitorsOpen) popupMonitorPicker.step(1)
+          } else if (snapPopup.monitorsOpen && (k === Qt.Key_Left || k === Qt.Key_Right || k === Qt.Key_Up || k === Qt.Key_Down)) {
+            popupMonitorPicker.step(k === Qt.Key_Left || k === Qt.Key_Up ? -1 : 1)
+          } else if (snapPopup.monitorsOpen && (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space)) popupMonitorPicker.pickSelected()
+          else if (k >= Qt.Key_1 && k <= Qt.Key_9) popupSnapView.selectLayout(k - Qt.Key_1)
           else if (k === Qt.Key_Left) popupSnapView.stepZone(-1)
           else if (k === Qt.Key_Right) popupSnapView.stepZone(1)
           else if (k === Qt.Key_Up) popupSnapView.stepRow(-1)
@@ -820,6 +852,108 @@ Item {
           var target = snapPopup.target
           snapPopup.wanted = false
           root.applySnap(target, layout, zone)
+        }
+
+        // Moving onto the layouts puts the monitor map away.
+        HoverHandler {
+          onHoveredChanged: if (hovered) snapPopup.monitorsOpen = false
+        }
+      }
+
+      // docs/SPEC.md "Snap layouts": the Move to monitor row under the layouts; hovering it
+      // (or M) opens the map of the monitors beside the card.
+      Rectangle {
+        id: monitorSep
+        visible: snapPopup.monitorRow
+        anchors.top: popupSnapView.bottom
+        anchors.topMargin: root.menuPad
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: root.menuPad
+        anchors.rightMargin: root.menuPad
+        height: 1
+        color: root.colHairline
+      }
+
+      Rectangle {
+        id: monitorRowBody
+        visible: snapPopup.monitorRow
+        anchors.top: monitorSep.bottom
+        anchors.topMargin: root.menuPad
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: root.menuPad
+        anchors.rightMargin: root.menuPad
+        height: root.menuRowHeight
+        radius: root.menuRowRadius
+        color: snapPopup.monitorsOpen || monitorRowMouse.containsMouse
+          ? Style.hoverFillFor(root.colForeground, root.colAccent) : "transparent"
+
+        Text {
+          textFormat: Text.PlainText
+          anchors.left: parent.left
+          anchors.leftMargin: Style.space(12)
+          anchors.verticalCenter: parent.verticalCenter
+          text: "Move to monitor"
+          color: root.colPopupText
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          anchors.right: parent.right
+          anchors.rightMargin: Style.space(10)
+          anchors.verticalCenter: parent.verticalCenter
+          text: "\u203a"
+          color: root.colPopupText
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+        }
+
+        MouseArea {
+          id: monitorRowMouse
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onEntered: snapPopup.monitorsOpen = true
+          onClicked: snapPopup.monitorsOpen = true
+        }
+      }
+    }
+
+    // The monitor flyout: beside the card (on its left when there is no room on
+    // the right), level with the row, and counted as part of the card by the
+    // rule that closes it when the pointer leaves.
+    Rectangle {
+      id: monitorFly
+      readonly property real gap: Style.space(4)
+      visible: snapPopup.monitorsOpen && snapPopup.monitorRow
+      width: popupMonitorPicker.implicitWidth + root.menuPad * 2
+      height: popupMonitorPicker.implicitHeight + root.menuPad * 2
+      readonly property bool onLeft: snapCard.x + snapCard.width + gap + width > snapPopup.width - Style.space(8)
+      x: onLeft ? snapCard.x - width - gap : snapCard.x + snapCard.width + gap
+      y: Math.max(Style.space(8), Math.min(snapPopup.height - height - Style.space(8), snapCard.y + monitorRowBody.y - root.menuPad))
+      radius: root.menuRadius
+      color: root.colPopupBackground
+      border.width: Style.normalBorderWidth
+      border.color: root.colHairline
+
+      // Clicks on its padding must not reach the closing area behind.
+      MouseArea { anchors.fill: parent }
+
+      MonitorPicker {
+        id: popupMonitorPicker
+        anchors.centerIn: parent
+        screens: root.monitorList
+        current: DockMonitors.monitorOf(snapPopup.target ? snapPopup.target.rect : null, root.monitorList)
+        fg: root.colPopupText
+        accent: root.colAccent
+        hairline: root.colHairline
+        onPick: function (name) {
+          var target = snapPopup.target
+          snapPopup.wanted = false
+          if (target) root.moveToMonitor(target.id, name)
         }
       }
     }
