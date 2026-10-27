@@ -29,7 +29,7 @@ var RAISE = "raise() { hyprctl -j clients | jq -e --arg a \"$1\" '.[] | select(.
 
 // Omarchy's window mode minimizes a Window by moving it to the special
 // workspace "special:minimized", where focusing it does not bring it back, and
-// Show desktop (DockShowDesktop.js) hides Windows on "special:showdesktop",
+// Show desktop (DockShowDesktop.js) hides Windows on "special:showdesktop<monitor id>",
 // where focusing one would show them all. A shell function: `restore ADDRESS`
 // moves such a Window to the workspace in front of the user (to the workspace
 // Show desktop saved for it, which also forgets it, so the next press brings
@@ -37,15 +37,17 @@ var RAISE = "raise() { hyprctl -j clients | jq -e --arg a \"$1\" '.[] | select(.
 var SHOWDESKTOP_STATE = "\"${XDG_RUNTIME_DIR:-/tmp}/startbar-showdesktop-${HYPRLAND_INSTANCE_SIGNATURE:-0}\"";
 // A copy of DockShowDesktop.js's PLACE (a test keeps them equal).
 var SHOWDESKTOP_PLACE = "place() { [ \"$2\" = true ] || return 0; "
+  + "hyprctl -j monitors | jq -e --argjson x \"$3\" --argjson y \"$4\" --argjson w \"$5\" --argjson h \"$6\" "
+  + "'any(.[]; ($x + $w / 2) >= .x and ($x + $w / 2) < .x + .width / .scale and ($y + $h / 2) >= .y and ($y + $h / 2) < .y + .height / .scale)' >/dev/null || return 0; "
   + "hyprctl -j clients | jq -e --arg a \"$1\" '.[] | select(.address == $a and .floating)' >/dev/null "
   + "|| hyprctl dispatch \"hl.dsp.window.float({ action = \\\"toggle\\\", window = \\\"address:$1\\\" })\" >/dev/null; "
   + "hyprctl dispatch \"hl.dsp.window.resize({ x = $5, y = $6, exact = true, window = \\\"address:$1\\\" })\" >/dev/null; "
   + "hyprctl dispatch \"hl.dsp.window.move({ x = $3, y = $4, window = \\\"address:$1\\\" })\" >/dev/null; }\n";
 var RESTORE = SHOWDESKTOP_PLACE + "restore() { "
   + "hidden=$(hyprctl -j clients | jq -r --arg a \"$1\" '.[] | select(.address == $a) | .workspace.name'); "
-  + "case \"$hidden\" in special:minimized|special:showdesktop) ;; *) return 0 ;; esac; "
+  + "case \"$hidden\" in special:minimized|special:showdesktop*) ;; *) return 0 ;; esac; "
   + "ws=$(hyprctl -j monitors | jq -r 'first(.[] | select(.focused) | .activeWorkspace.id) // empty'); "
-  + "if [ \"$hidden\" = special:showdesktop ]; then "
+  + "if [ \"${hidden#special:showdesktop}\" != \"$hidden\" ]; then "
   + "state=" + SHOWDESKTOP_STATE + "; "
   + "read -r saved fl x y w h <<< \"$(awk -v a=\"$1\" 'NR > 1 && $1 == a { print $2, $3, $4, $5, $6, $7 }' \"$state\" 2>/dev/null)\"; "
   + "[ -n \"$saved\" ] && ws=$saved; "
@@ -56,7 +58,7 @@ var RESTORE = SHOWDESKTOP_PLACE + "restore() { "
   + "hyprctl dispatch \"hl.dsp.window.set_prop({ prop = \\\"no_anim\\\", value = \\\"1\\\", window = \\\"address:$1\\\" })\" >/dev/null; "
   + "hyprctl dispatch \"hl.dsp.window.move({ workspace = \\\"$ws\\\", window = \\\"address:$1\\\" })\" >/dev/null; "
   + "(sleep 0.4; hyprctl dispatch \"hl.dsp.window.set_prop({ prop = \\\"no_anim\\\", value = \\\"unset\\\", window = \\\"address:$1\\\" })\" >/dev/null) & "
-  + "[ \"$hidden\" = special:showdesktop ] && (sleep 0.4; place \"$1\" \"$fl\" \"$x\" \"$y\" \"$w\" \"$h\") & "
+  + "[ \"${hidden#special:showdesktop}\" != \"$hidden\" ] && (sleep 0.4; place \"$1\" \"$fl\" \"$x\" \"$y\" \"$w\" \"$h\") & "
   + "}; ";
 
 // WORKAROUND, may need revisiting if Omarchy fixes it. A floating Window can be
@@ -202,7 +204,7 @@ function peekWindow(address) {
     + PEEK_UNDO
     + "addr=\"$1\"; state=" + PEEK_STATE + "\n"
     + "# Focusing a Window Show desktop hid would show every hidden Window.\n"
-    + "hyprctl -j clients | jq -e --arg a \"$addr\" '.[] | select(.address == $a and .workspace.name == \"special:showdesktop\")' >/dev/null && exit 0\n"
+    + "hyprctl -j clients | jq -e --arg a \"$addr\" '.[] | select(.address == $a and (.workspace.name | startswith(\"special:showdesktop\")))' >/dev/null && exit 0\n"
     + NO_WARPS
     + "if [ -f \"$state\" ]; then\n"
     + "  # Moving on from an earlier peek: put its changes back first, keeping the\n"
