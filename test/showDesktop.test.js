@@ -151,3 +151,22 @@ test("restore does not depend on the hidden workspace's monitor still existing",
   assert.equal(s.run().status, 0);
   assert.deepEqual(s.places(), { "0xaa": "1", "0xbb": "2" });
 });
+
+test("a hidden workspace left showing on a monitor is closed at the end of a restore", () => {
+  const s = session([w("0xaa", 1), w("0xbb", 2)]);
+  s.run();
+  // Monitor M1 is showing the (now empty) hidden workspace: the dimmed, blurred look.
+  s.setMonitors([mon(0, "M0", 0, true), { ...mon(1, "M1", 1920), specialWorkspace: { name: "special:showdesktop0" } }]);
+  assert.equal(s.run().status, 0);
+  const log = fs.readFileSync(s.log, "utf8");
+  assert.match(log, /focus\(\{ monitor = "M1" \}\)[\s\S]*toggle_special\("showdesktop0"\)/, "focus the monitor that shows it, then toggle it");
+  const last = log.split("\n").filter((l) => l.includes("hl.dsp.focus")).pop();
+  assert.match(last, /window = "address:0xaa"|monitor = "M0"/, "focus goes back where it was");
+});
+
+test("with nothing left showing, no hidden workspace is toggled", () => {
+  const s = session([w("0xaa", 1)]);
+  s.run();
+  s.run();
+  assert.doesNotMatch(fs.readFileSync(s.log, "utf8"), /toggle_special/);
+});
