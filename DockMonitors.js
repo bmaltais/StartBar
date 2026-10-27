@@ -19,12 +19,19 @@ function argv(script, args) {
 // monitor is showing, without following it. Omarchy's workspace modes then
 // settle how it sits there (a floating, window-mode workspace floats it, a
 // tiled one tiles a Window the mode had floated), so this does not.
+//
+// A Window already maximized or full screen there is taken out of that state
+// first. Hyprland sends all the mouse input of such a workspace to that Window,
+// and a Window that was moved there, not opened there, is never let over it: it
+// would show on top but could not be clicked or hovered into focus.
 function moveToMonitor(address, name) {
   var normalized = normalizedAddress(address);
   if (!normalized || typeof name !== "string" || !/^[A-Za-z0-9._:-]{1,64}$/.test(name)) return null;
   var script = "a=$1; name=$2; "
     + "ws=$(hyprctl -j monitors | jq -r --arg n \"$name\" '.[] | select(.name == $n) | .activeWorkspace.id'); "
     + "[ \"${ws:-0}\" -ge 1 ] 2>/dev/null || exit 0; "
+    + "for o in $(hyprctl -j clients | jq -r --argjson ws \"$ws\" --arg a \"$a\" '.[] | select(.workspace.id == $ws and .fullscreen != 0 and .address != $a) | .address'); do "
+    + "for m in maximized fullscreen; do hyprctl dispatch \"hl.dsp.window.fullscreen({ mode = \\\"$m\\\", action = \\\"unset\\\", window = \\\"address:$o\\\" })\" >/dev/null; done; done; "
     + "hyprctl dispatch \"hl.dsp.window.move({ workspace = \\\"$ws\\\", follow = false, window = \\\"address:$a\\\" })\" >/dev/null";
   return argv(script, [normalized, name]);
 }

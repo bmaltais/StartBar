@@ -35,11 +35,15 @@ test("moveToMonitor is a bash -lc argv whose script parses; the address and name
 });
 
 // A stub hyprctl: two monitors showing workspaces 2 and 131 (and a special one), logging dispatches.
-function run(name) {
+// `clients` is what `hyprctl -j clients` answers.
+function run(name, clients = []) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mon-"));
   fs.writeFileSync(path.join(dir, "hyprctl"), `#!/usr/bin/env bash
 if [ "$1" = -j ]; then
-  echo '[{"name":"L","activeWorkspace":{"id":2}},{"name":"M","activeWorkspace":{"id":131}},{"name":"S","activeWorkspace":{"id":-99}}]'
+  case "$2" in
+    clients) echo '${JSON.stringify(clients)}' ;;
+    *) echo '[{"name":"L","activeWorkspace":{"id":2}},{"name":"M","activeWorkspace":{"id":131}},{"name":"S","activeWorkspace":{"id":-99}}]' ;;
+  esac
 else
   echo "$2" >> "${dir}/log"
 fi
@@ -83,4 +87,21 @@ test("monitorMap keeps a stacked arrangement stacked, and copes with none", () =
   const map = M.monitorMap(stacked, "", { w: 200, h: 200 }, 0);
   assert.ok(map.rects[1].y > map.rects[0].y);
   assert.deepEqual(M.monitorMap([], "", { w: 200, h: 100 }, 0), { width: 0, height: 0, rects: [] });
+});
+
+const client = (address, ws, fullscreen) => ({ address, workspace: { id: ws }, fullscreen });
+
+test("a window maximized or full screen on the target workspace is taken out of that state before the move", () => {
+  const log = run("M", [client("0xmax", 131, 1), client("0xfull", 131, 2), client("0xplain", 131, 0), client("0xelsewhere", 2, 1), client("0xab12", 2, 0)]);
+  for (const a of ["0xmax", "0xfull"]) {
+    assert.match(log, new RegExp(`mode = "maximized", action = "unset", window = "address:${a}"`));
+    assert.match(log, new RegExp(`mode = "fullscreen", action = "unset", window = "address:${a}"`));
+  }
+  assert.doesNotMatch(log, /unset.*0xplain|unset.*0xelsewhere|unset.*0xab12/, "only the full screen windows of that workspace");
+  assert.ok(log.indexOf("action = \"unset\"") < log.indexOf("window.move"), "the state goes first, then the move");
+  assert.match(log, /window\.move\(\{ workspace = "131", follow = false, window = "address:0xab12" \}\)/);
+});
+
+test("nothing is un-maximized when the target workspace has no such window", () => {
+  assert.doesNotMatch(run("M", [client("0xplain", 131, 0), client("0xother", 2, 1)]), /unset/);
 });
