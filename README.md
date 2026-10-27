@@ -41,6 +41,7 @@ It shows a taskbar along the bottom of every monitor, or any other edge you choo
 - **Pins.** Keep apps in the bar whether or not they are running. Drag to reorder, drag out to unpin.
 - **Grouped windows.** Optionally stack an app's windows into one icon and pick the window from the previews, as on Windows.
 - **Any edge.** Put the bar at the bottom (the default), top, left or right of the screen. On the left and right it is a column, with the running dots beside the icons, above them on the top bar and below them on the bottom one. Menus and previews open on the side facing into the screen, the same distance from the bar as the Start menu is from the edge, as on Windows 11. Choose **Position** in the right-click menu or the settings window.
+- **Show desktop.** One key hides every window on every monitor, and the next brings each one back to where it was, even if monitors came or went in between. Bind `omarchy-shell io.github.bmaltais.startbar showDesktop` (for example to Super+D).
 - **Extras.** Auto-hide, a clock, a workspace badge over each icon, a transparent bar, an option to reserve the bar's space so maximized windows stop at it, and an option to open each new window on a workspace of its own.
 
 ### The Start menu
@@ -53,7 +54,7 @@ Search every installed app, a Pinned grid you can reorder, an A-Z list, recently
 
 <img src="screenshots/preview.png" alt="Hovering a grouped icon shows one thumbnail per window to pick from" width="473">
 
-Live window thumbnails with a close button. Hovering one shows that window, even from behind a maximized one, and moving away puts things back.
+Live window thumbnails with a close button, in the order the windows sit on screen, left to right. Hovering one shows that window, even from behind a maximized one, and moving away puts things back.
 
 ### Colours
 
@@ -72,7 +73,9 @@ Colours and fonts follow the current Omarchy theme live, or pick a fixed light o
 
 ### Right-click an icon
 
-Each icon has its own menu. A pin with no windows offers the app's actions, the app itself and **Unpin from taskbar**; a running app adds its window actions (Maximize, Full screen, Float, Move to scratchpad), then the app and **Pin to taskbar**, and ends with **Close window** (**Close all windows** for a stack of several). With **Snap layouts** on in the settings (Windows page), the menu of a window, on its icon or its preview, starts with layouts (halves, two stacked, thirds, quarters, a main pane with two beside it, one on top with two below it, wide and narrow, and a full one that maximizes); click a zone to put the window there (a tiled window is never floated: with two or three tiles on the workspace the picker offers the shapes that many can take (side by side or stacked; one beside two, three columns, one over two, three rows), and a click reshapes the workspace and puts the window in that zone; with more, the picker shows the tiles and a click swaps with one). It also adds **Move left / right / up / down** to a tiled window's menu. The same picker opens for the active window from a key, under the pointer: bind `omarchy-shell io.github.bmaltais.startbar snapPicker` (for example to Super+Z); digits choose a layout, the arrows move through its zones, Return applies, Escape closes.
+Each icon has its own menu. A pin with no windows offers the app's actions, the app itself and **Unpin from taskbar**; a running app adds its window actions (Maximize, Full screen, Float, Move to monitor, Move to scratchpad, which becomes Restore from scratchpad once the window is there), then the app and **Pin to taskbar**, and ends with **Close window** (**Close all windows** for a stack of several). With **Snap layouts** on in the settings (Windows page), the menu of a window, on its icon or its preview, starts with layouts (halves, two stacked, thirds, quarters, a main pane with two beside it, one on top with two below it, wide and narrow, and a full one that maximizes); click a zone to put the window there (a tiled window is never floated: with two or three tiles on the workspace the picker offers the shapes that many can take (side by side or stacked; one beside two, three columns, one over two, three rows), and a click reshapes the workspace and puts the window in that zone; with more, the picker shows the tiles and a click swaps with one). It also adds **Move left / right / up / down** to a tiled window's menu. The same picker opens for the active window from a key, under the pointer: bind `omarchy-shell io.github.bmaltais.startbar snapPicker` (for example to Super+Z); digits choose a layout, the arrows move through its zones, Return applies, Escape closes. With more than one monitor the picker has a monitor row too (key M): a map of your monitors as they sit on the desk, and a click sends the window to that monitor.
+
+**Move to monitor.** With more than one monitor, a window's menu (on its icon or its preview) has a **Move to monitor** row that opens a small map of the monitors beside it. Click one to send the window to the workspace that monitor is showing; a maximized or full screen window already there is taken out of that state first, so the one you moved can still be clicked.
 
 <img src="screenshots/icon-menu-clip.avif" alt="The menu of a running app that is not pinned, with its window actions, Close window, the app and Pin to taskbar, then the menu of a pinned app that is not running, with the app's actions, the app and Unpin from taskbar" width="640">
 
@@ -123,6 +126,9 @@ Run these with `omarchy-shell io.github.bmaltais.startbar <command>`, for instan
 | `closeStartMenu` | Closes it |
 | `settings` | Opens the settings window on the focused monitor |
 | `closeSettings` | Closes it |
+| `showDesktop` | Hides every window on every monitor; run it again to bring them back |
+| `snapPicker` | Opens the snap layout picker for the active window, under the pointer (needs **Snap layouts** on) |
+| `closeSnapPicker` | Closes it |
 
 ## Update and remove
 
