@@ -1,6 +1,6 @@
 <p align="center">
   <picture>
-    <img alt="A tour of StartBar: a preview of a group of windows, an icon's right-click menu, launching an app from the Start menu, the bar's menu with a submenu, the settings window with search and the bar following the colours and edge chosen there, and the Dock on the left in the light colours" src="screenshots/hero.avif" width="100%" />
+    <img alt="A tour of StartBar: two windows snapped side by side from their icons' menus, the Super+Z picker moving one into a quarter and F maximizing it, Show desktop hiding everything and bringing it back, the bar's menu opening the settings window, and the Dock on the left in the light colours with a window preview" src="screenshots/hero.avif" width="100%" />
   </picture>
 </p>
 

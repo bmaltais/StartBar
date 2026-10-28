@@ -2,100 +2,103 @@
 # StartBar's tour: the animation at the top of the README (screenshots/hero.avif).
 # Run it with scripts/tour.sh scripts/tours/hero.sh --install (or scripts/hero.sh --install).
 #
-# The story: hover a group of windows for its Preview and a thumbnail for a peek; right-click an icon for its menu; search the Start
-# menu and launch an app; right-click the bar and open a submenu; the settings window, a search, another page, and the bar following
-# the colours and the edge chosen there; then the Dock on the left in the light colours, with the Start menu and a Preview.
+# The story, in the order a person would show it: two windows are snapped side by side from their icons' menus; Super+Z on the keyboard
+# re-snaps one into a quarter and F maximizes it and puts it back; Show desktop hides everything and returns it; the bar's menu opens the
+# settings window, where the colours and the edge change at once; then the Dock on the left, in the light colours, with a Preview beside
+# it. Each feature has its own clip too (scripts/tours/*-clip.sh); this is the short version, kept under a minute (the Start menu is left
+# to its clip).
 #
 # It runs in a nested session in a sandbox (scripts/tours/common.sh): nothing of yours is touched, and the Start menu's power
-# commands are refused. The windows in the Dock are terminals posing as apps (the Dock gives them those apps' icons).
+# commands are refused. The windows are terminals posing as apps (the Dock gives them those apps' icons).
 #
 # Coordinates in the settings window are those of the window at its default size and place, centred on the 1280x800 screen
-# (Service.qml, settingsWindow): the search box at the top, the page list on the left, then the rows of the Taskbar page.
+# (Service.qml, settingsWindow): the page list on the left, then the rows of the Taskbar page.
 
 # shellcheck source=tours/common.sh
 source "$TOUR_DIR/common.sh"
 TOUR_OUT=screenshots/hero.avif
-TOUR_STEPS=6
+TOUR_STEPS=5
 TOUR_MAX_SECONDS=360
+with_settings '{"snapLayouts": true}'
 
 tour_setup() {
-  pose org.gnome.Nautilus "Documents" 2a3550 2
-  pose org.gnome.Nautilus "Downloads" 3d3a52 3
-  pose com.mitchellh.ghostty "Terminal" 1f3b2d 4
+  DOCS=$(float_win org.gnome.Nautilus "Documents" 2a3550 120 110 560 340)
+  TERM_WIN=$(float_win com.mitchellh.ghostty "Terminal" 1f3b2d 520 290 560 340)
   pose btop "btop" 4a2f3a 5
-  item_center '.appId == "btop"' >/dev/null
   settle_focus
+  item_center '.appId == "btop"' >/dev/null
 }
+
+# zone_click LAYOUT-COLUMN LAYOUT-ROW FX FY: click inside a thumbnail of the open icon menu's layout picker, at that fraction of it.
+zone_click() {
+  local mx my mw mh
+  read -r mx my mw mh < <(menu_rect item)
+  # 74 x 46 thumbnails, two to a row, 8 px apart, centred in the menu, 8 px below its top and 8 px of padding.
+  local tx=$((mx + mw / 2 - 4 - 74 + $1 * 82)) ty=$((my + 8 + 8 + $2 * 54))
+  glide "$((tx + 74 * $3 / 100))" "$((ty + 46 * $4 / 100))"; sleep 0.5
+  click "$((tx + 74 * $3 / 100))" "$((ty + 46 * $4 / 100))" 1.4
+}
+
+# super_z: the key the picker opens on, as the shell's own command (the recorder sends no chords), once the window has the focus.
+super_z() { omarchy-shell "$ID" snapPicker; wait_until snap_up 10; sleep 1.2; }
 
 tour_play() {
   local x y bx by bw bh px py pw ph
 
-  # 1. The Preview of a group of windows, and a peek.
-  cap "Hover an icon for a live preview of each window"
-  glide 640 400
+  # 1. Snap two windows side by side from their icons' menus.
+  cap "Snap windows into layouts from the icon menu"
+  glide 640 420; sleep 0.8
   read -r x y < <(item_center '.appId == "org.gnome.Nautilus"')
-  glide "$x" "$((y - 40))"; glide "$x" "$y"
-  read -r px py pw ph < <(menu_rect preview)
-  sleep 1.6
-  glide "$((px + pw / 4))" "$((py + ph / 2))"; sleep 2.0
-  glide "$((px + pw * 3 / 4))" "$((py + ph / 2))"; sleep 2.0
-  glide 640 300; sleep 1.0
+  rclick "$x" "$y" 0.8
+  sleep 0.6
+  zone_click 0 0 25 50          # halves, the left one
+  sleep 1.0
+  read -r x y < <(item_center '.appId == "com.mitchellh.ghostty"')
+  rclick "$x" "$y" 0.8
+  sleep 0.6
+  zone_click 0 0 75 50          # halves, the right one
+  sleep 1.0
 
-  # 2. An icon's menu.
-  cap "Right-click an icon for its menu"
-  read -r x y < <(item_center '.appId == "btop"')
-  rclick "$x" "$y" 0.6
-  read -r bx by bw bh < <(menu_rect item)
-  sleep 1.2
-  glide "$((bx + bw / 2))" "$((by + bh * 2 / 10))"; sleep 1.4
-  glide "$((bx + bw / 2))" "$((by + bh * 8 / 10))"; sleep 1.8
-  click 700 300 1.0
+  # 2. Super+Z: a layout from the keyboard, then F maximizes and puts the window back.
+  cap "Super+Z for layouts from the keyboard; F maximizes"
+  click 940 330 0.8             # the window on the right takes the focus
+  super_z
+  pressed 4; sleep 0.8          # quarters
+  pressed Right; sleep 0.6
+  pressed Return; sleep 1.2
+  glide 940 220; sleep 0.3
+  super_z
+  pressed f; sleep 1.4          # maximize
+  super_z
+  pressed f; sleep 1.2          # and back
 
-  # 3. The Start menu: search for an app and launch it.
-  cap "Search the Start menu and launch any app"
+  # 3. Show desktop, and everything back where it was.
+  cap "Show desktop hides everything, then brings it back"
+  omarchy-shell "$ID" showDesktop
+  sleep 2.4
+  omarchy-shell "$ID" showDesktop
+  sleep 2.2
+
+  # 4. The bar's menu opens the settings window; colours and the edge change as they are clicked.
+  cap "Right-click the bar for every setting. Changes apply as you click"
   read -r x y < <(start_button)
-  click "$x" "$y" 1.2
-  menu_rect start >/dev/null
-  typed "foot"; sleep 1.6
-  pressed Return
-  wait_until "hyprctl clients -j | jq -e '.[] | select(.class == \"foot\")'" 20
-  sleep 2.6
-  close_windows foot
-  sleep 1.2
-
-  # 4. The Bar menu and a submenu, then its last row opens the settings window.
-  cap "Right-click the bar for quick options"
-  rclick 640 "$y" 1.0
+  rclick 640 "$y" 0.8
   read -r bx by bw bh < <(menu_rect bar)
-  sleep 1.2
-  glide "$((bx + bw / 2))" "$((by + 4 + 32 + 16))"; menu_rect barSub >/dev/null; sleep 2.0     # Position
-  glide "$((bx + bw / 2))" "$((by + 4 + 96 + 9 + 16))"; menu_rect barSub >/dev/null; sleep 1.6  # Start button
+  sleep 1.0
   glide "$((bx + bw / 2))" "$((by + bh - 20))"; sleep 0.6
-  click "$((bx + bw / 2))" "$((by + bh - 20))" 1.4                                              # Settings...
-
-  # 5. The settings window: a search, another page, then colours and the edge, which the bar follows at once.
-  cap "Every setting in one window, with search. Changes apply as you click"
-  click 640 120 0.5
-  typed "icon"; sleep 2.2
-  pressed BackSpace; sleep 0.12; pressed BackSpace; sleep 0.12; pressed BackSpace; sleep 0.12; pressed BackSpace
-  sleep 0.8
-  click 299 253 1.6          # Windows
-  click 299 213 1.2          # Taskbar
-  click 987 293 2.0          # Colors: Light
-  click 889 251 2.2          # Position: Left
+  click "$((bx + bw / 2))" "$((by + bh - 20))" 1.6                                              # Settings...
+  click 299 253 1.0          # Windows
+  click 299 213 0.8          # Taskbar
+  click 987 293 1.6          # Colors: Light
+  click 889 251 1.8          # Position: Left
   esc; sleep 1.2
 
-  # 6. The Dock on the left, in the light colours: the Start menu, and a Preview beside it.
-  cap "Any edge, light or dark. Here it is on the left"
-  read -r x y < <(item_center 'true')
-  click "$x" "$((y - 52))" 1.2
-  menu_rect start >/dev/null
-  typed "set"; sleep 2.0
-  esc; sleep 0.5; esc; sleep 0.8
+  # 5. The Dock on the left, in the light colours: a Preview beside it.
+  cap "Any edge, light or dark, with live previews"
   read -r x y < <(item_center '.appId == "org.gnome.Nautilus"')
   glide 3 "$y"; glide "$x" "$y"
   read -r px py pw ph < <(menu_rect preview)
-  sleep 2.4
-  glide "$((px + pw / 4))" "$((py + ph / 2))"; sleep 2.0
-  glide 700 300; sleep 1.2
+  sleep 1.8
+  glide "$((px + pw / 4))" "$((py + ph / 2))"; sleep 1.4
+  glide 700 300; sleep 0.8
 }
