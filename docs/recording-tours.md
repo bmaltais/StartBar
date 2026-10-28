@@ -65,3 +65,4 @@ Newest first.
 | 2026-10-15 | The README's tour and clips are animated AVIFs in `<picture>` tags, replacing `hero.gif` (3.7 MB) | About a seventh of the size, sharper, and GitHub does not link a `<picture>` to the file |
 | 2026-10-15 | The recorder removes its frames when it ends | Each run left 1.5 GB in `/tmp`, which is memory: a few runs made everything that wrote there fail |
 | 2026-10-15 | The shell in the session starts after the window has its final size | Started before, it reported the first size as its screen's and `layout` answered with wrong pixels |
+| 2026-10-28 | The README's tour now opens with the 1.7 window features (snap from the icon menu, Super+Z and F, Show desktop), then the settings window and the Dock on the left; the Start menu and the bar submenu are left to their clips | The tour showed none of what is new, and over a minute it loses readers; each feature keeps its own clip for the detail |
