@@ -1,3 +1,4 @@
+require("./qmlimport");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
@@ -12,7 +13,7 @@ const settingsValues = (entry) => effectiveView(entry).values;
 const effectiveTaskbar = (entry) => effectiveView(entry).taskbar;
 
 const fields = () => settingsSchema().flatMap((g) => g.fields);
-const TYPES = ["bool", "choice", "int", "slider", "text", "list"];
+const TYPES = ["bool", "choice", "int", "slider", "text", "key", "list"];
 
 test("every field has a unique key, a label and a known widget type", () => {
   const keys = fields().map((f) => f.key);
