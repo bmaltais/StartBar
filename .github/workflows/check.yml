@@ -9,6 +9,6 @@ on:
 
 jobs:
   check:
-    uses: bmaltais/omarchy-plugin-devkit/.github/workflows/app-check.yml@fix/ci-qtquick
+    uses: bmaltais/omarchy-plugin-devkit/.github/workflows/app-check.yml@v0.2.8
     with:
       node: true
