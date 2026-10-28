@@ -1,3 +1,4 @@
+require("./qmlimport");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
@@ -52,7 +53,41 @@ test("bar defaults: always visible, left-aligned, theme colours, built-in Start 
     snapLayouts: false,
     snapFillOthers: false,
     newWindowWorkspace: "off",
+    snapKeyMaximize: "f",
+    snapKeyFullscreen: "x",
+    snapKeyFloat: "t",
+    snapKeyCenter: "c",
+    snapKeyPin: "p",
+    snapKeyScratchpad: "s",
+    snapKeyMoveLeft: "h",
+    snapKeyMoveDown: "j",
+    snapKeyMoveUp: "k",
+    snapKeyMoveRight: "l",
+    snapKeyClose: "",
   });
+});
+
+test("the Super+Z keys take a chord, blank for none, and fall back on an unusable one", () => {
+  const { effectiveView } = require("../DockConfig.js");
+  const { snapKeyMap } = require("../SnapKeys.js");
+  const bar = effectiveView({ snapKeyMaximize: "G", snapKeyFloat: "", snapKeyPin: "ctrl+nope", snapKeyCenter: "Shift+Ctrl+M", snapKeyClose: "up", snapKeyFullscreen: "ab" }).taskbar;
+  assert.equal(bar.snapKeyMaximize, "g");
+  assert.equal(bar.snapKeyFloat, "");
+  assert.equal(bar.snapKeyPin, "p");
+  assert.equal(bar.snapKeyCenter, "ctrl+shift+m");
+  assert.equal(bar.snapKeyFullscreen, "x");
+  const map = snapKeyMap(bar);
+  assert.equal(map.g, "maximize");
+  assert.equal(map.up, "close");
+  assert.equal(map["ctrl+shift+m"], "center");
+  assert.equal(map.t, undefined);
+});
+
+test("two actions on one chord: the first listed keeps it", () => {
+  const { effectiveView } = require("../DockConfig.js");
+  const { snapKeyMap } = require("../SnapKeys.js");
+  const map = snapKeyMap(effectiveView({ snapKeyFloat: "f" }).taskbar);
+  assert.equal(map.f, "maximize");
 });
 
 test("the bar honours valid values and autoHide", () => {

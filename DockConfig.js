@@ -25,6 +25,8 @@
 // only placement persisted: a Placed Window Item's position (docs/SPEC.md
 // "Ordering") lives in memory for as long as its Window stays open.
 
+.import "SnapKeys.js" as SnapKeys
+
 var DEFAULT_ICON_SIZE = 48;
 var DEFAULT_REVEAL_DELAY_MS = 200;
 var DEFAULT_HIDE_DELAY_MS = 300;
@@ -134,7 +136,7 @@ function newWindowWorkspaceOr(value) {
 
 function effectiveTaskbar(entry) {
   var source = isPlainObject(entry) ? entry : {};
-  return {
+  var taskbar = {
     alignment: oneOf(source.alignment, ["center", "left"], "left"),
     position: oneOf(source.position, ["bottom", "top", "left", "right"], "bottom"),
     colorScheme: oneOf(source.colorScheme, ["theme", "dark", "light"], "theme"),
@@ -162,6 +164,10 @@ function effectiveTaskbar(entry) {
     snapFillOthers: booleanOr(source.snapFillOthers, false),
     newWindowWorkspace: newWindowWorkspaceOr(source.newWindowWorkspace),
   };
+  for (var i = 0; i < SnapKeys.ACTIONS.length; i++) {
+    taskbar[SnapKeys.ACTIONS[i].key] = SnapKeys.valueOr(source[SnapKeys.ACTIONS[i].key], SnapKeys.ACTIONS[i].fallback);
+  }
+  return taskbar;
 }
 
 // null means "use the Omarchy theme"; otherwise a fixed palette in the same
@@ -207,7 +213,7 @@ function mergeSettings(entry, patch) {
 // Dock and Start menu manage those themselves. A test checks this covers
 // exactly the keys effectiveView understands.
 function settingsSchema() {
-  return [
+  var groups = [
     {
       title: "Taskbar",
       fields: [
@@ -269,6 +275,11 @@ function settingsSchema() {
       ],
     },
   ];
+  // The Super+Z keys follow the snap settings, in the Windows group.
+  var windows = groups[1].fields;
+  var at = windows.map(function (f) { return f.key; }).indexOf("snapFillOthers") + 1;
+  groups[1].fields = windows.slice(0, at).concat(SnapKeys.settingsFields(), windows.slice(at));
+  return groups;
 }
 
 // The complete effective view of a config entry (see the header). `settings`

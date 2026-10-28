@@ -16,6 +16,7 @@ import qs.Commons
 import qs.Ui
 import "DockModel.js" as DockModel
 import "DockConfig.js" as DockConfig
+import "SnapKeys.js" as SnapKeys
 import "DockBarMenu.js" as DockBarMenu
 import "DockSettingsWindow.js" as DockSettingsWindow
 import "StartPlaces.js" as StartPlaces
@@ -642,6 +643,20 @@ Item {
     if (command) Quickshell.execDetached(command)
   }
 
+  // A chord pressed in the Super+Z picker (the snapKey* settings): runs its action
+  // on the Window when that Window offers it (DockModel.windowActions: Center is
+  // for a floating one, Move left for a tiled one). True when it did.
+  function runSnapKey(win, chord) {
+    var action = chord ? SnapKeys.snapKeyMap(root.taskbar)[chord] : null
+    if (!action || !win) return false
+    if (action === "close") { root.closeWindow(win.id); return true }
+    var offered = DockModel.windowActions(win, { move: true, monitors: false })
+    for (let i = 0; i < offered.length; i++) {
+      if (offered[i].id === action) { root.runWindowAction(action, win.id); return true }
+    }
+    return false
+  }
+
   // Asks Hyprland which Window is active (Quickshell's own idea of it is empty
   // until the first focus change after a restart), then opens the popup for it.
   function toggleSnapPicker() {
@@ -820,6 +835,13 @@ Item {
         }
         Keys.onPressed: function (event) {
           var k = event.key
+          // A key bound in the settings (snapKey*) comes first, so it may take over
+          // a key the picker would use otherwise (an arrow, a digit, M).
+          if (root.runSnapKey(snapPopup.target, SnapKeys.chordOf(k, event.modifiers))) {
+            snapPopup.wanted = false
+            event.accepted = true
+            return
+          }
           // M opens the monitor map; then Left and Right choose a monitor and
           // Return or Space sends the Window there.
           if (k === Qt.Key_M && snapPopup.monitorRow) {
@@ -1443,6 +1465,7 @@ Item {
                       case "int": return stepperEditor
                       case "slider": return sliderEditor
                       case "text": return textEditor
+                      case "key": return keyEditor
                       case "list": return listEditor
                       }
                       return null
@@ -1450,6 +1473,24 @@ Item {
                     onLoaded: {
                       item.field = Qt.binding(function () { return fieldRow.field })
                       item.value = Qt.binding(function () { return fieldRow.value })
+                    }
+
+                    Component {
+                      id: keyEditor
+                      KeyField {
+                        property var field: null
+                        property var value: ""
+                        signal commit(var next)
+                        implicitWidth: Style.space(160)
+                        implicitHeight: Style.space(30)
+                        chord: value === undefined || value === null ? "" : String(value)
+                        fg: root.colPopupText
+                        accent: root.colAccent
+                        fontFamily: Style.font.family
+                        fontPixelSize: Style.font.body
+                        radiusSize: root.menuRowRadius
+                        onCaptured: function (next) { if (next !== chord) commit(next) }
+                      }
                     }
 
                     Connections {

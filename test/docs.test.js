@@ -1,3 +1,4 @@
+require("./qmlimport");
 // Keeps the docs and the code in step where a mismatch is mechanical:
 // settings without a row in the reference, comments citing a spec section
 // that no longer exists, version files that disagree, and theme colours used
