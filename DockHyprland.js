@@ -40,7 +40,7 @@ var RESCUE = "rescue() { "
 // Both are named for the Hyprland instance, so a second Hyprland session of
 // the same user (a nested test session, another login) has its own and never
 // restores or locks another's.
-var PEEK_LOCK = "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek-${HYPRLAND_INSTANCE_SIGNATURE:-0}.lock\"; flock 9\n";
+var PEEK_LOCK = Hidden.SWEEP + "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek-${HYPRLAND_INSTANCE_SIGNATURE:-0}.lock\"; flock 9\n";
 var PEEK_STATE = "\"${XDG_RUNTIME_DIR:-/tmp}/startbar-peek-${HYPRLAND_INSTANCE_SIGNATURE:-0}\"";
 
 // Put back what an earlier peek changed, from the saved state in $rest: any

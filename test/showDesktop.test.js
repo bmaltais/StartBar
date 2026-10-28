@@ -187,3 +187,22 @@ test("the click path and Show desktop share one place() and one state file", () 
   assert.ok(showDesktop()[2].includes(`state=${Hidden.STATE}`));
   assert.ok(Hidden.RESTORE.includes(`state=${Hidden.STATE}`));
 });
+
+test("the sweep drops the state and lock files of Hyprland instances that are gone, and only those", () => {
+  const { SWEEP } = require("../HiddenWindows.js");
+  const rt = fs.mkdtempSync(path.join(os.tmpdir(), "sweep-"));
+  try {
+    fs.mkdirSync(path.join(rt, "hypr", "live"), { recursive: true });
+    const names = ["startbar-peek-live", "startbar-peek-live.lock", "startbar-showdesktop-live", "startbar-peek-dead", "startbar-peek-dead.lock", "startbar-showdesktop-dead", "startbar-other-dead"];
+    for (const n of names) fs.writeFileSync(path.join(rt, n), "");
+    const run = spawnSync("bash", ["-c", SWEEP], { env: { ...process.env, XDG_RUNTIME_DIR: rt } });
+    assert.equal(run.status, 0, run.stderr.toString());
+    assert.deepEqual(fs.readdirSync(rt).sort(), ["hypr", "startbar-other-dead", "startbar-peek-live", "startbar-peek-live.lock", "startbar-showdesktop-live"]);
+    // Without a hypr folder at all it removes nothing (a session whose runtime folder is not the usual one).
+    fs.rmSync(path.join(rt, "hypr"), { recursive: true });
+    spawnSync("bash", ["-c", SWEEP], { env: { ...process.env, XDG_RUNTIME_DIR: rt } });
+    assert.equal(fs.readdirSync(rt).filter((n) => n.startsWith("startbar-peek-live")).length, 2);
+  } finally {
+    fs.rmSync(rt, { recursive: true, force: true });
+  }
+});

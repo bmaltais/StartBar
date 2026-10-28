@@ -20,7 +20,7 @@
 // lock keeps two quick presses from overlapping.
 //
 function showDesktop() {
-  var script = "exec 9>" + Hidden.STATE.slice(0, -1) + ".lock\"; flock 9\n"
+  var script = Hidden.SWEEP + "exec 9>" + Hidden.STATE.slice(0, -1) + ".lock\"; flock 9\n"
     + "state=" + Hidden.STATE + "\n"
     + Hidden.PLACE
     + "move() { hyprctl dispatch \"hl.dsp.window.move({ workspace = \\\"$1\\\", follow = false, window = \\\"address:$2\\\" })\" >/dev/null; }\n"

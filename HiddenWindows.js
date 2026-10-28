@@ -46,6 +46,11 @@ function showDesktopWorkspace(monitorId) {
 // workspace and floating state it had and, when it floated, its position and
 // size, and its monitor id.
 var STATE = "\"${XDG_RUNTIME_DIR:-/tmp}/startbar-showdesktop-${HYPRLAND_INSTANCE_SIGNATURE:-0}\"";
+// Peek's and Show desktop's state and lock files are named for the Hyprland instance (see DockHyprland.js), so each session of
+// the user leaves a pair behind. Run first by their scripts: drop the files of an instance whose folder in $XDG_RUNTIME_DIR/hypr
+// is gone. One line without a newline, so it can lead a one-line script.
+var SWEEP = "if [ -n \"$XDG_RUNTIME_DIR\" ] && [ -d \"$XDG_RUNTIME_DIR/hypr\" ]; then for f in \"$XDG_RUNTIME_DIR\"/startbar-peek-* \"$XDG_RUNTIME_DIR\"/startbar-showdesktop-*; do "
+  + "[ -e \"$f\" ] || continue; s=${f##*/}; s=${s#startbar-peek-}; s=${s#startbar-showdesktop-}; s=${s%.lock}; [ -d \"$XDG_RUNTIME_DIR/hypr/$s\" ] || rm -f \"$f\"; done; fi; ";
 var COLUMNS = "addr ws fl x y w h mon";
 // jq, over `hyprctl -j clients`: one row for each Window Show desktop hides.
 var ROWS_JQ = ".[] | select(.mapped and .workspace.id > 0) | \"\\(.address) \\(.workspace.id) \\(.floating) \\(.at[0]) \\(.at[1]) \\(.size[0]) \\(.size[1]) \\(.monitor)\"";
@@ -94,6 +99,6 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     SPECIAL_PREFIX: SPECIAL_PREFIX, SCRATCHPAD: SCRATCHPAD, MINIMIZED: MINIMIZED, SHOWDESKTOP: SHOWDESKTOP,
     kind: kind, isSpecial: isSpecial, showDesktopWorkspace: showDesktopWorkspace,
-    STATE: STATE, COLUMNS: COLUMNS, ROWS_JQ: ROWS_JQ, HIDDEN_JQ: HIDDEN_JQ, PLACE: PLACE, RESTORE: RESTORE,
+    STATE: STATE, SWEEP: SWEEP, COLUMNS: COLUMNS, ROWS_JQ: ROWS_JQ, HIDDEN_JQ: HIDDEN_JQ, PLACE: PLACE, RESTORE: RESTORE,
   };
 }
