@@ -15,7 +15,6 @@
 <p align="center">
   <a href="#install">Install</a> ·
   <a href="#tour">Tour</a> ·
-  <a href="#manage-your-windows">Manage your windows</a> ·
   <a href="#configure">Configure</a> ·
   <a href="#commands">Commands</a> ·
   <a href="docs/README.md">Docs</a>
@@ -72,21 +71,33 @@ Colours and fonts follow the current Omarchy theme live, or pick a fixed light o
 
 ### Right-click an icon
 
-Every icon has its own menu: the app's actions, window actions (Maximize, Full screen, Float, Move to monitor, Move to scratchpad), Pin or Unpin, and Close window.
+Every icon has its own menu: the app's actions, window actions (Maximize, Full screen, Float, Move to monitor, Move to scratchpad), Pin or Unpin, and Close window. With more than one monitor, **Move to monitor** opens a small map of your screens: click one to send the window there ([details](docs/windows-and-monitors.md#move-to-monitor)).
 
 <img src="screenshots/icon-menu-clip.avif" alt="The menu of a running app that is not pinned, with its window actions, Close window, the app and Pin to taskbar, then the menu of a pinned app that is not running, with the app's actions, the app and Unpin from taskbar" width="640">
 
-## Manage your windows
+### Snap layouts
 
-New in 1.7: the bar does more than list your windows. Each of these has its own page.
+<img src="screenshots/snap-layouts-clip.avif" alt="A window's menu opens with the layout picker; clicking the left half snaps the window there, then the lower right quarter" width="640">
 
-| | |
-|---|---|
-| <img src="screenshots/snap-layouts-clip.avif" alt="A window's menu opens with the layout picker; clicking the left half snaps the window there, then the lower right quarter" width="300"> | **Snap layouts**<br>Click a zone of a layout (halves, thirds, quarters, a main pane and more) to place a window, as in Windows 11. Tiled windows are reshaped, not floated.<br>[Read more](docs/snap-layouts.md) |
-| <img src="screenshots/super-z-clip.avif" alt="Super+Z opens the picker under the pointer; keys choose a layout, then F maximizes the window" width="300"> | **Super+Z picker**<br>The same layouts from the keyboard, plus keys that act on the window: <kbd>F</kbd> maximizes, <kbd>T</kbd> floats, <kbd>S</kbd> hides it away. Press the key you want in the settings to change any of them.<br>[Keyboard](docs/keyboard.md) |
-| <img src="screenshots/show-desktop-clip.avif" alt="Three windows are hidden by one command and brought back to where they were by the next" width="300"> | **Show desktop**<br>One key hides every window on every monitor; the next brings each one back where it was.<br>[Read more](docs/windows-and-monitors.md#show-desktop) |
-| <img src="screenshots/focus-clip.avif" alt="The pointer moves over the window behind, which comes to the front, then over the other one" width="300"> | **Focus and stacking**<br>Focus follows the mouse, floating windows rise when focused, and new windows can open on a workspace of their own.<br>[Read more](docs/windows-and-monitors.md#focus-and-stacking) |
-| | **Move to monitor**<br>With more than one monitor, a small map of your screens in a window's menu: click one to send the window there.<br>[Read more](docs/windows-and-monitors.md#move-to-monitor) |
+Place a window in a zone of the screen, as in Windows 11: halves, thirds, quarters, a main pane and more. A floating window goes to the zone; tiled windows are reshaped, never floated. Turn on **Snap layouts** in the settings. [Read more](docs/snap-layouts.md).
+
+### The Super+Z picker
+
+<img src="screenshots/super-z-clip.avif" alt="Super+Z opens the picker under the pointer; keys choose a layout, then F maximizes the window" width="640">
+
+The same layouts from the keyboard, under the pointer. Letters act on the window: <kbd>F</kbd> maximizes, <kbd>T</kbd> floats, <kbd>S</kbd> puts it in the scratchpad, and you can give any action the key you like (arrows and <kbd>Ctrl</kbd> chords included) by pressing it in the settings. [Read more](docs/keyboard.md).
+
+### Show desktop
+
+<img src="screenshots/show-desktop-clip.avif" alt="Three windows are hidden by one command and brought back to where they were by the next" width="640">
+
+One key hides every window on every monitor, and the next brings each one back where it was, even if monitors came or went in between. Bind `omarchy-shell io.github.bmaltais.startbar showDesktop`, for example to Super+D. [Read more](docs/windows-and-monitors.md#show-desktop).
+
+### Focus and stacking
+
+<img src="screenshots/focus-clip.avif" alt="The pointer moves over the window behind, which comes to the front, then over the other one" width="640">
+
+Focus can follow the mouse, floating windows can rise when they get focus, and new windows can open on a workspace of their own. [Read more](docs/windows-and-monitors.md#focus-and-stacking).
 
 ## Configure
 
