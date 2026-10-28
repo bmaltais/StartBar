@@ -40,7 +40,8 @@ tour_requires() {
 # (The settings window is a layer of its own. settings_up is defined here, not with the recorder's helpers, so that tour_setup, which
 # runs before they exist, can wait for the window.)
 settings_up() { hyprctl layers -j | jq -e '[.. | .namespace? // empty] | any(. == "omarchy-startbar-settings")' >/dev/null 2>&1; }
-tour_keys_ok() { settings_up || omarchy-shell "$ID" layout 2>/dev/null | jq -e '.menus.start != null' >/dev/null 2>&1; }
+snap_up() { hyprctl layers -j | jq -e '[.. | .namespace? // empty] | any(. == "omarchy-startbar-snap")' >/dev/null 2>&1; }
+tour_keys_ok() { settings_up || snap_up || omarchy-shell "$ID" layout 2>/dev/null | jq -e '.menus.start != null' >/dev/null 2>&1; }
 
 # ---- finding things: the Dock reports them (`omarchy-shell $ID layout`), in pixels of the session's screen ----------------------
 layout() { omarchy-shell "$ID" layout 2>/dev/null; }
@@ -87,6 +88,28 @@ pose() {
   [[ -n $addr ]] || { echo "tour: the window $title did not open" >&2; return 1; }
   hyprctl dispatch "hl.dsp.window.move({ workspace = \"$ws\", follow = false, window = \"address:$addr\" })" >/dev/null
 }
+
+# float_win CLASS TITLE COLOUR X Y W H: like pose, but the window stays on the workspace in view, floating at that place and size (pixels of
+# the session's screen), for a clip about what happens to windows. Prints its address.
+float_win() {
+  local class=$1 title=$2 bg=$3 x=$4 y=$5 w=$6 h=$7 i addr t
+  foot -a "$class" -T "$title" -o main.font=monospace:size=20 -o colors-dark.background="$bg" -o colors-dark.foreground=f2f2f2 \
+    -o colors-dark.alpha=1 sh -c "printf '\n\n  %s\n' '$title'; exec sleep 3600" >/dev/null 2>&1 &
+  for i in $(seq 1 60); do
+    addr=$(hyprctl clients -j | jq -r --arg c "$class" --arg t "$title" '.[] | select(.class == $c and .title == $t) | .address' | head -n1)
+    [[ -n $addr ]] && break
+    sleep 0.1
+  done
+  [[ -n $addr ]] || { echo "tour: the window $title did not open" >&2; return 1; }
+  t="window = \"address:$addr\""
+  hyprctl dispatch "hl.dsp.window.float({ action = \"set\", $t })" >/dev/null
+  hyprctl dispatch "hl.dsp.window.resize({ x = $w, y = $h, exact = true, $t })" >/dev/null
+  hyprctl dispatch "hl.dsp.window.move({ x = $x, y = $y, $t })" >/dev/null
+  echo "$addr"
+}
+
+# with_settings JSON: the tour's Dock settings with these merged in (call it at the top of a tour file).
+with_settings() { TOUR_PLUGIN_ENTRY=$(jq -c ". + $1" <<<"$TOUR_PLUGIN_ENTRY"); }
 
 # close_windows CLASS: close every window of that class.
 close_windows() {

@@ -6,6 +6,8 @@ The bar acts on your windows, not only lists them. This page covers what each ac
 
 ## Show desktop
 
+<img src="../screenshots/show-desktop-clip.avif" alt="Three windows are hidden by one command and brought back to where they were by the next" width="640">
+
 Hide every window on every monitor with one key, and bring each one back to where it was with the next. Bind `omarchy-shell io.github.bmaltais.startbar showDesktop` (for example to Super+D). It needs no setting and works with or without a Dock.
 
 - Each window is hidden on a workspace of its own monitor, so it keeps its size and nothing is squeezed together.
@@ -30,6 +32,8 @@ The Super+Z picker has the same row (key **M**): see [Snap layouts](snap-layouts
 Resting on an icon shows live thumbnails with a close button. A group's thumbnails are ordered left to right by where the windows are on screen. With **Show window on preview hover** (`previewPeek`, on by default) hovering a thumbnail brings that window into view, even from behind a maximized one, and moving away puts everything back; clicking keeps it. Related settings: `showPreviews`, `previewSlide`, `previewWarpPointer`.
 
 ## Focus and stacking
+
+<img src="../screenshots/focus-clip.avif" alt="The pointer moves over the window behind, which comes to the front, then over the other one" width="640">
 
 Two optional settings, both off by default:
 
