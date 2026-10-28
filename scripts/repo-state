@@ -4,9 +4,10 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
+# release-branch asks the remote itself (ls-remote), so it runs before the fetch: nothing is executed from the working tree after it.
+release=$(scripts/release-branch 2>/dev/null | head -1 || true)
 git fetch -q origin
 branch=$(git branch --show-current)
-release=$(scripts/release-branch 2>/dev/null | head -1 || true)
 echo "branch ${branch:-detached}  head $(git rev-parse --short HEAD)"
 if [[ -n $release ]] && git rev-parse -q --verify "origin/$release" >/dev/null; then
   read -r behind ahead < <(git rev-list --left-right --count "origin/$release...HEAD")
