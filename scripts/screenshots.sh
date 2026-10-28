@@ -205,12 +205,9 @@ open_item_menu() {
   wait_for '.menus.item | select(.height > 40) | [.x, .y, .width, .height] | @tsv'
 }
 
-# Bar menu: right click on the bar away from any Item, with auto-hide on as in the image, so the Dock is revealed by the pointer
-# first.
+# Bar menu: right click on the bar away from any Item.
 if wanted right-click || wanted right-click-submenu; then
-  "$DEV" set '{"autoHide":true}' >/dev/null
-  at $((mw / 2)) $((mh - 2)); sleep 1.2
-  at $((mw * 6 / 10)) $((mh - 12)); sleep 0.5
+  park
   "$DEV" rclick $((mw * 6 / 10)) $((mh - 12)) >/dev/null
   if rect=$(wait_for '.menus.bar | select(.height > 100) | [.x, .y, .width, .height] | @tsv'); then
     read -r bx by bw bh <<<"$rect"

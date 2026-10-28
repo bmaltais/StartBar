@@ -1,12 +1,14 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const S = require("../StartMenu.js");
+const Apps = require("../StartMenuApps.js");
+const Actions = require("../StartMenuActions.js");
 
 // --- Helpers ----------------------------------------------------------------
 
 const mkApp = (id, name) => ({ id, name: name || id, icon: id, entry: { id }, noDisplay: false });
 const APPS = ["alacritty", "browser", "calc", "files", "gimp", "htop", "inkscape", "mail"].map((id) => mkApp(id));
-const cat = S.catalog(APPS);
+const cat = Apps.catalog(APPS);
 
 function ctxFor(over) {
   const o = over || {};
@@ -15,9 +17,9 @@ function ctxFor(over) {
   return {
     command: o.command || "builtin",
     hoverOpen: o.hoverOpen !== undefined ? o.hoverOpen : true,
-    results: S.filterApps(APPS, query),
-    pinned: S.resolveApps(cat, startPinIds),
-    recent: S.resolveApps(cat, o.recentIds || []),
+    results: Apps.filterApps(APPS, query),
+    pinned: Apps.resolveApps(cat, startPinIds),
+    recent: Apps.resolveApps(cat, o.recentIds || []),
     allFlat: cat.allFlat,
     letterRows: cat.letterRows,
     startPinIds,
@@ -224,7 +226,7 @@ test("Enter in search launches the highlighted result, closes the menu and recor
   const open = clickOpened().state;
   const result = feed([type("a"), key("down"), key("enter")], {}, open);
   // "a" matches alacritty (prefix) before calc / gimp / ... by rank, then alphabetically
-  const expected = S.filterApps(APPS, "a")[1].id;
+  const expected = Apps.filterApps(APPS, "a")[1].id;
   assert.deepEqual(launchedIds(result), [expected]);
   assert.equal(result.state.open, false);
   assert.deepEqual(result.effects.find((e) => e.type === "apply"), { type: "apply", intent: { type: "pushRecentApp", appId: expected } });
@@ -277,7 +279,7 @@ test("Up/Down in All apps do nothing while the jump grid is up", () => {
 
 test("Down/Up in search move the highlight, clamped to the results", () => {
   const typed = feed([type("a")], {}, clickOpened().state);
-  const count = S.filterApps(APPS, "a").length;
+  const count = Apps.filterApps(APPS, "a").length;
   assert.equal(feed(Array(count + 3).fill(key("down")), {}, typed.state).state.resultIndex, count - 1);
   assert.equal(feed([key("up")], {}, typed.state).state.resultIndex, 0);
 });
@@ -286,7 +288,7 @@ test("clicking a tile, a result or an Open row launches it the same way", () => 
   const click = feed([{ type: "launch", app: APPS[3] }], {}, clickOpened().state);
   assert.deepEqual(launchedIds(click), ["files"]);
   assert.equal(click.state.open, false);
-  const rows = S.overlayRows({ kind: "app", app: APPS[3] }, ctxFor());
+  const rows = Actions.overlayRows({ kind: "app", app: APPS[3] }, ctxFor());
   const chosen = feed([{ type: "choose", row: rows[2] }], {}, clickOpened().state);
   assert.deepEqual(launchedIds(chosen), ["files"]);
   assert.equal(chosen.state.open, false);
@@ -367,14 +369,14 @@ test("catalog groups displayable apps under their first letter, non-letters unde
     { id: "n", name: "7zip" },
     { id: "h", name: "Hidden", noDisplay: true },
   ];
-  const c = S.catalog(list);
+  const c = Apps.catalog(list);
   assert.deepEqual(c.allFlat.map((a) => a.letter + a.id), ["#n", "Aa1", "Aa2", "Bb"]);
   assert.deepEqual(c.letterRows, { "#": 0, A: 1, B: 3 });
-  assert.deepEqual(S.catalog(null).allFlat, []);
+  assert.deepEqual(Apps.catalog(null).allFlat, []);
 });
 
 test("resolveApps keeps saved order and skips apps that are gone", () => {
-  assert.deepEqual(S.resolveApps(cat, ["mail", "gone", "calc"]).map((a) => a.id), ["mail", "calc"]);
+  assert.deepEqual(Apps.resolveApps(cat, ["mail", "gone", "calc"]).map((a) => a.id), ["mail", "calc"]);
 });
 
 test("jumping to a letter closes the jump grid and scrolls All apps to its first row", () => {
@@ -406,11 +408,11 @@ test("the account and power buttons toggle their own overlay and replace an app 
 });
 
 test("the power and account rows name the command each runs, and choosing one closes the menu", () => {
-  const power = S.overlayRows({ kind: "power" }, ctxFor());
+  const power = Actions.overlayRows({ kind: "power" }, ctxFor());
   assert.deepEqual(power.map((r) => r.label), ["Sleep", "Restart", "Shut down"]);
   assert.deepEqual(power.map((r) => r.action.command), ["systemctl suspend", "omarchy-system reboot", "omarchy-system shutdown"]);
   assert.deepEqual(power[2].action, { type: "run", command: "omarchy-system shutdown" });
-  const user = S.overlayRows({ kind: "user" }, ctxFor());
+  const user = Actions.overlayRows({ kind: "user" }, ctxFor());
   assert.deepEqual(user.map((r) => r.label), ["Lock", "Sign out"]);
   assert.deepEqual(user.map((r) => r.action.command), ["omarchy-system-lock", "omarchy-system logout"]);
 
@@ -423,9 +425,9 @@ test("the power and account rows name the command each runs, and choosing one cl
 
 test("an app's menu words Pin/Unpin by where it is pinned; choosing a row keeps the menu open", () => {
   const app = { kind: "app", app: APPS[1] };
-  const fresh = S.overlayRows(app, ctxFor());
+  const fresh = Actions.overlayRows(app, ctxFor());
   assert.deepEqual(fresh.map((r) => r.label), ["Pin to Start", "Pin to Dock", "Open"]);
-  const pinned = S.overlayRows(app, ctxFor({ startPinIds: ["browser"], dockPinIds: ["browser"] }));
+  const pinned = Actions.overlayRows(app, ctxFor({ startPinIds: ["browser"], dockPinIds: ["browser"] }));
   assert.deepEqual(pinned.map((r) => r.label), ["Unpin from Start", "Unpin from Dock", "Open"]);
   assert.deepEqual(pinned[0].action, { type: "apply", intent: { type: "unpinStartApp", appId: "browser" } });
   assert.deepEqual(fresh[0].action, { type: "apply", intent: { type: "pinStartApp", appId: "browser" } });
@@ -436,7 +438,7 @@ test("an app's menu words Pin/Unpin by where it is pinned; choosing a row keeps 
   assert.equal(chosen.state.open, true);
   assert.equal(chosen.state.overlay, null);
   assert.deepEqual(chosen.effects, [fresh[0].action]);
-  assert.deepEqual(S.overlayRows(null, ctxFor()), []);
+  assert.deepEqual(Actions.overlayRows(null, ctxFor()), []);
 });
 
 test("a Place closes the menu and hands off to the file manager", () => {
@@ -548,7 +550,7 @@ test("a drag move with no drag in progress does nothing", () => {
 });
 
 test("openCommand never lets a Place be read as an xdg-open option", () => {
-  const { openCommand } = require("../StartMenu.js");
+  const { openCommand } = require("../StartMenuActions.js");
   assert.deepEqual(openCommand("/home/me/Documents"), ["xdg-open", "/home/me/Documents"]);
   assert.deepEqual(openCommand("--manual"), ["xdg-open", "./--manual"]);
   assert.deepEqual(openCommand("-x"), ["xdg-open", "./-x"]);

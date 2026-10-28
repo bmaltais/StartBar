@@ -2,6 +2,8 @@
 // CONTEXT.md). No Quickshell or QML imports, so the exact same file loads
 // as a JS import inside the shell and via `require` under Node for the
 // test suite.
+
+.import "HiddenWindows.js" as Hidden
 //
 // Placed positions (CONTEXT.md "Placed"; docs/SPEC.md "Ordering" and
 // "Input"): every Item carries a stable `key` ("pin:<appId>" for a Pin
@@ -44,7 +46,6 @@
 // belonging to an unpinned App follows in Launch Order, exactly as
 // buildDockItems ordered every Window before Pins existed.
 
-var SPECIAL_WORKSPACE_PREFIX = "special:";
 
 // The key of the Pin Item for an App id, and the test for one. The one place
 // that knows the format: Placed positions are stored under these keys, and
@@ -75,8 +76,8 @@ function resolveWindowApp(window, resolveApp) {
 // Hyprland's "special:" prefix stripped.
 function badgeFor(workspace) {
   var name = workspace || "";
-  if (name.indexOf(SPECIAL_WORKSPACE_PREFIX) === 0) {
-    return name.slice(SPECIAL_WORKSPACE_PREFIX.length) || name;
+  if (name.indexOf(Hidden.SPECIAL_PREFIX) === 0) {
+    return name.slice(Hidden.SPECIAL_PREFIX.length) || name;
   }
   return name;
 }
@@ -346,9 +347,11 @@ function menuFor(item) {
 // each is { id, label }, in menu order. Labels flip to their undo while the
 // state is on (Maximize/Restore, Full screen/Exit full screen, Float/Tile,
 // Pin on top/Unpin from top). Center and Pin on top only make sense for a
-// floating window; Move to scratchpad is hidden once there. Service.qml
+// floating window; Move to monitor (a flyout row, only with more than one
+// monitor) sits above Move to scratchpad, which is replaced by Restore from
+// scratchpad once there. Service.qml
 // maps each id to its Hyprland dispatch.
-function windowActions(window) {
+function windowActions(window, options) {
   if (!window) return [];
   var fullscreen = Number(window.fullscreen) || 0;
   var actions = [
@@ -356,12 +359,27 @@ function windowActions(window) {
     { id: "fullscreen", label: fullscreen === 2 ? "Exit full screen" : "Full screen" },
     { id: "float", label: window.floating ? "Tile" : "Float" },
   ];
+  // With Snap layouts on, a tiled Window can also be sent to a neighbour's
+  // side (Hyprland swaps it with the Window there).
+  if (!window.floating && options && options.move) {
+    actions.push({ id: "moveLeft", label: "Move left" });
+    actions.push({ id: "moveRight", label: "Move right" });
+    actions.push({ id: "moveUp", label: "Move up" });
+    actions.push({ id: "moveDown", label: "Move down" });
+  }
   if (window.floating) {
     actions.push({ id: "center", label: "Center" });
     actions.push({ id: "pin", label: window.pinned ? "Unpin from top" : "Pin on top" });
   }
-  if (String(window.workspace || "") !== "special:scratchpad") {
+  // With more than one monitor: a row whose hover opens the map of them
+  // (DockMonitors.js), so it carries no command of its own.
+  if (options && options.monitors) {
+    actions.push({ id: "monitor", label: "Move to monitor", flyout: true });
+  }
+  if (Hidden.kind(window.workspace) !== "scratchpad") {
     actions.push({ id: "scratchpad", label: "Move to scratchpad" });
+  } else {
+    actions.push({ id: "unscratchpad", label: "Restore from scratchpad" });
   }
   return actions;
 }
@@ -447,7 +465,11 @@ function windowFromToplevel(toplevel, openedAt) {
     attention: !!toplevel.urgent,
     fullscreen: info.fullscreen || 0,
     floating: !!info.floating,
+    rect: info.at && info.size ? { x: info.at[0], y: info.at[1], w: info.size[0], h: info.size[1] } : null,
     pinned: !!info.pinned,
+    // On one of Omarchy's window-mode (floating) workspaces, where a Window the
+    // mode left tiled (a maximized one) is still one of its Windows.
+    windowMode: Array.isArray(info.tags) && info.tags.indexOf("omarchy-floating-workspace") >= 0,
   };
 }
 
@@ -653,6 +675,7 @@ if (typeof module !== "undefined" && module.exports) {
     newItemsState: newItemsState,
     resolveApp: resolveApp,
     openedWindow: openedWindow,
+    windowFromToplevel: windowFromToplevel,
     placedList: placedList,
     refreshItems: refreshItems,
     awaitingToplevels: awaitingToplevels,

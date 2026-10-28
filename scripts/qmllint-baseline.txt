@@ -1,9 +1,13 @@
 IconResolver.qml	confusing-expression-statement	Expression statement has no obvious effect.
-Service.qml	import	Failed to import qs.Commons. Are your import paths set up properly?
+MonitorPicker.qml	import	Failed to import qs.Commons. Are your import paths set up properly?
+MonitorPicker.qml	import	Warnings occurred while importing module "qs.Commons":
+MonitorPicker.qml	unqualified	Style
 Service.qml	import	Failed to import qs.Ui. Are your import paths set up properly?
 Service.qml	import	PanelToolTip was not found. Did you add all imports and dependencies?
-Service.qml	import	Warnings occurred while importing module "qs.Commons":
 Service.qml	import	Warnings occurred while importing module "qs.Ui":
+Service.qml	incompatible-type	Cannot assign binding of type PopupAdjustment::Enum to PopupAdjustment::Flags
+Service.qml	incompatible-type	Cannot assign binding of type int to Edges::Flags
+Service.qml	incompatible-type	Cannot assign binding of type int to PopupAdjustment::Flags
 Service.qml	missing-property	Could not find property "adjustment".
 Service.qml	missing-property	Could not find property "bottom".
 Service.qml	missing-property	Could not find property "edges".
@@ -50,6 +54,7 @@ Service.qml	unqualified	groupBlock
 Service.qml	unqualified	icon
 Service.qml	unqualified	listBox
 Service.qml	unqualified	listEditor
+Service.qml	unqualified	margins
 Service.qml	unqualified	onAnchoring
 Service.qml	unqualified	panel
 Service.qml	unqualified	previewAnchor
@@ -67,7 +72,10 @@ Service.qml	unqualified	stepperEditor
 Service.qml	unqualified	switchEditor
 Service.qml	unqualified	textEditor
 Service.qml	unqualified	userDirsForSettings
+Service.qml	unresolved-type	Type "PopupAnchor" of property "anchor" not found. This is likely due to a missing dependency entry or a type not being exposed declaratively.
+Service.qml	unresolved-type	Type margins is used but it is not resolved
 Service.qml	unresolved-type	Type rect is used but it is not resolved
+SnapLayouts.qml	unqualified	Style
 StartMenuView.qml	missing-property	Member "accent" not found on type "QQuickColor"
 StartMenuView.qml	missing-property	Member "background" not found on type "QQuickColor"
 StartMenuView.qml	missing-property	Member "foreground" not found on type "QQuickColor"

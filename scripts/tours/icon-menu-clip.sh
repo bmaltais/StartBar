@@ -5,7 +5,7 @@
 # It runs in a sandbox, like the hero tour (see scripts/tours/common.sh).
 
 # shellcheck source=tours/common.sh
-source "$HERE/tours/common.sh"
+source "$TOUR_DIR/common.sh"
 TOUR_OUT=screenshots/icon-menu-clip.avif
 # The Dock and the menus that rise from it, over the theme's wallpaper, with a margin.
 TOUR_CROP=640x340+0+460

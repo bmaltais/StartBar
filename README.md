@@ -1,6 +1,6 @@
 <p align="center">
   <picture>
-    <img alt="A tour of StartBar: a preview of a group of windows, an icon's right-click menu, launching an app from the Start menu, the bar's menu with a submenu, the settings window with search and the bar following the colours and edge chosen there, and the Dock on the left in the light colours" src="screenshots/hero.avif" width="100%" />
+    <img alt="A tour of StartBar: two windows snapped side by side from their icons' menus, the Super+Z picker moving one into a quarter and F maximizing it, Show desktop hiding everything and bringing it back, the bar's menu opening the settings window, and the Dock on the left in the light colours with a window preview" src="screenshots/hero.avif" width="100%" />
   </picture>
 </p>
 
@@ -17,8 +17,7 @@
   <a href="#tour">Tour</a> ·
   <a href="#configure">Configure</a> ·
   <a href="#commands">Commands</a> ·
-  <a href="#update-and-remove">Update and remove</a> ·
-  <a href="#contributing">Contributing</a>
+  <a href="docs/README.md">Docs</a>
 </p>
 
 > **Omarchy 4.5:** StartBar is compatible with the windowed mode coming in Omarchy 4.5.
@@ -40,20 +39,20 @@ It shows a taskbar along the bottom of every monitor, or any other edge you choo
 - **Every window.** One icon per open window, across all workspaces and monitors. Click to jump to it.
 - **Pins.** Keep apps in the bar whether or not they are running. Drag to reorder, drag out to unpin.
 - **Grouped windows.** Optionally stack an app's windows into one icon and pick the window from the previews, as on Windows.
-- **Any edge.** Put the bar at the bottom (the default), top, left or right of the screen. On the left and right it is a column, with the running dots beside the icons, above them on the top bar and below them on the bottom one. Menus and previews open on the side facing into the screen, the same distance from the bar as the Start menu is from the edge, as on Windows 11. Choose **Position** in the right-click menu or the settings window.
-- **Extras.** Auto-hide, a clock, a workspace badge over each icon, a transparent bar, an option to reserve the bar's space so maximized windows stop at it, and an option to open each new window on a workspace of its own.
+- **Any edge.** Bottom (the default), top, left or right, as a row or a column. Menus and previews open toward the screen, as on Windows 11.
+- **Extras.** Auto-hide, a clock, workspace badges, a transparent bar, reserved space so maximized windows stop at the bar.
 
 ### The Start menu
 
 <img src="screenshots/start-menu-clip.avif" alt="The Start menu opening from the Start button with pinned apps, recommended apps and folders; typing filters every installed app, the arrow keys move, Escape backs out, and All apps lists them A to Z" width="640">
 
-Search every installed app, a Pinned grid you can reorder, an A-Z list, recently launched apps, your folders, and lock, sign out and power. Bind a key to toggle it, then type to search, use the arrow keys to move and Enter to launch. Escape backs out one step at a time.
+Search every installed app, a Pinned grid you can reorder, an A-Z list, recent apps, your folders, and lock, sign out and power. Bind a key to toggle it, type to search, arrows to move, Enter to launch.
 
 ### Hover previews
 
 <img src="screenshots/preview.png" alt="Hovering a grouped icon shows one thumbnail per window to pick from" width="473">
 
-Live window thumbnails with a close button. Hovering one shows that window, even from behind a maximized one, and moving away puts things back.
+Live thumbnails with a close button, ordered as the windows sit on screen. Hovering one shows that window, even from behind a maximized one; moving away puts things back.
 
 ### Colours
 
@@ -72,9 +71,33 @@ Colours and fonts follow the current Omarchy theme live, or pick a fixed light o
 
 ### Right-click an icon
 
-Each icon has its own menu. A pin with no windows offers the app's actions, the app itself and **Unpin from taskbar**; a running app adds its window actions (Maximize, Full screen, Float, Move to scratchpad), then the app and **Pin to taskbar**, and ends with **Close window** (**Close all windows** for a stack of several).
+Every icon has its own menu: the app's actions, window actions (Maximize, Full screen, Float, Move to monitor, Move to scratchpad), Pin or Unpin, and Close window. With more than one monitor, **Move to monitor** opens a small map of your screens: click one to send the window there ([details](docs/windows-and-monitors.md#move-to-monitor)).
 
 <img src="screenshots/icon-menu-clip.avif" alt="The menu of a running app that is not pinned, with its window actions, Close window, the app and Pin to taskbar, then the menu of a pinned app that is not running, with the app's actions, the app and Unpin from taskbar" width="640">
+
+### Snap layouts
+
+<img src="screenshots/snap-layouts-clip.avif" alt="A window's menu opens with the layout picker; clicking the left half snaps the window there, then the lower right quarter" width="640">
+
+Place a window in a zone of the screen, as in Windows 11: halves, thirds, quarters, a main pane and more. A floating window goes to the zone; tiled windows are reshaped, never floated. Turn on **Snap layouts** in the settings. [Read more](docs/snap-layouts.md).
+
+### The Super+Z picker
+
+<img src="screenshots/super-z-clip.avif" alt="Super+Z opens the picker under the pointer; keys choose a layout, then F maximizes the window" width="640">
+
+The same layouts from the keyboard, under the pointer. Letters act on the window: <kbd>F</kbd> maximizes, <kbd>T</kbd> floats, <kbd>S</kbd> puts it in the scratchpad, and you can give any action the key you like (arrows and <kbd>Ctrl</kbd> chords included) by pressing it in the settings. [Read more](docs/keyboard.md).
+
+### Show desktop
+
+<img src="screenshots/show-desktop-clip.avif" alt="Three windows are hidden by one command and brought back to where they were by the next" width="640">
+
+One key hides every window on every monitor, and the next brings each one back where it was, even if monitors came or went in between. Bind `omarchy-shell io.github.bmaltais.startbar showDesktop`, for example to Super+D. [Read more](docs/windows-and-monitors.md#show-desktop).
+
+### Focus and stacking
+
+<img src="screenshots/focus-clip.avif" alt="The pointer moves over the window behind, which comes to the front, then over the other one" width="640">
+
+Focus can follow the mouse, floating windows can rise when they get focus, and new windows can open on a workspace of their own. [Read more](docs/windows-and-monitors.md#focus-and-stacking).
 
 ## Configure
 
@@ -115,14 +138,16 @@ Every key, its default, and how pinning and dragging behave are in [docs/SETTING
 
 ## Commands
 
-Run these with `omarchy-shell io.github.bmaltais.startbar <command>`, for instance from a key binding:
+StartBar answers commands; you bind them to the keys you like. Run them with `omarchy-shell io.github.bmaltais.startbar <command>`:
 
 | Command | Does |
 |---|---|
 | `startMenu` | Toggles the Start menu on the focused monitor |
-| `closeStartMenu` | Closes it |
-| `settings` | Opens the settings window on the focused monitor |
-| `closeSettings` | Closes it |
+| `showDesktop` | Hides every window; run it again to bring them back |
+| `snapPicker` | Opens the snap picker for the active window (needs **Snap layouts** on) |
+| `settings` | Opens the settings window |
+
+`closeStartMenu`, `closeSettings` and `closeSnapPicker` close the matching one. The picker's own keys and how to change them are in [Keyboard and commands](docs/keyboard.md).
 
 ## Update and remove
 
@@ -136,9 +161,21 @@ Your settings and pins are kept, since they live in `shell.json` and not in the 
 omarchy plugin remove io.github.bmaltais.startbar
 ```
 
+## Documentation
+
+| | |
+|---|---|
+| [Snap layouts](docs/snap-layouts.md) | Layouts, tiled and floating windows, the Super+Z picker |
+| [Windows and monitors](docs/windows-and-monitors.md) | Show desktop, Move to monitor, scratchpad, previews, focus |
+| [Keyboard and commands](docs/keyboard.md) | Every command, the picker's keys, choosing your own |
+| [Settings reference](docs/SETTINGS.md) | Every setting and its default |
+| [Specification](docs/SPEC.md) | Exactly how it behaves |
+
+Everything is indexed in [docs/README.md](docs/README.md).
+
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the development install, the tests and the manual checklist, [docs/testing.md](docs/testing.md) for the test session that runs the plugin in a second desktop your mouse and keyboard cannot reach, and [docs/recording-tours.md](docs/recording-tours.md) for how the animations above are recorded.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development install, the tests and the manual checklist, and [docs/testing.md](docs/testing.md) for the test session that runs the plugin in a second desktop your mouse and keyboard cannot reach.
 
 ## License
 

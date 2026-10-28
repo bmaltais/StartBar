@@ -4,6 +4,8 @@ The agreed behaviour is in [docs/SPEC.md](docs/SPEC.md) and the vocabulary in [C
 
 ## Development install
 
+Clone with `git clone --recurse-submodules` (or run `git submodule update --init` in an existing clone): `scripts/devkit`, the test session and recorder, is a submodule of the shared [omarchy-plugin-devkit](https://github.com/bmaltais/omarchy-plugin-devkit). It is development tooling, so it is not in what `omarchy plugin add` installs; without it `npm run check` still passes, skipping the devkit's rules.
+
 This repository's root is the plugin directory (`manifest.json` at the root), with id `io.github.bmaltais.startbar`.
 
 1. Symlink the checkout into the Omarchy plugins directory:
@@ -41,15 +43,28 @@ The rules live in pure JavaScript modules with no Quickshell imports, so they ru
 | --- | --- |
 | `DockModel.js` | Which Items the Dock shows and in what order: Launch Order, Pins, Placed. It also takes Hyprland's toplevels to Items (`refreshItems`: Launch Order ranks, Windows held back until they have a class, App lookup, what changed) and decides where a drop is stored (`dropPlaced`: a Pin's position for settings, a Window's or Group's in memory). Tests give it plain objects shaped like the toplevels |
 | `DockConfig.js` | Settings: defaults, the effective view of the config entry, and every change to it |
+| `DockBarMenu.js` | The Bar menu: its rows (`barMenuRows`, each with the `setSettings` patch it writes) and the labels that size it and its submenu |
+| `DockSettingsWindow.js` | The settings window's search over `settingsSchema` and whether a field is enabled |
 | `DockInteraction.js` | Reveal and hide (one hold per holder: strip, dock, menus, Start menu, drag), and where a dragged Item lands |
 | `DockGeometry.js` | Where the bar and what stands on it sit on each of the four edges (`layout`: the bar, Reveal Strip, Start button, clock and Items as rectangles; `iconSize`; `slot` and `dots` for an Item's icon and running dots). The QML binds to these instead of choosing per edge |
 | `DockPlacement.js` | Where popups stand for the Dock's edge: a Preview and the Item menu beside their Item, the Bar menu beside the bar, its submenu, the Start menu (`beside`, `barTarget`, `submenu`, `startMenu`, `slide`) |
+| `HyprlandScript.js` | What every Hyprland command is built from: the address check (`normalizedAddress`), the argv shape (`argv`), the cursor:no_warps guard (`NO_WARPS`, `WARPS_BACK`) and `unsetFullscreen`. The `Dock*.js` command modules `.import` it |
 | `DockHyprland.js` | How to ask Hyprland for each thing the Dock wants: focus, raise, close, Window-state rows, Peek. Returns the command; tests run `bash -n` over every script |
+| `HiddenWindows.js` | Windows hidden on a special workspace, and how they come back: the workspace names (`kind`, `isSpecial`), Show desktop's state file (its path, columns, the `place` and `restore` shell functions) shared by `DockShowDesktop.js` and the click path in `DockHyprland.js`. Modules `.import` it; `test/qmlimport.js` lets Node load such files |
+| `DockShowDesktop.js` | Show desktop: the one toggle command that moves every Window to a hidden special workspace and, on the next press, puts back the ones it moved |
+| `DockMonitors.js` | Move to monitor: the command that sends a Window to the workspace a monitor is showing (Omarchy's workspace modes then float or tile it), which monitor a Window is on, and the scaled map of the monitors that `MonitorPicker.qml` draws |
+| `DockSnap.js` | How snap layouts are applied to Hyprland: snap a floating Window to a zone (filling the others if asked), maximize, reshape two or three tiles, swap tiles. Returns the command, like `DockHyprland.js` |
+| `SnapKeys.js` | The Super+Z picker's key chords ("f", "up", "ctrl+m"): the chord a key event makes, a stored chord in canonical form, and its label; `KeyField.qml` records one in the settings window |
 | `DockIcons.js` | Finding an App's icon file when Qt's lookup has missed: the command that searches the icon directories, which file is best, and when to search again |
 | `IconResolver.qml` | The QML side of `DockIcons.js`, one instance shared by the Dock and the Start menu: `source(name)` is Qt's icon path, else a found file, else "" while it searches |
 | `PlainText.js` | What a plain text field does with a key or a paste (`PlainField.qml` draws it): typing, Backspace, Ctrl+U, and the bounded `wl-paste` command |
 | `DockPreview.js` | The hover Preview, Peek and the Preview menu: when a Preview shows and goes, what is peeked, kept or put back, and that the Preview's menu holds it up |
 | `StartMenu.js` | The Start menu: opening and closing, Hover mode, search, selection, Escape, Start Pin reorder |
+| `StartMenuApps.js` | The Start menu's app lists: search results (`filterApps`), the A-Z groups and jump letters, and saved Pins and recents mapped to installed Apps (`catalog`, `resolveApps`) |
+| `StartPlaces.js` | The Places the Start menu lists: the user's XDG folders or a `startPlaces` setting |
+| `StartMenuActions.js` | The rows the Start menu's overlays offer (`overlayRows`), the account's name and the command that opens a Place |
+| `SnapLayouts.js` | Snap layouts: the layouts a Window's picker shows (`layoutsFor`), the Window the Super+Z key means (`windowAt`), and what a picked zone does (`plan`: maximize, reshape tiles, swap tiles or snap a floating Window, with or without filling the other zones). `DockSnap.snapCommand` turns a plan into the command |
+| `PopupDismiss.js` | When the Item menu closes because the pointer left it (the settle time after the grab, entered, the leave timer), and when the snap popup does (`farOutside`) |
 
 Every `Text` in the QML says `textFormat: Text.PlainText`: Qt's default renders anything that looks like HTML, and rich text loads `<img>` files synchronously, so a window title or a pasted string could hang the shell. `test/textFormat.test.js` fails on one that doesn't. [docs/SECURITY.md](docs/SECURITY.md) lists every place outside data reaches the plugin and what bounds it; add a row when you add one.
 
@@ -66,7 +81,8 @@ It is one long file. Search for these names:
 | `focusWindow`, `focusWindowAndWarp`, `runWindowAction`, `closeWindow` | Run what `DockHyprland.js` builds for a click or a menu row |
 | `peekWindow`, `peekRestore`, `peekCommit` | Peek: run the scripts (`DockHyprland.js`) that show a Window and put things back (`DockPreview.js` decides when) |
 | `previewState`, `previewPopup` | The state, timers and effects of `DockPreview.js`, and the Preview itself with its thumbnails |
-| `contextMenu` | The Item menu, and the Preview menu (`previewWindowId`) |
+| `contextMenu` | The Item menu, and the Preview menu (`previewWindowId`); `sendDismiss` runs `PopupDismiss.js` |
+| `applySnap`, `snapPopup`, `activeAsk` | Snap layouts: run what `SnapLayouts.plan` decides; the Super+Z card and the query for the active Window it opens for |
 | `barMenu` | The Bar menu |
 | `dockState` | Holds what `DockModel.refreshItems` returns and calls it on every Hyprland event; `placeItem` stores a drop through `DockModel.dropPlaced` |
 | `dockRow` | The Items, drag and drop |
@@ -82,16 +98,18 @@ runs everything that can be checked without the shell:
 
 - the tests above, which also keep the docs in step with the code: every setting has a row in `docs/SETTINGS.md`, every `SPEC.md "…"` section a comment cites exists, `manifest.json` and `package.json` agree on the version, and the Dock and what rises from it take their colours from the colour scheme instead of the theme directly;
 - `omarchy plugin validate .`;
-- `npm run lint:sh`, which syntax-checks every shell script (`scripts/`, the session's, the tours', the hook) and runs `shellcheck` over them when it is installed, with the rules in `.shellcheckrc`; and `scripts/lint-rules.sh`, the project rules no linter knows (see its header);
-- `npm run lint:qml`, which fails on any `qmllint` warning not already listed in `scripts/qmllint-baseline.txt`. `qmllint` can't see Quickshell's types, so the QML carries standing warnings; a new one is usually a misspelt or removed id. Accept a legitimate new one with `npm run lint:qml -- --update`.
+- the shell scripts (`bash -n`, and `shellcheck` when it is installed, with the rules in `.shellcheckrc`) and the project rules no linter knows (`scripts/devkit/bin/lint`): both are steps of the devkit's `scripts/check`, which `npm run check` runs;
+- `npm run lint:qml`, which fails on any `qmllint` warning not already listed in `scripts/qmllint-baseline.txt`. `qmllint` can't see Quickshell's types, so the QML carries standing warnings; a new one is usually a misspelt or removed id. Accept a legitimate new one with `npm run lint:qml -- --update` (it refuses to baseline a real bug such as a property override).
 
 Run it on every commit with the pre-commit hook:
 
 ```sh
-git config core.hooksPath .githooks
+git config core.hooksPath .githooks   # or: scripts/devkit/bin/pre-commit --install
 ```
 
-Pull requests run `npm test`, shellcheck and the project rules on GitHub; the manifest and QML checks need Omarchy and Qt, so they only run locally.
+The hook also runs `scripts/check-file-size.sh`, which rejects a staged source file over ~5000 tokens (bytes/4) and says how to split it. Files already over are listed in `.file-size-guard-ignore`; `scripts/check-file-size.sh --all` audits every tracked file.
+
+Pull requests run the devkit's `check` on GitHub (its shell, rules and `npm test` steps); the manifest and QML checks need Omarchy and Qt, so they only run locally.
 
 ### Trying a change: the test session
 
@@ -109,7 +127,7 @@ scripts/dev down
 
 `npm run smoke` does the standing part for you: it starts the session, fails if the plugin logs anything, and screenshots the Dock, the Start menu and the settings window in each colour scheme (`--position`, `--type`, `--out`). Look at the screenshots: the script only knows the plugin loaded quietly. It cannot hover or drag; use `scripts/dev` for a Preview, the Item menu and the Bar menu. Drag, a second monitor and anything it could not reach still need the checklist below, on a real desktop.
 
-To see a change on your own shell, `scripts/reload` restarts it with this checkout. `scripts/pointer.sh` (a real pointer through `ydotool`, `docs/hyprland-notes.md` "Moving the pointer") and `scripts/try-setting.sh` act on your real desktop, so use them only when you mean to.
+To see a change on your own shell, `scripts/reload` restarts it with this checkout. `scripts/pointer` (a real pointer through `ydotool`, `docs/hyprland-notes.md` "Moving the pointer") and `scripts/try-setting` act on your real desktop, so use them only when you mean to.
 
 ### Retaking screenshots and animations
 

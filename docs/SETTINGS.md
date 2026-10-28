@@ -28,7 +28,7 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 | `alignment` | `left` | `left` or `center` for the Start button and icons |
 | `position` | `bottom` | `bottom`, `top`, `left` or `right`: the screen edge the bar sits on |
 | `autoHide` | `false` | Hide the bar until the pointer rests on the bar's screen edge |
-| `reserveSpace` | `false` | With auto-hide off: windows (maximized ones included) stop at the Dock instead of running under it |
+| `reserveSpace` | `true` | With auto-hide off: windows (maximized ones included) stop at the Dock instead of running under it |
 | `revealDelayMs` | `200` | With auto-hide: how long the pointer must rest on the Reveal Strip before the bar shows, in ms |
 | `hideDelayMs` | `300` | With auto-hide: how long after the pointer leaves the bar before it hides, in ms |
 | `iconSize` | `48` | Largest icon size in px; icons are also limited to `barHeight - 20` and shrink further to fit when there are many windows |
@@ -45,6 +45,21 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 | `startIcon` | `grid` | `grid` (drawn in QML), `omarchy`, `arch`, `linux`, an icon-theme name, or an absolute image path |
 | `showClock` | `false` | Clock at the right end |
 | `hideOmarchyDock` | `true` | Turn off Omarchy's own dock (the `omarchy.dock` plugin, shown on floating workspaces). Switching it on disables the plugin and switching it off enables it again; while it is off, a dock you disabled yourself stays disabled |
+| `focusFollowsMouse` | `false` | Hovering a Window gives it keyboard focus without a click (Hyprland's `input:follow_mouse`, with `float_switch_override_focus` 2 so it also works between floating Windows). Off leaves Omarchy's own value alone; switching it off after it was on sets it back to 0 until the next config reload |
+| `raiseOnFocus` | `false` | A floating Window that takes focus, by hover or any other way, is raised above the other floating Windows. Tiled Windows are left alone, and nothing is raised while a Preview peek is showing a Window |
+| `snapLayouts` | `false` | The Item menu of a Window Item, and the Preview menu of a Window, start with eight layouts (halves, two stacked, thirds, quarters, a main pane with two beside it, one on top with two below it, 2/3 and 1/3 side by side, and a full one that maximizes). Choosing a zone resizes and moves that Window into it (a tiled Window is never floated: with two or three tiles it sees the shapes they can take and a click reshapes the workspace, with more it sees the tiles and a click swaps with one). A tiled Window's menu also gets Move left, right, up and down |
+| `snapFillOthers` | `false` | With Snap layouts on: choosing a zone also places the workspace's other windows, most recently used first, in the layout's remaining zones. They become floating (Tile puts one back) |
+| `snapKeyMaximize` | `f` | With Snap layouts on, a key pressed in the Super+Z picker acts on the window and closes the picker: Maximize (toggle). In the settings window click the field and press the key, with any Ctrl, Alt, Shift or Super; Backspace clears it, Escape cancels. It is stored as a chord (`f`, `up`, `ctrl+m`, `ctrl+shift+f5`). A bound key wins over the picker's own use of it (digits, arrows, `m`); Escape cannot be bound. If two actions share a chord the first listed here keeps it |
+| `snapKeyFullscreen` | `x` | Super+Z key: Full screen (toggle) |
+| `snapKeyFloat` | `t` | Super+Z key: Float or tile the window |
+| `snapKeyCenter` | `c` | Super+Z key: Center (a floating window only) |
+| `snapKeyPin` | `p` | Super+Z key: Pin on top (a floating window only) |
+| `snapKeyScratchpad` | `s` | Super+Z key: Move to scratchpad |
+| `snapKeyMoveLeft` | `h` | Super+Z key: Move left (a tiled window only) |
+| `snapKeyMoveDown` | `j` | Super+Z key: Move down (a tiled window only) |
+| `snapKeyMoveUp` | `k` | Super+Z key: Move up (a tiled window only) |
+| `snapKeyMoveRight` | `l` | Super+Z key: Move right (a tiled window only) |
+| `snapKeyClose` | `(none)` | Super+Z key: Close the window; unset by default |
 | `newWindowWorkspace` | `off` | `off`, `normal`, `maximized` or `fullscreen`. Otherwise a Window that opens tiled beside other Windows moves to the lowest-numbered empty workspace and is shown that way there (`normal` leaves its state alone). Floating Windows Omarchy did not float itself, and full screen ones, are left alone. A leftover `true` reads as `maximized` |
 | `showPreviews` | `true` | Hover thumbnails with a close button |
 | `previewSlide` | `true` | The hover preview rises out of the Dock edge when it appears; it still disappears at once |

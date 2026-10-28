@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { filterApps } = require("../StartMenu.js");
+const { filterApps } = require("../StartMenuApps.js");
 
 const apps = [
   { id: "org.gnome.Calculator", name: "Calculator", genericName: "", keywords: ["math"] },
@@ -35,7 +35,7 @@ test("apps with noDisplay never appear, and no match gives an empty list", () =>
 });
 
 
-const { effectivePlaces } = require("../StartMenu.js");
+const { effectivePlaces } = require("../StartPlaces.js");
 
 const userDirs = [
   "# comment",

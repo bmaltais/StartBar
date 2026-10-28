@@ -1,7 +1,9 @@
+require("./qmlimport");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
 const H = require("../DockHyprland.js");
+const Snap = require("../DockSnap.js");
 const { windowActions } = require("../DockModel.js");
 
 const ADDR = "0x56538020a4f0";
@@ -17,6 +19,12 @@ const all = {
   peekCommit: H.peekCommit(),
   rescueWindows: H.rescueWindows([ADDR, "0xabc"]),
   glassRule: H.glassRule(),
+  snapWindow: Snap.snapWindow(ADDR, { x: 0, y: 0, w: 0.5, h: 1 }),
+  snapWindowFill: Snap.snapWindow(ADDR, { x: 0, y: 0, w: 0.5, h: 1 }, [{ x: 0.5, y: 0, w: 0.5, h: 1 }]),
+  maximizeWindow: Snap.maximizeWindow(ADDR),
+  swapTiles: Snap.swapTiles(ADDR, "0xabc"),
+  reshapeTiles: Snap.reshapeTiles(ADDR, "H", { x: 0, y: 0, w: 0.5, h: 1 }),
+  reshapeTilesThree: Snap.reshapeTiles(ADDR, "HV", { x: 0, y: 0, w: 0.5, h: 1 }),
   openOnOwnWorkspace: H.openOnOwnWorkspace(ADDR, "maximized"),
   openOnOwnWorkspaceFullscreen: H.openOnOwnWorkspace(ADDR, "fullscreen"),
   openOnOwnWorkspaceNormal: H.openOnOwnWorkspace(ADDR, "normal"),
@@ -70,7 +78,7 @@ test("every Window-state row has a dispatch aimed by address, and no others exis
     { fullscreen: 0, floating: false, workspace: "1" },
     { fullscreen: 1, floating: true, pinned: true, workspace: "1" },
     { fullscreen: 2, floating: true, workspace: "special:scratchpad" },
-  ]) for (const a of windowActions(window)) ids.add(a.id);
+  ]) for (const a of windowActions(window, { move: true })) ids.add(a.id);
   assert.deepEqual([...ids].sort(), [...H.windowActionIds].sort());
   for (const id of ids) {
     const argv = H.windowAction(id, ADDR);
@@ -87,8 +95,8 @@ test("close dispatches window.close at the address argument", () => {
 
 test("peek scripts share one lock and one state file", () => {
   for (const name of ["peekWindow", "peekRestore", "peekCommit"]) {
-    assert.match(scriptOf(all[name]), /startbar-peek\.lock/, name);
-    assert.match(scriptOf(all[name]), /startbar-peek"/, name);
+    assert.match(scriptOf(all[name]), /startbar-peek-\$\{HYPRLAND_INSTANCE_SIGNATURE:-0\}\.lock/, name);
+    assert.match(scriptOf(all[name]), /startbar-peek-\$\{HYPRLAND_INSTANCE_SIGNATURE:-0\}"/, name);
   }
 });
 
@@ -189,4 +197,24 @@ test("opening a Preview rescues each of its Windows that is outside every monito
   assert.deepEqual(centers(dispatches).map((d) => d.match(/address:(\w+)/)[1]), [ADDR]);
   assert.equal(H.rescueWindows([]), null);
   assert.equal(H.rescueWindows(["nope"]), null);
+});
+
+const Script = require("../HyprlandScript.js");
+
+test("argv takes no argument, one or a list", () => {
+  assert.deepEqual(Script.argv("echo"), ["bash", "-lc", "echo", "bash"]);
+  assert.deepEqual(Script.argv("echo", "a"), ["bash", "-lc", "echo", "bash", "a"]);
+  assert.deepEqual(Script.argv("echo", ["a", "b"]), ["bash", "-lc", "echo", "bash", "a", "b"]);
+});
+
+test("normalizedAddress takes bare or 0x hex and nothing else", () => {
+  for (const [input, want] of [["56538020a4f0", "0x56538020a4f0"], ["0xAB", "0xAB"], ["0x", null], ["", null], ["xyz", null], ["0x12; rm -rf /", null], [null, null], [12, null]]) {
+    assert.equal(Script.normalizedAddress(input), want, JSON.stringify(input));
+  }
+});
+
+test("unsetFullscreen is valid shell for the given window selector", () => {
+  const fragment = Script.unsetFullscreen('window = \\"address:$a\\"');
+  assert.match(fragment, /action = \\"unset\\", window = \\"address:\$a\\" \}\)/);
+  assert.equal(spawnSync("bash", ["-n"], { input: fragment }).status, 0);
 });

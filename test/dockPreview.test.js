@@ -259,3 +259,29 @@ test("windowIds returns the previous array while the set of Windows is unchanged
   assert.equal(DP.windowIds(prev, [win("1"), win("2")]), prev);
   assert.deepEqual(DP.windowIds(prev, [win("1")]), ["1"]);
 });
+
+const at = (id, x, y, w = 100, h = 100) => ({ id, rect: { x, y, w, h } });
+
+test("windowIds orders the thumbnails left to right across monitors, then top to bottom", () => {
+  // Monitors at x = 0, 1920 and 3840: a window on the right monitor is listed after one on the left.
+  const windows = [at("right", 4000, 0), at("left", 100, 0), at("middle", 2000, 0)];
+  assert.deepEqual(DP.windowIds([], windows), ["left", "middle", "right"]);
+  // Side by side on one monitor, then stacked windows by their top.
+  assert.deepEqual(DP.windowIds([], [at("b", 960, 0, 960, 1080), at("a", 0, 0, 960, 1080)]), ["a", "b"]);
+  assert.deepEqual(DP.windowIds([], [at("low", 0, 540, 960, 540), at("high", 0, 0, 960, 540)]), ["high", "low"]);
+});
+
+test("windowIds goes by the middle of a window, not its edge", () => {
+  // A wide window starting left of a narrow one, but centred to its right.
+  assert.deepEqual(DP.windowIds([], [at("wide", 0, 0, 3000, 100), at("narrow", 500, 0, 100, 100)]), ["narrow", "wide"]);
+});
+
+test("windowIds puts a window with no known place last and keeps ties in the Dock's order", () => {
+  const windows = [{ id: "unknown" }, at("b", 0, 0), at("a", 0, 0), { id: "unknown2", rect: null }];
+  assert.deepEqual(DP.windowIds([], windows), ["b", "a", "unknown", "unknown2"]);
+});
+
+test("windowIds keeps returning the previous array while the sorted order is unchanged", () => {
+  const prev = ["l", "r"];
+  assert.equal(DP.windowIds(prev, [at("r", 2000, 0), at("l", 0, 0)]), prev);
+});

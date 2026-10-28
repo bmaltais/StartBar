@@ -1,3 +1,4 @@
+require("./qmlimport");
 // Keeps the docs and the code in step where a mismatch is mechanical:
 // settings without a row in the reference, comments citing a spec section
 // that no longer exists, version files that disagree, and theme colours used
@@ -14,6 +15,14 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const sourceFiles = () =>
   fs.readdirSync(root).filter((name) => /\.(qml|js)$/.test(name))
     .concat(fs.readdirSync(path.join(root, "test")).filter((name) => name !== "docs.test.js").map((name) => "test/" + name));
+
+test("every JS module has a row in the module table of CONTRIBUTING.md", () => {
+  const contributing = read("CONTRIBUTING.md");
+  const modules = fs.readdirSync(root).filter((name) => /\.js$/.test(name));
+  assert.ok(modules.length > 0);
+  const missing = modules.filter((name) => !contributing.includes("| `" + name + "` |"));
+  assert.deepEqual(missing, [], "add these to the table under CONTRIBUTING.md \"Tests\"");
+});
 
 test("every setting in the settings window has a row in docs/SETTINGS.md", () => {
   const reference = read("docs/SETTINGS.md");

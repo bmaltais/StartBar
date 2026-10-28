@@ -1,3 +1,4 @@
+require("./qmlimport");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
@@ -28,7 +29,7 @@ test("bar defaults: always visible, left-aligned, theme colours, built-in Start 
   assert.deepEqual(effectiveTaskbar({}), {
     alignment: "left",
     position: "bottom",
-    reserveSpace: false,
+    reserveSpace: true,
     edgeSpacing: 12,
     colorScheme: "theme",
     autoHide: false,
@@ -47,8 +48,46 @@ test("bar defaults: always visible, left-aligned, theme colours, built-in Start 
     groupWindows: true,
     startHoverOpen: false,
     hideOmarchyDock: true,
+    focusFollowsMouse: false,
+    raiseOnFocus: false,
+    snapLayouts: false,
+    snapFillOthers: false,
     newWindowWorkspace: "off",
+    snapKeyMaximize: "f",
+    snapKeyFullscreen: "x",
+    snapKeyFloat: "t",
+    snapKeyCenter: "c",
+    snapKeyPin: "p",
+    snapKeyScratchpad: "s",
+    snapKeyMoveLeft: "h",
+    snapKeyMoveDown: "j",
+    snapKeyMoveUp: "k",
+    snapKeyMoveRight: "l",
+    snapKeyClose: "",
   });
+});
+
+test("the Super+Z keys take a chord, blank for none, and fall back on an unusable one", () => {
+  const { effectiveView } = require("../DockConfig.js");
+  const { snapKeyMap } = require("../SnapKeys.js");
+  const bar = effectiveView({ snapKeyMaximize: "G", snapKeyFloat: "", snapKeyPin: "ctrl+nope", snapKeyCenter: "Shift+Ctrl+M", snapKeyClose: "up", snapKeyFullscreen: "ab" }).taskbar;
+  assert.equal(bar.snapKeyMaximize, "g");
+  assert.equal(bar.snapKeyFloat, "");
+  assert.equal(bar.snapKeyPin, "p");
+  assert.equal(bar.snapKeyCenter, "ctrl+shift+m");
+  assert.equal(bar.snapKeyFullscreen, "x");
+  const map = snapKeyMap(bar);
+  assert.equal(map.g, "maximize");
+  assert.equal(map.up, "close");
+  assert.equal(map["ctrl+shift+m"], "center");
+  assert.equal(map.t, undefined);
+});
+
+test("two actions on one chord: the first listed keeps it", () => {
+  const { effectiveView } = require("../DockConfig.js");
+  const { snapKeyMap } = require("../SnapKeys.js");
+  const map = snapKeyMap(effectiveView({ snapKeyFloat: "f" }).taskbar);
+  assert.equal(map.f, "maximize");
 });
 
 test("the bar honours valid values and autoHide", () => {
@@ -129,7 +168,7 @@ test("resolveStartIcon: grid, an absolute image path, or an icon-theme name", ()
   assert.deepEqual(resolveStartIcon(""), { kind: "grid" });
 });
 
-const { barMenuRows, barMenuLabels, barSubmenuLabels } = require("../DockConfig.js");
+const { barMenuRows, barMenuLabels, barSubmenuLabels } = require("../DockBarMenu.js");
 
 // Every row, sections' children included.
 const everyRow = (rows) => rows.flatMap((r) => [r, ...(r.children || [])]);
@@ -217,7 +256,7 @@ test("barMenuLabels sizes the menu, barSubmenuLabels its submenus", () => {
   assert.equal(sub.includes("Colors"), false);
 });
 
-const { longestLabel } = require("../DockConfig.js");
+const { longestLabel } = require("../DockBarMenu.js");
 
 test("longestLabel picks the longest label from rows or strings, for sizing a menu", () => {
   assert.equal(longestLabel([{ label: "Clock" }, { label: "Pointer follows preview click" }, { label: "Auto-hide" }]), "Pointer follows preview click");

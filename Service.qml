@@ -16,12 +16,20 @@ import qs.Commons
 import qs.Ui
 import "DockModel.js" as DockModel
 import "DockConfig.js" as DockConfig
-import "StartMenu.js" as StartMenu
+import "SnapKeys.js" as SnapKeys
+import "DockBarMenu.js" as DockBarMenu
+import "DockSettingsWindow.js" as DockSettingsWindow
+import "StartPlaces.js" as StartPlaces
 import "DockInteraction.js" as DockInteraction
 import "DockGeometry.js" as DockGeometry
 import "DockPlacement.js" as DockPlacement
 import "DockPreview.js" as DockPreview
 import "DockHyprland.js" as DockHyprland
+import "DockSnap.js" as DockSnap
+import "DockMonitors.js" as DockMonitors
+import "DockShowDesktop.js" as DockShowDesktop
+import "SnapLayouts.js" as SnapLayoutData
+import "PopupDismiss.js" as PopupDismiss
 
 Item {
   id: root
@@ -163,6 +171,7 @@ Item {
       dockSettings.startPlaces = view.startPlaces
       dockSettings.values = view.values
       dockSettings.syncOmarchyDock(view.taskbar.hideOmarchyDock)
+      dockSettings.syncFollowMouse(view.taskbar.focusFollowsMouse)
       dockSettings.loaded = true
     }
 
@@ -175,6 +184,17 @@ Item {
       dockSettings.omarchyDockHidden = hide
       if (before === hide || (before === null && !hide)) return
       Quickshell.execDetached(["omarchy-shell", "shell", "setPluginEnabled", "omarchy.dock", hide ? "false" : "true"])
+    }
+
+    // docs/SPEC.md "Focus follows mouse": focusFollowsMouse (off by default)
+    // sets Hyprland's input:follow_mouse. Off leaves Omarchy's own value alone;
+    // it only writes 0 when the switch goes from on to off.
+    property var followMouseOn: null
+    function syncFollowMouse(on) {
+      var before = dockSettings.followMouseOn
+      dockSettings.followMouseOn = on
+      if (before === on || (before === null && !on)) return
+      Quickshell.execDetached(DockHyprland.followMouse(on))
     }
 
     function apply(intent) {
@@ -283,10 +303,18 @@ Item {
   Connections {
     target: Hyprland
     function onRawEvent(event) {
-      if (event.name === "configreloaded") Quickshell.execDetached(DockHyprland.glassRule())
+      if (event.name === "configreloaded") {
+        Quickshell.execDetached(DockHyprland.glassRule())
+        if (dockSettings.followMouseOn) Quickshell.execDetached(DockHyprland.followMouse(true))
+      }
       // An App started any other way (Super+Space, a Pin, a terminal) is
       // still a recently launched App: openwindow data is
       // "address,workspace,class,title".
+      if (event.name === "activewindowv2" && root.taskbar && root.taskbar.raiseOnFocus
+          && !peekRunner.running && root.peekQueue.length === 0) {
+        let raise = DockHyprland.raiseWindow(event.data)
+        if (raise) Quickshell.execDetached(raise)
+      }
       if (event.name === "openwindow") {
         let opened = DockModel.openedWindow(event.data)
         let app = opened.class ? root.resolveApp({ class: opened.class }) : null
@@ -448,6 +476,22 @@ Item {
 
   // A Window-state row of the context menu (DockModel.windowActions has the
   // ids and labels, DockHyprland.windowAction the dispatch).
+  // The monitors as plain data, for the "Move to monitor" map.
+  readonly property var monitorList: {
+    var list = []
+    for (let i = 0; i < Quickshell.screens.length; i++) {
+      let s = Quickshell.screens[i]
+      list.push({ name: s.name, x: s.x, y: s.y, width: s.width, height: s.height })
+    }
+    return list
+  }
+
+  // Move to monitor (docs/SPEC.md "Input"): onto the workspace that monitor shows.
+  function moveToMonitor(address, name) {
+    var command = DockMonitors.moveToMonitor(address, name)
+    if (command) Quickshell.execDetached(command)
+  }
+
   function runWindowAction(id, address) {
     var command = DockHyprland.windowAction(id, address)
     if (command) Quickshell.execDetached(command)
@@ -591,6 +635,61 @@ Item {
     return null
   }
 
+  // Snap layouts (docs/SPEC.md "Snap layouts"), shared by the Item and Preview
+  // menus and the Super+Z popup. SnapLayouts.js decides what a Window is offered
+  // and what a pick does; this only runs the result.
+  function applySnap(win, layout, zone) {
+    var command = DockSnap.snapCommand(SnapLayoutData.plan(win, layout, zone, root.taskbar.snapFillOthers))
+    if (command) Quickshell.execDetached(command)
+  }
+
+  // A chord pressed in the Super+Z picker (the snapKey* settings): runs its action
+  // on the Window when that Window offers it (DockModel.windowActions: Center is
+  // for a floating one, Move left for a tiled one). True when it did.
+  function runSnapKey(win, chord) {
+    var action = chord ? SnapKeys.snapKeyMap(root.taskbar)[chord] : null
+    if (!action || !win) return false
+    if (action === "close") { root.closeWindow(win.id); return true }
+    var offered = DockModel.windowActions(win, { move: true, monitors: false })
+    for (let i = 0; i < offered.length; i++) {
+      if (offered[i].id === action) { root.runWindowAction(action, win.id); return true }
+    }
+    return false
+  }
+
+  // Asks Hyprland which Window is active (Quickshell's own idea of it is empty
+  // until the first focus change after a restart), then opens the popup for it.
+  function toggleSnapPicker() {
+    if (snapPopup.wanted) { snapPopup.wanted = false; return }
+    if (!root.taskbar || !root.taskbar.snapLayouts || activeAsk.running) return
+    activeAsk.running = true
+  }
+
+  Process {
+    id: activeAsk
+    // "ADDRESS X Y": the active Window and where the pointer is.
+    command: ["bash", "-lc", "echo \"$(hyprctl -j activewindow | jq -r '.address // empty') "
+      + "$(hyprctl -j cursorpos | jq -r '\"\\(.x | floor) \\(.y | floor)\"')\""]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var parts = this.text.trim().split(/\s+/)
+        var win = SnapLayoutData.windowAt(dockState.items, parts[0])
+        // With nothing to snap to (a lone tiled Window), the card still opens for
+        // its "Move to monitor" row when there is more than one monitor.
+        if (!win || (SnapLayoutData.layoutsFor(dockState.items, win).length === 0 && root.monitorList.length < 2)) return
+        snapPopup.target = win
+        snapPopup.popupScreen = root.focusedScreen()
+        var scr = snapPopup.popupScreen
+        // Where the pointer is on that monitor; unknown puts the card in the middle.
+        snapPopup.pointerX = parts.length >= 3 && scr ? Number(parts[1]) - scr.x : -1
+        snapPopup.pointerY = parts.length >= 3 && scr ? Number(parts[2]) - scr.y : -1
+        snapPopup.wanted = true
+        // The card has nothing else to show then: open the map at once.
+        snapPopup.monitorsOpen = SnapLayoutData.layoutsFor(dockState.items, win).length === 0
+      }
+    }
+  }
+
   // Asked (by IPC) to toggle or close the Start menu on one monitor; each
   // monitor's panel owns a menu and answers only for its own screen.
   signal startMenuRequested(string screenName, string action)
@@ -613,6 +712,12 @@ Item {
     // For a Super-key binding: `omarchy-shell io.github.bmaltais.startbar startMenu`.
     function startMenu(): void { root.startMenuRequested(root.focusedScreenName(), "toggle") }
     function closeStartMenu(): void { root.startMenuRequested(root.focusedScreenName(), "close") }
+    // For a key binding: the snap layouts of the active Window, centred on the focused monitor.
+    function snapPicker(): void { root.toggleSnapPicker() }
+    function closeSnapPicker(): void { snapPopup.wanted = false }
+    // For a key binding such as Super+D: hide every Window on every monitor, or
+    // bring back the ones the last press hid.
+    function showDesktop(): void { Quickshell.execDetached(DockShowDesktop.showDesktop()) }
     // Where the Dock's Items and any open menu are on the focused monitor, as
     // JSON (see `layout` in the panel). For the scripts that drive the pointer.
     function layout(): string {
@@ -626,6 +731,255 @@ Item {
     }
   }
 
+  // The snap picker of the active Window on its own (IPC snapPicker, bound to a
+  // key): a centred card on the focused monitor. Digits choose a layout, the
+  // arrows move through its zones and rows, Return applies, Escape or a click
+  // outside closes.
+  PanelWindow {
+    id: snapPopup
+
+    property bool wanted: false
+    property var target: null
+    property var popupScreen: null
+    property real pointerX: -1
+    property real pointerY: -1
+    // "Move to monitor": the flyout with the map of the monitors, opened by hovering
+    // the row under the layouts (or by M), closed when the popup goes.
+    property bool monitorsOpen: false
+    readonly property bool monitorRow: root.monitorList.length > 1
+    readonly property bool hasLayouts: snapPopup.layouts.length > 0
+    readonly property var layouts: SnapLayoutData.layoutsFor(dockState.items, snapPopup.target)
+
+    screen: snapPopup.popupScreen
+    visible: snapPopup.wanted && !!snapPopup.target && !!snapPopup.popupScreen
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-startbar-snap"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+    exclusionMode: ExclusionMode.Ignore
+    anchors.left: true
+    anchors.right: true
+    anchors.top: true
+    anchors.bottom: true
+
+    onVisibleChanged: {
+      if (snapPopup.visible) {
+        popupSnapView.kbLayout = -1
+        snapKeys.forceActiveFocus()
+      } else {
+        snapPopup.monitorsOpen = false
+        popupMonitorPicker.kbName = ""
+      }
+    }
+
+    MouseArea {
+      anchors.fill: parent
+      onClicked: snapPopup.wanted = false
+    }
+
+    // The card goes away when the pointer moves off it: further than this from
+    // its edge. Only a moving pointer counts, so a pointer left where it was
+    // (just above the card, which opens below it) does not close it.
+    HoverHandler {
+      onPointChanged: {
+        var card = { x: snapCard.x, y: snapCard.y, width: snapCard.width, height: snapCard.height }
+        if (PopupDismiss.farOutside(card, point.position, Style.space(48))) snapPopup.wanted = false
+      }
+    }
+
+    RectangularShadow {
+      anchors.fill: snapCard
+      radius: snapCard.radius
+      blur: root.menuShadow
+      offset.y: Style.space(4)
+      color: Qt.rgba(0, 0, 0, 0.6)
+    }
+
+    Rectangle {
+      id: snapCard
+      // Under the pointer, centred on it across and clamped to the monitor; above
+      // it when there is no room below. In the middle when the pointer is unknown.
+      readonly property real gap: Style.space(8)
+      readonly property bool placed: snapPopup.pointerX >= 0 && snapPopup.pointerY >= 0
+      x: placed ? Math.max(gap, Math.min(snapPopup.width - width - gap, snapPopup.pointerX - width / 2))
+                : (snapPopup.width - width) / 2
+      // Below the pointer when even the card with its monitor map open fits there,
+      // so opening the map never moves the row under the pointer; above it, the
+      // card's top stays put and the map grows downwards.
+      readonly property bool below: snapPopup.pointerY + gap + snapCard.fullHeight <= snapPopup.height - gap
+      y: placed ? Math.min(below ? snapPopup.pointerY + gap : Math.max(gap, snapPopup.pointerY - gap - snapCard.collapsedHeight),
+                           snapPopup.height - gap - height)
+                : (snapPopup.height - height) / 2
+      width: Style.space(190)
+      // The layouts and, with more than one monitor, the row; open, the map under it.
+      readonly property real collapsedHeight: root.menuPad * 2 + (snapPopup.hasLayouts ? popupSnapView.implicitHeight : 0)
+        + (snapPopup.monitorRow ? (snapPopup.hasLayouts ? root.menuPad * 2 + 1 : 0) + root.menuRowHeight : 0)
+      readonly property real mapHeight: snapPopup.monitorRow ? root.menuPad + popupMonitorPicker.implicitHeight : 0
+      readonly property real fullHeight: snapCard.collapsedHeight + snapCard.mapHeight
+      height: snapPopup.monitorsOpen ? snapCard.fullHeight : snapCard.collapsedHeight
+      radius: root.menuRadius
+      color: root.colPopupBackground
+      border.width: Style.normalBorderWidth
+      border.color: root.colHairline
+
+      // Clicks on the card's own padding must not reach the closing area behind.
+      MouseArea { anchors.fill: parent }
+
+      Item {
+        id: snapKeys
+        anchors.fill: parent
+        focus: true
+        Keys.onEscapePressed: {
+          if (snapPopup.monitorsOpen) snapPopup.monitorsOpen = false
+          else snapPopup.wanted = false
+        }
+        Keys.onPressed: function (event) {
+          var k = event.key
+          // A key bound in the settings (snapKey*) comes first, so it may take over
+          // a key the picker would use otherwise (an arrow, a digit, M).
+          if (root.runSnapKey(snapPopup.target, SnapKeys.chordOf(k, event.modifiers))) {
+            snapPopup.wanted = false
+            event.accepted = true
+            return
+          }
+          // M opens the monitor map; then Left and Right choose a monitor and
+          // Return or Space sends the Window there.
+          if (k === Qt.Key_M && snapPopup.monitorRow) {
+            snapPopup.monitorsOpen = !snapPopup.monitorsOpen
+            if (snapPopup.monitorsOpen) popupMonitorPicker.step(1)
+          } else if (snapPopup.monitorsOpen && (k === Qt.Key_Left || k === Qt.Key_Right || k === Qt.Key_Up || k === Qt.Key_Down)) {
+            popupMonitorPicker.step(k === Qt.Key_Left || k === Qt.Key_Up ? -1 : 1)
+          } else if (snapPopup.monitorsOpen && (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space)) popupMonitorPicker.pickSelected()
+          else if (k >= Qt.Key_1 && k <= Qt.Key_9) popupSnapView.selectLayout(k - Qt.Key_1)
+          else if (k === Qt.Key_Left) popupSnapView.stepZone(-1)
+          else if (k === Qt.Key_Right) popupSnapView.stepZone(1)
+          else if (k === Qt.Key_Up) popupSnapView.stepRow(-1)
+          else if (k === Qt.Key_Down) popupSnapView.stepRow(1)
+          else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) popupSnapView.pickSelected()
+          else return
+          event.accepted = true
+        }
+      }
+
+      SnapLayouts {
+        id: popupSnapView
+        layouts: snapPopup.layouts
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.topMargin: root.menuPad
+        fg: root.colPopupText
+        accent: root.colAccent
+        hairline: root.colHairline
+        onPick: function (zone, layout) {
+          var target = snapPopup.target
+          snapPopup.wanted = false
+          root.applySnap(target, layout, zone)
+        }
+
+        // Moving onto the layouts puts the monitor map away.
+        HoverHandler {
+          onHoveredChanged: if (hovered) snapPopup.monitorsOpen = false
+        }
+      }
+
+      // docs/SPEC.md "Snap layouts": the Move to monitor row under the layouts; hovering it
+      // (or M) opens the map of the monitors beside the card.
+      Rectangle {
+        id: monitorSep
+        visible: snapPopup.monitorRow && snapPopup.hasLayouts
+        anchors.top: popupSnapView.bottom
+        anchors.topMargin: root.menuPad
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: root.menuPad
+        anchors.rightMargin: root.menuPad
+        height: 1
+        color: root.colHairline
+      }
+
+      Rectangle {
+        id: monitorRowBody
+        visible: snapPopup.monitorRow
+        anchors.top: snapPopup.hasLayouts ? monitorSep.bottom : parent.top
+        anchors.topMargin: root.menuPad
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: root.menuPad
+        anchors.rightMargin: root.menuPad
+        height: root.menuRowHeight
+        radius: root.menuRowRadius
+        color: snapPopup.monitorsOpen || monitorRowMouse.containsMouse
+          ? Style.hoverFillFor(root.colForeground, root.colAccent) : "transparent"
+
+        Text {
+          textFormat: Text.PlainText
+          anchors.left: parent.left
+          anchors.leftMargin: Style.space(12)
+          anchors.verticalCenter: parent.verticalCenter
+          text: "Move to monitor"
+          color: root.colPopupText
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          anchors.right: parent.right
+          anchors.rightMargin: Style.space(10)
+          anchors.verticalCenter: parent.verticalCenter
+          text: "\u203a"
+          color: root.colPopupText
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+        }
+
+        MouseArea {
+          id: monitorRowMouse
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onEntered: snapPopup.monitorsOpen = true
+          onClicked: snapPopup.monitorsOpen = true
+        }
+      }
+
+      // The map of the monitors, expanding below the row, centred under it.
+      Item {
+        id: monitorArea
+        visible: snapPopup.monitorsOpen && snapPopup.monitorRow
+        anchors.top: monitorRowBody.bottom
+        anchors.topMargin: root.menuPad
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: popupMonitorPicker.implicitWidth
+        height: popupMonitorPicker.implicitHeight
+
+        MonitorPicker {
+          id: popupMonitorPicker
+          boxWidth: snapCard.width - root.menuPad * 2
+          boxHeight: Style.space(120)
+          gap: Style.space(4)
+          screens: root.monitorList
+          current: DockMonitors.monitorOf(snapPopup.target ? snapPopup.target.rect : null, root.monitorList)
+          fg: root.colPopupText
+          accent: root.colAccent
+          hairline: root.colHairline
+          onPick: function (name) {
+            var target = snapPopup.target
+            snapPopup.wanted = false
+            if (target) root.moveToMonitor(target.id, name)
+          }
+        }
+      }
+    }
+  }
+
+  FileView {
+    id: manifestFile
+    path: decodeURIComponent(Qt.resolvedUrl("manifest.json").toString().replace(/^file:\/\//, ""))
+    printErrors: false
+  }
+
   FileView {
     id: userDirsForSettings
     path: Quickshell.env("HOME") + "/.config/user-dirs.dirs"
@@ -637,6 +991,10 @@ Item {
 
     readonly property var values: dockSettings.values
     property bool confirmingReset: false
+    // The plugin's version, from its manifest, for the small-caps line under the title.
+    readonly property string version: {
+      try { return JSON.parse(manifestFile.text() || "{}").version || "" } catch (e) { return "" }
+    }
     // The page shown: an index into DockConfig.settingsSchema().
     property int page: 0
     // What is typed in the search box; while it is not blank the right side
@@ -645,7 +1003,7 @@ Item {
     readonly property bool searching: settingsWindow.query.trim() !== ""
     readonly property var schema: DockConfig.settingsSchema()
     readonly property var shownGroups: settingsWindow.searching
-      ? DockConfig.searchSettings(settingsWindow.schema, settingsWindow.query)
+      ? DockSettingsWindow.searchSettings(settingsWindow.schema, settingsWindow.query)
       : [settingsWindow.schema[settingsWindow.page]]
 
     // Asked to be open; shown only once the settings have been read, so the
@@ -867,21 +1225,37 @@ Item {
         anchors.leftMargin: Style.spacing.lg
         width: Style.space(190)
 
-        // The window's name, on the row of the page heading beside it.
-        Text {
-          textFormat: Text.PlainText
+        // The window's name over a small-caps line saying what it is for, on
+        // the row of the page heading beside it, as in the other Start apps.
+        Column {
           id: settingsTitle
           anchors.top: parent.top
           anchors.left: parent.left
           anchors.right: parent.right
-          height: Style.space(40)
-          verticalAlignment: Text.AlignVCenter
-          elide: Text.ElideRight
-          text: "Taskbar settings"
-          color: root.colPopupText
-          font.family: Style.font.family
-          font.pixelSize: Style.font.body + 3
-          font.bold: true
+          height: Style.space(48)
+          topPadding: (height - implicitHeight) / 2
+
+          Text {
+            textFormat: Text.PlainText
+            width: parent.width
+            elide: Text.ElideRight
+            text: "StartBar"
+            color: root.colPopupText
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body + 3
+            font.bold: true
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            width: parent.width
+            elide: Text.ElideRight
+            text: settingsWindow.version !== "" ? "SETTINGS \u00B7 " + settingsWindow.version : "SETTINGS"
+            color: root.colMuted
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            font.letterSpacing: 1
+          }
         }
 
         Column {
@@ -954,7 +1328,7 @@ Item {
         anchors.leftMargin: Style.spacing.lg * 2
         anchors.right: parent.right
         anchors.rightMargin: Style.spacing.lg
-        height: Style.space(40)
+        height: Style.space(48)
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
         text: settingsWindow.searching ? "Search results" : settingsWindow.schema[settingsWindow.page].title
@@ -990,7 +1364,7 @@ Item {
             width: settingsColumn.width
             wrapMode: Text.WordWrap
             topPadding: Style.spacing.md
-            text: "No settings match \u201C" + settingsWindow.query.trim() + "\u201D."
+            text: "No setting matches \u201C" + settingsWindow.query.trim() + "\u201D."
             color: Util.alpha(root.colPopupText, 0.7)
             font.family: Style.font.family
             font.pixelSize: Style.font.body
@@ -1029,7 +1403,7 @@ Item {
                   readonly property bool stacked: fieldRow.field.type === "list"
                   // A field that follows another setting is dimmed and
                   // inert while that one is off, and indented under it.
-                  readonly property bool live: DockConfig.fieldEnabled(fieldRow.field, settingsWindow.values)
+                  readonly property bool live: DockSettingsWindow.fieldEnabled(fieldRow.field, settingsWindow.values)
                   readonly property real indent: fieldRow.field.enabledWhen ? Style.space(16) : 0
 
                   width: groupBlock.width
@@ -1091,6 +1465,7 @@ Item {
                       case "int": return stepperEditor
                       case "slider": return sliderEditor
                       case "text": return textEditor
+                      case "key": return keyEditor
                       case "list": return listEditor
                       }
                       return null
@@ -1098,6 +1473,24 @@ Item {
                     onLoaded: {
                       item.field = Qt.binding(function () { return fieldRow.field })
                       item.value = Qt.binding(function () { return fieldRow.value })
+                    }
+
+                    Component {
+                      id: keyEditor
+                      KeyField {
+                        property var field: null
+                        property var value: ""
+                        signal commit(var next)
+                        implicitWidth: Style.space(160)
+                        implicitHeight: Style.space(30)
+                        chord: value === undefined || value === null ? "" : String(value)
+                        fg: root.colPopupText
+                        accent: root.colAccent
+                        fontFamily: Style.font.family
+                        fontPixelSize: Style.font.body
+                        radiusSize: root.menuRowRadius
+                        onCaptured: function (next) { if (next !== chord) commit(next) }
+                      }
                     }
 
                     Connections {
@@ -1180,7 +1573,7 @@ Item {
           anchors.left: parent.left
           anchors.leftMargin: Style.spacing.lg
           anchors.verticalCenter: parent.verticalCenter
-          text: "Changes apply instantly"
+          text: "Changes apply instantly   \u00B7   Esc to close"
           color: Util.alpha(root.colPopupText, 0.55)
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
@@ -1479,7 +1872,7 @@ Item {
         readonly property var items: listBox.isDefault ? [] : listBox.value
 
         function seedFromDefaults() {
-          var places = StartMenu.effectivePlaces(dockSettings.startPlaces, userDirsForSettings.text(), Quickshell.env("HOME") || "")
+          var places = StartPlaces.effectivePlaces(dockSettings.startPlaces, userDirsForSettings.text(), Quickshell.env("HOME") || "")
           var paths = []
           for (let i = 0; i < places.length; i++) paths.push(places[i].path)
           listBox.commit(paths)
@@ -1674,12 +2067,10 @@ Item {
       // one as well, which would leave the Dock floating beside an empty
       // strip: a negative margin on the Dock's own edge takes the room back.
       readonly property real reserved: root.taskbar.reserveSpace && !root.autoHide ? root.taskbar.barHeight : 0
-      margins {
-        top: panel.edge.top ? -panel.reserved : 0
-        bottom: panel.edge.bottom ? -panel.reserved : 0
-        left: panel.edge.left ? -panel.reserved : 0
-        right: panel.edge.right ? -panel.reserved : 0
-      }
+      margins.top: panel.edge.top ? -panel.reserved : 0
+      margins.bottom: panel.edge.bottom ? -panel.reserved : 0
+      margins.left: panel.edge.left ? -panel.reserved : 0
+      margins.right: panel.edge.right ? -panel.reserved : 0
 
       // The input region is the union of the Reveal Strip and the Dock
       // itself: whichever one the Row's slide currently makes zero-area
@@ -1730,7 +2121,7 @@ Item {
 
       // Where everything is on this monitor, in pixels from its top-left
       // corner, for `omarchy-shell <id> layout` (scripts/screenshots.sh and
-      // scripts/pointer.sh read it instead of finding things in a screenshot):
+      // scripts/pointer read it instead of finding things in a screenshot):
       // { monitor, items: [{ key, kind, appId, count, x, y, width, height }],
       //   menus: { item, bar, preview, start } } with a menu's rectangle when it is open.
       // The panel covers the monitor less any bar reserved at an edge, so its
@@ -2971,7 +3362,7 @@ Item {
 
 
       // The bar's quick menu: right click on the bar itself. Rows come from
-      // DockConfig.barMenuRows; choosing one writes its patch through the
+      // DockBarMenu.barMenuRows; choosing one writes its patch through the
       // same write-back Pin/Unpin uses, so the bar updates live. A section
       // row (Colors, Start button...) opens its choices in a second popup
       // beside it, barSubMenu, as a traditional submenu does. Closes on any
@@ -2987,7 +3378,7 @@ Item {
         // row is in this window; both reset when the menu closes.
         property string openSection: ""
         property real openRowY: 0
-        readonly property var rows: DockConfig.barMenuRows(root.taskbar)
+        readonly property var rows: DockBarMenu.barMenuRows(root.taskbar)
         readonly property var openRows: {
           for (let i = 0; i < barMenu.rows.length; i++) {
             if (barMenu.rows[i].children && barMenu.rows[i].label === barMenu.openSection) return barMenu.rows[i].children
@@ -3006,14 +3397,14 @@ Item {
           id: barMenuMetrics
           font.family: Style.font.family
           font.pixelSize: Style.font.body
-          text: DockConfig.longestLabel(DockConfig.barMenuLabels(barMenu.rows))
+          text: DockBarMenu.longestLabel(DockBarMenu.barMenuLabels(barMenu.rows))
         }
 
         TextMetrics {
           id: barSubMetrics
           font.family: Style.font.family
           font.pixelSize: Style.font.body
-          text: DockConfig.longestLabel(DockConfig.barSubmenuLabels(barMenu.rows))
+          text: DockBarMenu.longestLabel(DockBarMenu.barSubmenuLabels(barMenu.rows))
         }
 
         function close() {
@@ -3364,7 +3755,7 @@ Item {
           id: contextMenuMetrics
           font.family: Style.font.family
           font.pixelSize: Style.font.body
-          text: DockConfig.longestLabel(contextMenu.rows)
+          text: DockBarMenu.longestLabel(contextMenu.rows)
         }
 
         // Rows in three groups, divided in the menu: App rows (Pin/Unpin, New
@@ -3378,12 +3769,13 @@ Item {
             // peek being put back) is reflected in the labels.
             let win = previewPopup.windowFor(contextMenu.previewWindowId)
             let previewRows = []
-            let winStates = DockModel.windowActions(win)
+            let winStates = DockModel.windowActions(win, { move: !!root.taskbar && root.taskbar.snapLayouts, monitors: root.monitorList.length > 1 })
             for (let s = 0; s < winStates.length; s++) {
               previewRows.push({
                 label: winStates[s].label,
                 enabled: true,
                 group: 1,
+                flyout: !!winStates[s].flyout,
                 // Choosing a state row keeps the peeked Window focused, as a
                 // click on the thumbnail does, instead of the peek being put back.
                 trigger: (function (id) { return function () { previewState.send({ type: "menuRowChosen" }); root.runWindowAction(id, win.id) } })(winStates[s].id),
@@ -3445,12 +3837,13 @@ Item {
             })
           }
           if (item.kind === "window" && !(item.count > 1)) {
-            let states = DockModel.windowActions(item.window)
+            let states = DockModel.windowActions(item.window, { move: !!root.taskbar && root.taskbar.snapLayouts, monitors: root.monitorList.length > 1 })
             for (let j = 0; j < states.length; j++) {
               list.push({
                 label: states[j].label,
                 enabled: true,
                 group: 1,
+                flyout: !!states[j].flyout,
                 trigger: (function (id) { return function () { root.runWindowAction(id, item.window.id) } })(states[j].id),
               })
             }
@@ -3492,15 +3885,38 @@ Item {
 
         function close() { contextMenu.visible = false }
 
+        // docs/SPEC.md "Snap layouts": the layout picker tops the menu of a
+        // Window, from its Item (a Window Item alone) or its Preview, when the
+        // setting is on. A floating Window gets every layout; a tiled one the
+        // current arrangement of its workspace's tiles, and a click swaps it
+        // with that tile, so it stays tiled and the layout rearranges the rest.
+        readonly property var snapTarget: {
+          if (contextMenu.forPreview) return previewPopup.windowFor(contextMenu.previewWindowId)
+          var item = contextMenu.menuItem
+          return item && item.kind === "window" && !(item.count > 1) ? item.window : null
+        }
+        readonly property var snapLayoutList: SnapLayoutData.layoutsFor(dockState.items, contextMenu.snapTarget)
+        readonly property bool snapAvailable: !!root.taskbar && root.taskbar.snapLayouts && contextMenu.snapLayoutList.length > 0
+
         // The menu stays open until a row is chosen, an outside click closes
-        // it (the focus grab below), or the pointer leaves it: leaving only
-        // counts once the pointer has actually been on the menu
-        // (enteredMenu), so one that is still travelling up from the
-        // right-clicked Item never closes it, however long that takes.
-        // Leaving closes after hideDelayMs, the same delay the Dock's own
-        // auto-hide uses, so a brief crossing between rows doesn't.
-        readonly property bool hoveringMenu: menuHover.hovered
-        property bool enteredMenu: false
+        // it (the focus grab below), or the pointer leaves it. When leaving
+        // counts, and the settle time after the grab, are PopupDismiss.js's;
+        // the leave delay is hideDelayMs, the same as the Dock's auto-hide.
+        readonly property bool hoveringMenu: menuHover.hovered || monitorFlyoutHover.hovered
+        // The "Move to monitor" flyout beside the menu, level with its row.
+        property bool flyoutOpen: false
+        property real flyoutRowY: 0
+        property var dismissState: PopupDismiss.initial()
+
+        function sendDismiss(event) {
+          var result = PopupDismiss.transition(contextMenu.dismissState, event)
+          contextMenu.dismissState = result.state
+          if (result.timers.settle === "stop") menuSettleTimer.stop()
+          else if (result.timers.settle === "start") menuSettleTimer.restart()
+          if (result.timers.leave === "stop") menuLeaveTimer.stop()
+          else if (result.timers.leave === "start") menuLeaveTimer.restart()
+          for (let i = 0; i < result.effects.length; i++) if (result.effects[i].type === "close") contextMenu.close()
+        }
 
         // Without this, the popup renders on top but never actually
         // becomes the surface Hyprland routes pointer input to — hover
@@ -3511,28 +3927,27 @@ Item {
         visible: false
         color: "transparent"
         implicitWidth: contextMenu.rowWidth + root.menuShadow * 2
-        implicitHeight: menuColumn.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
+        implicitHeight: menuColumn.implicitHeight + snapBlock.height + root.menuPad * 2 + root.menuShadow * 2
 
         onVisibleChanged: {
+          if (!contextMenu.visible) contextMenu.flyoutOpen = false
           revealState.set("menu", contextMenu.visible)
-          contextMenu.enteredMenu = false
-          menuLeaveTimer.stop()
+          contextMenu.sendDismiss({ type: contextMenu.visible ? "opened" : "closed" })
           previewState.send({ type: "menuVisible", visible: contextMenu.visible, forPreview: contextMenu.forPreview })
         }
 
-        onHoveringMenuChanged: {
-          if (contextMenu.hoveringMenu) {
-            contextMenu.enteredMenu = true
-            menuLeaveTimer.stop()
-          } else if (contextMenu.visible && contextMenu.enteredMenu) {
-            menuLeaveTimer.restart()
-          }
+        onHoveringMenuChanged: contextMenu.sendDismiss({ type: "hover", hovered: contextMenu.hoveringMenu })
+
+        Timer {
+          id: menuSettleTimer
+          interval: PopupDismiss.SETTLE_MS
+          onTriggered: contextMenu.sendDismiss({ type: "settleFired", hovered: contextMenu.hoveringMenu })
         }
 
         Timer {
           id: menuLeaveTimer
           interval: root.hideDelayMs
-          onTriggered: contextMenu.close()
+          onTriggered: contextMenu.sendDismiss({ type: "leaveFired" })
         }
 
         // Outside-click dismissal: grabFocus's own compositor grab already
@@ -3599,12 +4014,50 @@ Item {
             id: menuHover
           }
 
-          Column {
-            id: menuColumn
+          // docs/SPEC.md "Snap layouts": the layouts, above the usual rows.
+          Item {
+            id: snapBlock
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.margins: root.menuPad
+            visible: contextMenu.snapAvailable
+            height: contextMenu.snapAvailable ? menuSnapView.implicitHeight + root.menuPad * 2 + 1 : 0
+
+            SnapLayouts {
+              id: menuSnapView
+              layouts: contextMenu.snapLayoutList
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.top: parent.top
+              fg: previewPopup.textColor
+              accent: previewPopup.accentColor
+              hairline: root.colHairline
+              onPick: function (zone, layout) {
+                // From a Preview, keep the peeked Window shown, as a state row does.
+                if (contextMenu.forPreview) previewState.send({ type: "menuRowChosen" })
+                root.applySnap(contextMenu.snapTarget, layout, zone)
+                contextMenu.close()
+              }
+            }
+
+            Rectangle {
+              anchors.bottom: parent.bottom
+              anchors.left: parent.left
+              anchors.right: parent.right
+              height: 1
+              color: root.colHairline
+            }
+          }
+
+          Column {
+            id: menuColumn
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: snapBlock.bottom
+            anchors.leftMargin: root.menuPad
+            anchors.rightMargin: root.menuPad
+            anchors.topMargin: root.menuPad
 
             Repeater {
               model: contextMenu.rows
@@ -3686,19 +4139,119 @@ Item {
                     font.pixelSize: Style.font.body
                   }
 
+                  // A row that opens a flyout (Move to monitor) points at it.
+                  Text {
+                    textFormat: Text.PlainText
+                    visible: !!menuRow.modelData.flyout
+                    anchors.right: parent.right
+                    anchors.rightMargin: Style.space(10)
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "\u203a"
+                    color: previewPopup.textColor
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                  }
+
                   MouseArea {
                     id: rowMouse
                     anchors.fill: parent
                     hoverEnabled: true
                     enabled: menuRow.modelData.enabled
                     cursorShape: Qt.PointingHandCursor
+                    onEntered: {
+                      contextMenu.flyoutOpen = !!menuRow.modelData.flyout
+                      if (contextMenu.flyoutOpen) contextMenu.flyoutRowY = menuRow.mapToItem(null, 0, 0).y
+                    }
                     onClicked: {
+                      if (menuRow.modelData.flyout) {
+                        contextMenu.flyoutRowY = menuRow.mapToItem(null, 0, 0).y
+                        contextMenu.flyoutOpen = true
+                        return
+                      }
                       menuRow.modelData.trigger()
                       contextMenu.close()
                     }
                   }
                 }
               }
+            }
+          }
+        }
+      }
+
+      // docs/SPEC.md "Input": the "Move to monitor" flyout of a Window's menu: a
+      // popup of its own beside the menu, level with its row, holding the map
+      // of the monitors (MonitorPicker.qml). The menu counts a pointer on it as
+      // on the menu (hoveringMenu), so moving across to it does not close
+      // either.
+      PopupWindow {
+        id: monitorFlyout
+
+        readonly property var target: contextMenu.snapTarget
+
+        grabFocus: true
+        visible: contextMenu.visible && contextMenu.flyoutOpen && !!monitorFlyout.target && root.monitorList.length > 1
+        color: "transparent"
+        anchor.window: contextMenu
+        anchor.adjustment: PopupAdjustment.Flip | PopupAdjustment.Slide
+        readonly property var opening: DockPlacement.submenu(panel.edge, contextMenu.implicitWidth, root.menuShadow)
+        anchor.edges: monitorFlyout.opening.opensLeft ? Edges.Top | Edges.Left : Edges.Top | Edges.Right
+        anchor.gravity: monitorFlyout.opening.opensLeft ? Edges.Bottom | Edges.Left : Edges.Bottom | Edges.Right
+        anchor.rect.width: 1
+        anchor.rect.height: 1
+        anchor.onAnchoring: {
+          anchor.rect.x = monitorFlyout.opening.x
+          anchor.rect.y = contextMenu.flyoutRowY - root.menuPad - root.menuShadow
+        }
+
+        implicitWidth: monitorPicker.implicitWidth + root.menuPad * 2 + root.menuShadow * 2
+        implicitHeight: monitorPicker.implicitHeight + root.menuPad * 2 + root.menuShadow * 2
+
+        onVisibleChanged: if (visible) monitorFlyout.anchor.updateAnchor()
+        onImplicitHeightChanged: if (visible) monitorFlyout.anchor.updateAnchor()
+
+        Connections {
+          target: contextMenu
+          function onFlyoutRowYChanged() {
+            if (monitorFlyout.visible) monitorFlyout.anchor.updateAnchor()
+          }
+        }
+
+        HoverHandler {
+          id: monitorFlyoutHover
+        }
+
+        RectangularShadow {
+          anchors.fill: monitorFlyoutFrame
+          radius: monitorFlyoutFrame.radius
+          blur: root.menuShadow
+          offset.y: Style.space(4)
+          spread: 0
+          color: Qt.rgba(0, 0, 0, 0.6)
+        }
+
+        Rectangle {
+          id: monitorFlyoutFrame
+          anchors.fill: parent
+          anchors.margins: root.menuShadow
+          radius: root.menuRadius
+          color: root.colPopupBackground
+          border.width: Style.normalBorderWidth
+          border.color: root.colHairline
+
+          MonitorPicker {
+            id: monitorPicker
+            anchors.centerIn: parent
+            screens: root.monitorList
+            current: DockMonitors.monitorOf(monitorFlyout.target ? monitorFlyout.target.rect : null, root.monitorList)
+            fg: previewPopup.textColor
+            accent: previewPopup.accentColor
+            hairline: root.colHairline
+            onPick: function (name) {
+              // From a Preview, keep the peeked Window shown, as a state row does.
+              if (contextMenu.forPreview) previewState.send({ type: "menuRowChosen" })
+              root.moveToMonitor(monitorFlyout.target.id, name)
+              contextMenu.close()
             }
           }
         }
