@@ -82,11 +82,11 @@ New in 1.7: the bar does more than list your windows. Each of these has its own 
 
 | | |
 |---|---|
-| **Snap layouts**<br>Click a zone of a layout (halves, thirds, quarters, a main pane and more) to place a window, as in Windows 11. Tiled windows are reshaped, not floated. | [Read more](docs/snap-layouts.md) |
-| **Super+Z picker**<br>The same layouts from the keyboard, plus keys that act on the window: <kbd>F</kbd> maximizes, <kbd>T</kbd> floats, <kbd>S</kbd> hides it away. Press the key you want in the settings to change any of them. | [Keyboard](docs/keyboard.md) |
-| **Show desktop**<br>One key hides every window on every monitor; the next brings each one back where it was. | [Read more](docs/windows-and-monitors.md#show-desktop) |
-| **Move to monitor**<br>A small map of your screens in a window's menu: click one to send the window there. | [Read more](docs/windows-and-monitors.md#move-to-monitor) |
-| **Focus and stacking**<br>Focus follows the mouse, raise floating windows on focus, open new windows on a workspace of their own. | [Read more](docs/windows-and-monitors.md#focus-and-stacking) |
+| <img src="screenshots/snap-layouts-clip.avif" alt="A window's menu opens with the layout picker; clicking the left half snaps the window there, then the lower right quarter" width="300"> | **Snap layouts**<br>Click a zone of a layout (halves, thirds, quarters, a main pane and more) to place a window, as in Windows 11. Tiled windows are reshaped, not floated.<br>[Read more](docs/snap-layouts.md) |
+| <img src="screenshots/super-z-clip.avif" alt="Super+Z opens the picker under the pointer; keys choose a layout, then F maximizes the window" width="300"> | **Super+Z picker**<br>The same layouts from the keyboard, plus keys that act on the window: <kbd>F</kbd> maximizes, <kbd>T</kbd> floats, <kbd>S</kbd> hides it away. Press the key you want in the settings to change any of them.<br>[Keyboard](docs/keyboard.md) |
+| <img src="screenshots/show-desktop-clip.avif" alt="Three windows are hidden by one command and brought back to where they were by the next" width="300"> | **Show desktop**<br>One key hides every window on every monitor; the next brings each one back where it was.<br>[Read more](docs/windows-and-monitors.md#show-desktop) |
+| <img src="screenshots/focus-clip.avif" alt="The pointer moves over the window behind, which comes to the front, then over the other one" width="300"> | **Focus and stacking**<br>Focus follows the mouse, floating windows rise when focused, and new windows can open on a workspace of their own.<br>[Read more](docs/windows-and-monitors.md#focus-and-stacking) |
+| | **Move to monitor**<br>With more than one monitor, a small map of your screens in a window's menu: click one to send the window there.<br>[Read more](docs/windows-and-monitors.md#move-to-monitor) |
 
 ## Configure
 

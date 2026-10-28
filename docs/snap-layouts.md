@@ -4,6 +4,8 @@ Put a window in a zone of the screen in one click, as in Windows 11. Off by defa
 
 [README](../README.md) · [Keyboard and commands](keyboard.md) · [Settings reference](SETTINGS.md) · [Full specification](SPEC.md#input)
 
+<img src="../screenshots/snap-layouts-clip.avif" alt="A window's menu opens with the layout picker; clicking the left half snaps the window there, then the lower right quarter" width="640">
+
 ## The picker
 
 With Snap layouts on, the menu of a window (right-click its icon, or its preview) starts with a picker: one small thumbnail per layout, each zone lighting up under the pointer.
@@ -33,6 +35,8 @@ Click a zone and the window goes there. Zones keep a 6 px margin round the edge 
 **Snap fills the other windows** (`snapFillOthers`, off by default) makes a click fill the rest of the layout too: the workspace's other windows on the same monitor, most recently used first, take the remaining zones. They become floating (**Tile** puts one back). Windows beyond the zones are left alone.
 
 ## From the keyboard: Super+Z
+
+<img src="../screenshots/super-z-clip.avif" alt="Super+Z opens the picker under the pointer; keys choose a layout, then F maximizes the window" width="640">
 
 The same picker opens for the active window from a key, under the pointer. Bind `omarchy-shell io.github.bmaltais.startbar snapPicker` (for example to Super+Z), then:
 
