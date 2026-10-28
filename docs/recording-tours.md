@@ -6,7 +6,7 @@
 
 ```sh
 scripts/hero.sh              # the hero, left in /tmp/hero.avif for a look (--install copies it to screenshots/hero.avif)
-scripts/clips.sh             # the five clips, installed in screenshots/ (or: scripts/clips.sh start-menu settings)
+scripts/clips.sh             # all the clips, installed in screenshots/ (or: scripts/clips.sh start-menu settings)
 scripts/tour.sh scripts/tours/start-menu-clip.sh      # one tour, to look at it first (/tmp/start-menu-clip.avif)
 ```
 
@@ -17,6 +17,10 @@ scripts/tour.sh scripts/tours/start-menu-clip.sh      # one tour, to look at it 
 - **`devkit.conf`** (repo root): the plugin (`io.github.bmaltais.startbar`, a service, so not on the bar), its settings window's layer, what a recording must leave unchanged (`TOUR_REAL_UNCHANGED`: the real `shell.json` and `~/.local/share/applications`), and the commands `dev startmenu | settings | close | layout`.
 - **The Pins.** The tours pin five apps, which must be installed (`TOUR_PINS` in `scripts/tours/common.sh`: Files, Ghostty, Edge, VS Code, Obsidian); the recorder says which one is missing.
 - **Windows for the Dock** are terminals posing as apps (`pose` in `common.sh`), one per workspace so a Peek shows that window alone.
+
+## One look for every recording
+
+Every screenshot, clip and tour, and the test session itself, uses the same look, whatever theme the person recording has chosen: Omarchy's **ethereal** theme (dark blue, peach text) with its **1-cosmic** wallpaper, bar on the theme's colours, 1280×800, the same five Pins. `devkit.conf` pins it (`TOUR_THEME`, `TOUR_BACKGROUND`, and `devkit_sandbox`, which puts a copy of that theme from Omarchy's own files in the sandbox in place of the link to your current theme). To change the look of all of them, change those two names and retake everything (`scripts/hero.sh --install`, `scripts/clips.sh`, `scripts/screenshots.sh --install`): never one image at a time, or the set stops matching. A new tour needs nothing: it gets the look from the sandbox.
 
 ## The helpers every StartBar tour has
 
@@ -42,7 +46,7 @@ Keys and typing are only sent while the Start menu or the settings window is up,
 
 ## Clips
 
-The README's clips are `scripts/tours/taskbar-clip.sh`, `icon-menu-clip.sh`, `start-menu-clip.sh`, `bar-menu-clip.sh` and `settings-clip.sh`; `scripts/clips.sh` records them all and installs them in `screenshots/`. How a clip is made (`TOUR_CROP`, no captions, looping) is in the [devkit's guide](../scripts/devkit/docs/recording-tours.md#clips). What is different here:
+The README's clips are `scripts/tours/taskbar-clip.sh`, `icon-menu-clip.sh`, `start-menu-clip.sh`, `bar-menu-clip.sh` and `settings-clip.sh`, and for the window features `snap-layouts-clip.sh`, `super-z-clip.sh`, `show-desktop-clip.sh` and `focus-clip.sh` (full-screen clips with floating windows from `float_win`; Move to monitor has no clip, since the test session has one screen); `scripts/clips.sh` records them all and installs them in `screenshots/`. How a clip is made (`TOUR_CROP`, no captions, looping) is in the [devkit's guide](../scripts/devkit/docs/recording-tours.md#clips). What is different here:
 
 - **The wallpaper stays.** The flat backdrop (`TOUR_BACKDROP=plain`) the other Start apps use is a full-screen window, which Hyprland may draw over the Dock (a Top layer); it was not tried here. The clips show the theme's wallpaper, as the stills do.
 - **The settings clip** starts and ends on the page the window opened on, opened in `tour_setup`.
