@@ -49,17 +49,17 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 | `raiseOnFocus` | `false` | A floating Window that takes focus, by hover or any other way, is raised above the other floating Windows. Tiled Windows are left alone, and nothing is raised while a Preview peek is showing a Window |
 | `snapLayouts` | `false` | The Item menu of a Window Item, and the Preview menu of a Window, start with eight layouts (halves, two stacked, thirds, quarters, a main pane with two beside it, one on top with two below it, 2/3 and 1/3 side by side, and a full one that maximizes). Choosing a zone resizes and moves that Window into it (a tiled Window is never floated: with two or three tiles it sees the shapes they can take and a click reshapes the workspace, with more it sees the tiles and a click swaps with one). A tiled Window's menu also gets Move left, right, up and down |
 | `snapFillOthers` | `false` | With Snap layouts on: choosing a zone also places the workspace's other windows, most recently used first, in the layout's remaining zones. They become floating (Tile puts one back) |
-| `snapKeyMaximize` | `f` | With Snap layouts on, a key pressed in the Super+Z picker acts on the window and closes the picker: Maximize (toggle). In the settings window click the field and press the key, with any Ctrl, Alt, Shift or Super; Backspace clears it, Escape cancels. It is stored as a chord (`f`, `up`, `ctrl+m`, `ctrl+shift+f5`). A bound key wins over the picker's own use of it (digits, arrows, `m`); Escape cannot be bound. If two actions share a chord the first listed here keeps it |
-| `snapKeyFullscreen` | `x` | Super+Z key: Full screen (toggle) |
-| `snapKeyFloat` | `t` | Super+Z key: Float or tile the window |
-| `snapKeyCenter` | `c` | Super+Z key: Center (a floating window only) |
-| `snapKeyPin` | `p` | Super+Z key: Pin on top (a floating window only) |
-| `snapKeyScratchpad` | `s` | Super+Z key: Move to scratchpad |
-| `snapKeyMoveLeft` | `h` | Super+Z key: Move left (a tiled window only) |
-| `snapKeyMoveDown` | `j` | Super+Z key: Move down (a tiled window only) |
-| `snapKeyMoveUp` | `k` | Super+Z key: Move up (a tiled window only) |
-| `snapKeyMoveRight` | `l` | Super+Z key: Move right (a tiled window only) |
-| `snapKeyClose` | `(none)` | Super+Z key: Close the window; unset by default |
+| `snapKeyMaximize` | `f` | With Snap layouts on, a key pressed in the snap picker acts on the window and closes the picker: Maximize (toggle). In the settings window click the field and press the key, with any Ctrl, Alt, Shift or Super; Backspace clears it, Escape cancels. It is stored as a chord (`f`, `up`, `ctrl+m`, `ctrl+shift+f5`). A bound key wins over the picker's own use of it (digits, arrows, `m`); Escape cannot be bound. If two actions share a chord the first listed here keeps it |
+| `snapKeyFullscreen` | `x` | Snap picker key: Full screen (toggle) |
+| `snapKeyFloat` | `t` | Snap picker key: Float or tile the window |
+| `snapKeyCenter` | `c` | Snap picker key: Center (a floating window only) |
+| `snapKeyPin` | `p` | Snap picker key: Pin on top (a floating window only) |
+| `snapKeyScratchpad` | `s` | Snap picker key: Move to scratchpad |
+| `snapKeyMoveLeft` | `h` | Snap picker key: Move left (a tiled window only) |
+| `snapKeyMoveDown` | `j` | Snap picker key: Move down (a tiled window only) |
+| `snapKeyMoveUp` | `k` | Snap picker key: Move up (a tiled window only) |
+| `snapKeyMoveRight` | `l` | Snap picker key: Move right (a tiled window only) |
+| `snapKeyClose` | `(none)` | Snap picker key: Close the window; unset by default |
 | `keySnapPicker` | `super+z` | Command key: opens the snap picker for the active window. Bound only while `snapLayouts` is on. A chord with at least one of Super, Ctrl or Alt (`super+z`, `ctrl+u`, `super+shift+f5`); in the settings window click the field and press it. Absent uses the default; `""` leaves the command unbound. A key another binding already holds is not taken (the row says what holds it) |
 | `keyShowDesktop` | `super+d` | Command key: Show desktop (toggle). Same rules as `keySnapPicker`, without the `snapLayouts` condition |
 | `keyStartMenu` | `""` | Command key: toggles the Start menu on the focused monitor. Unbound by default |
