@@ -60,6 +60,10 @@ The Dock is a Windows 11-style bar along the bottom edge of every monitor.
 | `snapKeyMoveUp` | `k` | Super+Z key: Move up (a tiled window only) |
 | `snapKeyMoveRight` | `l` | Super+Z key: Move right (a tiled window only) |
 | `snapKeyClose` | `(none)` | Super+Z key: Close the window; unset by default |
+| `keySnapPicker` | `super+z` | Command key: opens the snap picker for the active window. Bound only while `snapLayouts` is on. A chord with at least one of Super, Ctrl or Alt (`super+z`, `ctrl+u`, `super+shift+f5`); in the settings window click the field and press it. Absent uses the default; `""` leaves the command unbound. A key another binding already holds is not taken (the row says what holds it) |
+| `keyShowDesktop` | `super+d` | Command key: Show desktop (toggle). Same rules as `keySnapPicker`, without the `snapLayouts` condition |
+| `keyStartMenu` | `""` | Command key: toggles the Start menu on the focused monitor. Unbound by default |
+| `keySettings` | `""` | Command key: opens the settings window on the focused monitor. Unbound by default |
 | `newWindowWorkspace` | `off` | `off`, `normal`, `maximized` or `fullscreen`. Otherwise a Window that opens tiled beside other Windows moves to the lowest-numbered empty workspace and is shown that way there (`normal` leaves its state alone). Floating Windows Omarchy did not float itself, and full screen ones, are left alone. A leftover `true` reads as `maximized` |
 | `showPreviews` | `true` | Hover thumbnails with a close button |
 | `previewSlide` | `true` | The hover preview rises out of the Dock edge when it appears; it still disappears at once |

@@ -72,6 +72,10 @@ _Avoid_: thumbnail menu, window menu
 The menu opened by a right click on the Dock away from any Item. It holds the common settings and the way into the settings window.
 _Avoid_: quick menu, settings menu
 
+**Command key**:
+A key StartBar itself binds to one of its commands (open the snap picker, show the desktop, toggle the Start menu, open settings). It works anywhere on the desktop and is changed or cleared in the settings window. A key already bound by the user always wins over it.
+_Avoid_: shortcut, hotkey, keybinding; "Window key" (that is a key pressed inside the snap picker to act on the Window)
+
 ## Start menu
 
 **Start button**:

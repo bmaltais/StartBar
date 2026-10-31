@@ -132,7 +132,12 @@ function snapKeyMap(taskbar) {
 // The settings window's fields for them, each dimmed while Snap layouts is off.
 function settingsFields() {
   return ACTIONS.map(function (k, n) {
-    return { key: k.key, label: "Super+Z key: " + k.label, type: "key", hint: n === 0 ? "Click, then press the key (Backspace clears); it replaces that key's usual job in the picker" : undefined, enabledWhen: { key: "snapLayouts", is: true } };
+    var field = { key: k.key, label: k.label, type: "key", enabledWhen: { key: "snapLayouts", is: true } };
+    if (n === 0) {
+      field.heading = "In the snap picker";
+      field.hint = "Keys pressed while the picker is open act on the window. Click, then press the key (Backspace clears); it replaces that key's usual job in the picker";
+    }
+    return field;
   });
 }
 

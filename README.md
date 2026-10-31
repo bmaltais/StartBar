@@ -91,7 +91,7 @@ The same layouts from the keyboard, under the pointer. Letters act on the window
 
 <img src="screenshots/show-desktop-clip.avif" alt="Three windows are hidden by one command and brought back to where they were by the next" width="640">
 
-One key hides every window on every monitor, and the next brings each one back where it was, even if monitors came or went in between. Bind `omarchy-shell io.github.bmaltais.startbar showDesktop`, for example to Super+D. [Read more](docs/windows-and-monitors.md#show-desktop).
+One key hides every window on every monitor, and the next brings each one back where it was, even if monitors came or went in between. **Super+D** does it, bound by StartBar when the key is free. [Read more](docs/windows-and-monitors.md#show-desktop).
 
 ### Focus and stacking
 
@@ -138,7 +138,7 @@ Every key, its default, and how pinning and dragging behave are in [docs/SETTING
 
 ## Commands
 
-StartBar answers commands; you bind them to the keys you like. Run them with `omarchy-shell io.github.bmaltais.startbar <command>`:
+StartBar binds Super+Z (snap picker, with Snap layouts on) and Super+D (show desktop) itself, and answers commands you can bind to any key. Run them with `omarchy-shell io.github.bmaltais.startbar <command>`:
 
 | Command | Does |
 |---|---|

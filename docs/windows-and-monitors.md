@@ -8,7 +8,7 @@ The bar acts on your windows, not only lists them. This page covers what each ac
 
 <img src="../screenshots/show-desktop-clip.avif" alt="Three windows are hidden by one command and brought back to where they were by the next" width="640">
 
-Hide every window on every monitor with one key, and bring each one back to where it was with the next. Bind `omarchy-shell io.github.bmaltais.startbar showDesktop` (for example to Super+D). It needs no setting and works with or without a Dock.
+Hide every window on every monitor with one key, and bring each one back to where it was with the next. **Super+D** does it: StartBar binds the key itself when it is free (change or clear it on the Keyboard page of the settings window). It works with or without a Dock.
 
 - Each window is hidden on a workspace of its own monitor, so it keeps its size and nothing is squeezed together.
 - Restoring puts each window back on the workspace it came from, and refocuses the one that was active. It still works if a monitor was plugged in or out in between: a floating window's position is only restored if it would still be on a screen.
