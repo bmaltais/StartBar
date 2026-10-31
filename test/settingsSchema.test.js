@@ -122,7 +122,8 @@ test("search keeps the fields whose label, hint or page match every word, in any
   assert.ok(keysOf("maximized").includes("newWindowWorkspace"));
   // a page title matches all its fields
   const start = searchSettings(settingsSchema(), "start menu");
-  assert.deepEqual(start.map((g) => g.title), ["Start menu"]);
+  // (the Keyboard page has a Start menu key row too)
+  assert.deepEqual(start.map((g) => g.title), ["Start menu", "Keyboard"]);
   assert.equal(start[0].fields.length, settingsSchema().find((g) => g.title === "Start menu").fields.length);
 });
 

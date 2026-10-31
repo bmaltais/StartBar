@@ -64,6 +64,10 @@ test("bar defaults: always visible, left-aligned, theme colours, built-in Start 
     snapKeyMoveUp: "k",
     snapKeyMoveRight: "l",
     snapKeyClose: "",
+    keySnapPicker: "super+z",
+    keyShowDesktop: "super+d",
+    keyStartMenu: "",
+    keySettings: "",
   });
 });
 
@@ -280,4 +284,12 @@ test("edgeSpacing is 12, may be zero, and a bad value falls back", () => {
   assert.equal(effectiveTaskbar({ edgeSpacing: 20 }).edgeSpacing, 20);
   assert.equal(effectiveTaskbar({ edgeSpacing: -3 }).edgeSpacing, 12);
   assert.equal(effectiveTaskbar({ edgeSpacing: "wide" }).edgeSpacing, 12);
+});
+
+test("Command keys: absent is the default, empty is unbound, junk is the default", () => {
+  const bar = effectiveView({ keySnapPicker: "", keyShowDesktop: "Ctrl+U", keyStartMenu: "u", keySettings: "super+shift+s" }).taskbar;
+  assert.equal(bar.keySnapPicker, "");
+  assert.equal(bar.keyShowDesktop, "ctrl+u");
+  assert.equal(bar.keyStartMenu, "");
+  assert.equal(bar.keySettings, "super+shift+s");
 });

@@ -17,6 +17,7 @@ import qs.Ui
 import "DockModel.js" as DockModel
 import "DockConfig.js" as DockConfig
 import "SnapKeys.js" as SnapKeys
+import "CommandKeys.js" as CommandKeys
 import "DockBarMenu.js" as DockBarMenu
 import "DockSettingsWindow.js" as DockSettingsWindow
 import "StartPlaces.js" as StartPlaces
@@ -305,6 +306,8 @@ Item {
     function onRawEvent(event) {
       if (event.name === "configreloaded") {
         Quickshell.execDetached(DockHyprland.glassRule())
+        // A reload drops the Command keys, which are bound at runtime.
+        root.syncCommandKeys()
         if (dockSettings.followMouseOn) Quickshell.execDetached(DockHyprland.followMouse(true))
       }
       // An App started any other way (Super+Space, a Pin, a terminal) is
@@ -354,6 +357,7 @@ Item {
     Quickshell.execDetached(DockHyprland.glassRule())
     // A peek the last shell never got to undo (it restarted mid-hover).
     root.peekRestore()
+    root.syncCommandKeys()
     Hyprland.refreshToplevels()
     dockState.refresh()
   }
@@ -690,6 +694,43 @@ Item {
     }
   }
 
+  // ---- Command keys (CommandKeys.js, docs/keyboard.md) ----
+  // Bound at runtime with hl.bind, like glassRule and followMouse: Hyprland
+  // forgets them on a config reload, so every sync reads `hyprctl -j binds` and
+  // brings them in line with the settings. `commandKeyTaken` maps a key setting
+  // to what already holds that key, for the settings window's row.
+  property var commandKeyTaken: ({})
+  // A row of the settings window is waiting for a key: Hyprland would swallow a
+  // key we have bound (Super+Z) before the field sees it, so ours are let go meanwhile.
+  property bool commandKeyCapturing: false
+  onTaskbarChanged: root.syncCommandKeys()
+  onCommandKeyCapturingChanged: root.syncCommandKeys()
+
+  function syncCommandKeys() { commandKeyTimer.restart() }
+
+  Timer {
+    id: commandKeyTimer
+    interval: 150
+    onTriggered: { if (bindsAsk.running) commandKeyTimer.restart(); else bindsAsk.running = true }
+  }
+
+  Process {
+    id: bindsAsk
+    command: ["hyprctl", "-j", "binds"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var binds = null
+        try { binds = JSON.parse(this.text) } catch (e) { return }
+        var wanted = CommandKeys.desired(root.taskbar)
+        if (root.commandKeyCapturing) wanted.forEach(function (w) { w.chord = "" })
+        var plan = CommandKeys.reconcile(wanted, binds)
+        if (!root.commandKeyCapturing) root.commandKeyTaken = plan.taken
+        var lua = CommandKeys.luaFor(plan)
+        if (lua) Quickshell.execDetached(["hyprctl", "eval", lua])
+      }
+    }
+  }
+
   // Asked (by IPC) to toggle or close the Start menu on one monitor; each
   // monitor's panel owns a menu and answers only for its own screen.
   signal startMenuRequested(string screenName, string action)
@@ -714,6 +755,8 @@ Item {
     function closeStartMenu(): void { root.startMenuRequested(root.focusedScreenName(), "close") }
     // For a key binding: the snap layouts of the active Window, centred on the focused monitor.
     function snapPicker(): void { root.toggleSnapPicker() }
+    // The Command key of the picker (only opens: Escape closes).
+    function openSnapPicker(): void { if (!snapPopup.wanted) root.toggleSnapPicker() }
     function closeSnapPicker(): void { snapPopup.wanted = false }
     // For a key binding such as Super+D: hide every Window on every monitor, or
     // bring back the ones the last press hid.
@@ -1408,9 +1451,24 @@ Item {
 
                   width: groupBlock.width
                   opacity: fieldRow.live ? 1 : 0.4
-                  height: fieldRow.stacked
+                  // A row that starts a section of its page (Keyboard) names it above itself.
+                  readonly property real headingHeight: fieldRow.field.heading ? headingText.implicitHeight + Style.spacing.md * 2 : 0
+                  height: fieldRow.headingHeight + (fieldRow.stacked
                     ? labelColumn.implicitHeight + editorLoader.height + Style.spacing.md * 2
-                    : Math.max(labelColumn.implicitHeight, editorLoader.height) + Style.spacing.md * 2
+                    : Math.max(labelColumn.implicitHeight, editorLoader.height) + Style.spacing.md * 2)
+
+                  Text {
+                    textFormat: Text.PlainText
+                    id: headingText
+                    visible: !!fieldRow.field.heading
+                    anchors.top: parent.top
+                    anchors.topMargin: Style.spacing.md
+                    text: fieldRow.field.heading || ""
+                    color: Util.alpha(root.colPopupText, 0.7)
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                  }
 
                   Rectangle {
                     anchors.bottom: parent.bottom
@@ -1423,7 +1481,7 @@ Item {
                   Column {
                     id: labelColumn
                     anchors.top: parent.top
-                    anchors.topMargin: Style.spacing.md
+                    anchors.topMargin: Style.spacing.md + fieldRow.headingHeight
                     anchors.left: parent.left
                     anchors.leftMargin: fieldRow.indent
                     width: (fieldRow.stacked ? parent.width : parent.width - editorLoader.width - Style.spacing.md) - fieldRow.indent
@@ -1448,6 +1506,18 @@ Item {
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption
                     }
+
+                    // A Command key another binding already holds is not bound.
+                    Text {
+                      textFormat: Text.PlainText
+                      visible: !!root.commandKeyTaken[fieldRow.field.key]
+                      width: parent.width
+                      wrapMode: Text.WordWrap
+                      text: "Taken by " + (root.commandKeyTaken[fieldRow.field.key] || "")
+                      color: root.colAccent
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                    }
                   }
 
                   Loader {
@@ -1455,6 +1525,7 @@ Item {
                     enabled: fieldRow.live
                     anchors.right: parent.right
                     anchors.verticalCenter: fieldRow.stacked ? undefined : parent.verticalCenter
+                    anchors.verticalCenterOffset: fieldRow.stacked ? 0 : fieldRow.headingHeight / 2
                     anchors.bottom: fieldRow.stacked ? parent.bottom : undefined
                     anchors.bottomMargin: fieldRow.stacked ? Style.spacing.md : 0
                     width: fieldRow.stacked ? parent.width : implicitWidth
@@ -1484,6 +1555,9 @@ Item {
                         implicitWidth: Style.space(160)
                         implicitHeight: Style.space(30)
                         chord: value === undefined || value === null ? "" : String(value)
+                        command: !!field && !!field.command
+                        onCapturingChanged: if (command) root.commandKeyCapturing = capturing
+                        Component.onDestruction: if (command) root.commandKeyCapturing = false
                         fg: root.colPopupText
                         accent: root.colAccent
                         fontFamily: Style.font.family

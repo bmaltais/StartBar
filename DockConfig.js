@@ -26,6 +26,7 @@
 // "Ordering") lives in memory for as long as its Window stays open.
 
 .import "SnapKeys.js" as SnapKeys
+.import "CommandKeys.js" as CommandKeys
 
 var DEFAULT_ICON_SIZE = 48;
 var DEFAULT_REVEAL_DELAY_MS = 200;
@@ -167,6 +168,9 @@ function effectiveTaskbar(entry) {
   for (var i = 0; i < SnapKeys.ACTIONS.length; i++) {
     taskbar[SnapKeys.ACTIONS[i].key] = SnapKeys.valueOr(source[SnapKeys.ACTIONS[i].key], SnapKeys.ACTIONS[i].fallback);
   }
+  for (var c = 0; c < CommandKeys.COMMANDS.length; c++) {
+    taskbar[CommandKeys.COMMANDS[c].key] = CommandKeys.valueOr(source[CommandKeys.COMMANDS[c].key], CommandKeys.COMMANDS[c].fallback);
+  }
   return taskbar;
 }
 
@@ -275,10 +279,8 @@ function settingsSchema() {
       ],
     },
   ];
-  // The Super+Z keys follow the snap settings, in the Windows group.
-  var windows = groups[1].fields;
-  var at = windows.map(function (f) { return f.key; }).indexOf("snapFillOthers") + 1;
-  groups[1].fields = windows.slice(0, at).concat(SnapKeys.settingsFields(), windows.slice(at));
+  // The Keyboard page: the Command keys, then the picker's own keys.
+  groups.push({ title: "Keyboard", fields: CommandKeys.settingsFields().concat(SnapKeys.settingsFields()) });
   return groups;
 }
 

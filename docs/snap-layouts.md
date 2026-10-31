@@ -38,7 +38,7 @@ Click a zone and the window goes there. Zones keep a 6 px margin round the edge 
 
 <img src="../screenshots/super-z-clip.avif" alt="Super+Z opens the picker under the pointer; keys choose a layout, then F maximizes the window" width="640">
 
-The same picker opens for the active window from a key, under the pointer. Bind `omarchy-shell io.github.bmaltais.startbar snapPicker` (for example to Super+Z), then:
+With **Snap layouts** on, **Super+Z** opens the same picker for the active window, under the pointer. StartBar binds the key itself (change or clear it on the Keyboard page of the settings window; a Super+Z that is already bound elsewhere is left alone). Then:
 
 - **1–9** choose a layout, **← →** step through its zones, **↑ ↓** move a row, **Return** or **Space** applies it, **Escape** closes.
 - **Letters act on the window** without choosing a layout: F maximizes, T floats or tiles, S sends it to the scratchpad, and so on. Every one is changeable. See [Keyboard and commands](keyboard.md#keys-in-the-picker).

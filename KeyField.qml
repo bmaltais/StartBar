@@ -4,11 +4,14 @@
 // key events only, so it never touches the clipboard (PlainField.qml's reason).
 import QtQuick
 import "SnapKeys.js" as SnapKeys
+import "CommandKeys.js" as CommandKeys
 
 Rectangle {
   id: field
 
   property string chord: ""
+  // A Command key (CommandKeys.js): spelt with "super", and it needs a modifier.
+  property bool command: false
   property color fg: "white"
   property color accent: "dodgerblue"
   property string fontFamily: ""
@@ -29,7 +32,7 @@ Rectangle {
   Text {
     textFormat: Text.PlainText
     anchors.centerIn: parent
-    text: field.capturing ? "Press a key…" : (field.chord.length > 0 ? SnapKeys.label(field.chord) : "None")
+    text: field.capturing ? "Press a key…" : (field.chord.length > 0 ? SnapKeys.label(field.command ? CommandKeys.toChord(field.chord) : field.chord) : "None")
     color: field.fg
     opacity: field.capturing || field.chord.length === 0 ? 0.55 : 1
     font.family: field.fontFamily
@@ -56,6 +59,11 @@ Rectangle {
     var next = SnapKeys.chordOf(event.key, event.modifiers)
     // A modifier pressed on its own: wait for the key that goes with it.
     if (next === null) return
+    if (field.command) {
+      // Without Super, Ctrl or Alt it would take a plain key from every app.
+      next = CommandKeys.normalize(CommandKeys.fromChord(next))
+      if (!next) return
+    }
     field.captured(next)
     field.focus = false
   }
